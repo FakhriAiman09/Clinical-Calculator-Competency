@@ -1,21 +1,44 @@
 # syntax=docker/dockerfile:1
 
-ARG PYTHON_VERSION=3.11
-FROM python:${PYTHON_VERSION}-slim as base
+# Comments are provided throughout this file to help you get started.
+# If you need more help, visit the Dockerfile reference guide at
+# https://docs.docker.com/go/dockerfile-reference/
 
-# Update apt and install the venv package needed on slim images.
-RUN apt-get update && apt-get install -y python3.11-venv && rm -rf /var/lib/apt/lists/*
+# Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
 
-# Disable pyc generation and enable unbuffered output.
+ARG PYTHON_VERSION=3.11.11
+FROM python:${PYTHON_VERSION}-slim AS base
+
+# Prevents Python from writing pyc files.
 ENV PYTHONDONTWRITEBYTECODE=1
+
+# Keeps Python from buffering stdout and stderr to avoid situations where
+# the application crashes without emitting any logs due to buffering.
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Create a valid home directory for appuser.
+# Create a non-privileged user that the app will run under.
+# See https://docs.docker.com/go/dockerfile-user-best-practices/
 ARG UID=10001
-RUN adduser --disabled-password --gecos "" --home "/home/appuser" --shell "/sbin/nologin" --no-create-home --uid "${UID}" appuser && \
-    mkdir -p /home/appuser && chown appuser:appuser /home/appuser
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" \
+    appuser
+
+RUN python -m pip install --upgrade pip
+
+# Download dependencies as a separate step to take advantage of Docker's caching.
+# Leverage a cache mount to /root/.cache/pip to speed up subsequent builds.
+# Leverage a bind mount to requirements.txt to avoid having to copy them into
+# into this layer.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,source=requirements.txt,target=requirements.txt \
+    python -m pip install -r requirements.txt
 
 # Set Kaggle's config directory to a writable location.
 ENV KAGGLE_CONFIG_DIR=/home/appuser/.kaggle
@@ -24,9 +47,6 @@ RUN mkdir -p /home/appuser/.kaggle && chown appuser:appuser /home/appuser/.kaggl
 # Copy all application files with correct ownership.
 COPY --chown=appuser:appuser . .
 
-# Remove Windows (CR) line endings from init.sh and .env and ensure init.sh is executable.
-RUN sed -i 's/\r$//' /app/init.sh && sed -i 's/\r$//' /app/.env && chmod +x /app/init.sh
-
 # Ensure the entire /app directory is owned by appuser.
 USER root
 RUN chown -R appuser:appuser /app
@@ -34,33 +54,8 @@ RUN chown -R appuser:appuser /app
 # Switch to non-root appuser.
 USER appuser
 
-# Expose the port your application will use.
+# Expose the port that the application listens on.
 EXPOSE 8000
 
-# At runtime, list /app, source .env, echo key environment variables,
-# create /home/appuser/.kaggle/kaggle.json if it doesn't exist,
-# run init.sh, list the contents of bert-model, and finally start your application.
-CMD ["sh", "-c", "\
-  ls -la /app; \
-  if [ -f ./.env ]; then \
-    echo \".env found:\"; \
-    cat ./.env; \
-    . ./.env; \
-  else \
-    echo \".env not found\"; \
-  fi; \
-  echo \"==================================\"; \
-  echo \"Environment variables loaded:\"; \
-  echo \"KAGGLE_USERNAME: $KAGGLE_USERNAME\"; \
-  echo \"KAGGLE_KEY: $KAGGLE_KEY\"; \
-  echo \"SUPABASE_URL: $SUPABASE_URL\"; \
-  echo \"SUPABASE_SERVICE_ROLE_KEY: $SUPABASE_SERVICE_ROLE_KEY\"; \
-  echo \"==================================\"; \
-  if [ ! -f /home/appuser/.kaggle/kaggle.json ]; then \
-    echo \"Creating /home/appuser/.kaggle/kaggle.json\"; \
-    echo \"{\\\"username\\\": \\\"$KAGGLE_USERNAME\\\", \\\"key\\\": \\\"$KAGGLE_KEY\\\"}\" > /home/appuser/.kaggle/kaggle.json; \
-    chmod 600 /home/appuser/.kaggle/kaggle.json; \
-  fi; \
-  ./init.sh; \
-  ls -la bert-model; \
-  .venv/bin/python listener.py"]
+# Add the environment file when running the container
+CMD ["python3.11", "listener.py"]
