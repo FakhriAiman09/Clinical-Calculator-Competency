@@ -24,11 +24,12 @@ ARG UID=10001
 RUN adduser \
     --disabled-password \
     --gecos "" \
-    --home "/nonexistent" \
+    --home "/home/appuser" \
     --shell "/sbin/nologin" \
-    --no-create-home \
     --uid "${UID}" \
     appuser
+
+ENV HOME=/home/appuser
 
 RUN python -m pip install --upgrade pip
 
@@ -40,16 +41,17 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=requirements.txt,target=requirements.txt \
     python -m pip install -r requirements.txt
 
-# Set Kaggle's config directory to a writable location.
-ENV KAGGLE_CONFIG_DIR=/home/appuser/.kaggle
-RUN mkdir -p /home/appuser/.kaggle && chown appuser:appuser /home/appuser/.kaggle
-
 # Copy all application files with correct ownership.
 COPY --chown=appuser:appuser . .
 
-# Ensure the entire /app directory is owned by appuser.
+# Ensure the entire HOME directory and the app directory is owned by appuser.
 USER root
+
+RUN chown -R appuser:appuser /home/appuser
+RUN chmod -R 755 /home/appuser
+
 RUN chown -R appuser:appuser /app
+RUN chmod -R 755 /app
 
 # Switch to non-root appuser.
 USER appuser
