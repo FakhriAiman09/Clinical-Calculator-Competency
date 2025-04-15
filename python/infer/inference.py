@@ -7,15 +7,15 @@ import os
 import pickle
 import re
 
-from google import genai
-from google.genai.types import GenerateContentResponse
-from sklearn import svm
 import supabase as spb
 import tensorflow as tf
 import tensorflow_text as text  # pylint: disable=unused-import
+from google import genai
+from google.genai.types import GenerateContentResponse
+from sklearn import svm
 
 
-def bert_infer(model: tf.keras.Model, data: dict[str, list[str]]) -> dict[str, int]:  # pylint: disable=no-member
+def bert_infer(model: tf.keras.Model, data: dict[str, list[str]]) -> dict[str, int]:
   '''
   Loads a pre-trained BERT model and predicts the class for each sentence.
 
@@ -153,13 +153,23 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   {datastr}
 
   Based on this, please provide a summary/digest of the student's performance in a manner that is easy to understand. Please also suggest some actionable items for the student or clinician in this summary. For example, to increase observation on a specific aspect or activity, or to investigate specific aspects or activities.
+  Please format the response as a JSON object with the Key Functions as keys and the corresponding summaries as values. The summaries should be formatted in Markdown.
+
+  e.g.
+  {{
+    "1.1": ...,
+    "1.2": ...,
+    ...
+    "13.1": ...,
+    ...
+  }}
   """
 
   response: GenerateContentResponse = gemini.models.generate_content(model="gemini-2.0-flash", contents=query)
   if response.text:
     return response.text
   else:
-    return f"Error getting response"
+    return "Error getting response"
 
 # ==================================================================================================
 
