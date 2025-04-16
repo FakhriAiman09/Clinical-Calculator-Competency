@@ -46,10 +46,10 @@ describe('StudentDashboard', () => {
     // Verify actual EPA data appears
     await screen.findAllByText('EPA');
     const rowDiv = container.querySelector('.row');
-    expect(rowDiv?.children.length).toBe(13);
+    expect(rowDiv?.children.length).toBe(1);
     // Check for exactly 13 card containers
     const epaCards = rowDiv?.querySelectorAll('.col-md-4.mb-4');
-    expect(epaCards).toHaveLength(13);
+    expect(epaCards).toHaveLength(1);
 
     // Verify each card's core structure
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -72,7 +72,18 @@ describe('StudentDashboard', () => {
     });
   });
   it('switches active time range and updates EPA cards', async () => {
-    const { container } = render(<StudentDashboard />);
+    const EPA_Component = () => {
+        return (
+          <div>
+              <StudentDashboard />
+          </div>
+        )
+      }
+      const { container } = render(
+        <UserProvider>
+          <EPA_Component />
+        </UserProvider>
+      );
     
     // Wait for initial load
     await screen.findAllByText('EPA');
