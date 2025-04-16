@@ -29,7 +29,7 @@ describe('StudentDashboard', () => {
     });
   });
 
-  it('checks for 13 EPA cards and related structure', async () => {
+  it('checks for correct amount of EPA cards and related structure', async () => {
     const EPA_Component = () => {
       return (
         <div>
