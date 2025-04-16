@@ -76,17 +76,21 @@ describe('AdminSettingsButtons', () => {
     expect(screen.queryByText('Clinical Settings')).not.toBeInTheDocument();
   });
 
-  it('opens and closes the modal', () => {
+  it('opens and closes the modal', async () => {
     render(<AdminSettingsButtons />);
     
     // Click the button to open modal
-    fireEvent.click(screen.getByText('Edit Clinical Settings'));
+    await waitFor(async () => {
+        fireEvent.click(screen.getByText('Edit Clinical Settings'));
+    });
     
     // Modal should now be visible
     expect(screen.getByText('Clinical Settings')).toBeInTheDocument();
     
     // Close the modal
-    fireEvent.click(screen.getByRole('button', { name: /close/i }));
+    await waitFor(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /close/i }));
+    });
     
     // Modal should be closed again
     expect(screen.queryByText('Clinical Settings')).not.toBeInTheDocument();
@@ -102,7 +106,9 @@ describe('AdminSettingsButtons', () => {
     render(<AdminSettingsButtons />);
     
     // Open the modal
-    fireEvent.click(screen.getByText('Edit Clinical Settings'));
+    await waitFor(() => {
+        fireEvent.click(screen.getByText('Edit Clinical Settings'));
+    });
     
     // Wait for settings to appear
     await waitFor(() => {
