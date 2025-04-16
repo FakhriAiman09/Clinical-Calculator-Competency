@@ -25,3 +25,4 @@ Contents
    svm
    bert
    api
+   infer
