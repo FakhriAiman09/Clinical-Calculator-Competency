@@ -10,21 +10,23 @@ let mockSupabaseData: any;
 let mockSupabaseError: { message: string; } | null = null;
 jest.mock('@/context/UserContext');
 jest.mock('@/utils/supabase/client', () => ({
-  createClient: jest.fn(() => ({
-    from: jest.fn().mockImplementation(() => ({
-      select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockImplementation(() =>
-        Promise.resolve({ data: mockSupabaseData, error: mockSupabaseError })
+    createClient: jest.fn(() => ({
+      from: jest.fn().mockImplementation(() => ({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockImplementation(() => ({
+          eq: jest.fn().mockImplementation(() =>
+            Promise.resolve({ data: mockSupabaseData, error: mockSupabaseError })
+          )
+        }))
+      })),
+      rpc: jest.fn().mockImplementation(() =>
+        Promise.resolve({
+          data: mockSupabaseData,
+          error: null
+        })
       )
-    })),
-    rpc: jest.fn().mockImplementation(() =>
-      Promise.resolve({
-        data: mockSupabaseData,
-        error: null
-      })
-    )
-  }))
-}));
+    }))
+  }));
 
 jest.mock("next/navigation", () => ({
     useRouter() {
