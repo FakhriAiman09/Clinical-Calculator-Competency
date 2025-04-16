@@ -13,22 +13,50 @@ const EXPECTED_VALUE = {
     userRoleDev: 'dev',
     userRoleAuthorized: 'authorized',
 };
+
 describe('UserContext (Integration)', () => {
-  let supabase: ReturnType<typeof createClient>;
+  const supabase: ReturnType<typeof createClient> = createClient();
 
-  // Start the supabase client.
-  beforeAll(() => {
-    supabase = createClient();
-  });
-
-  // Log out current user.
-  afterEach(async () => {
+   // Ensure we're signed out before each test
+   beforeEach(async () => {
     await act(async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) await supabase.auth.signOut();
+      // Wait for any pending promises to resolve
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await supabase.auth.signOut();
     });
   });
 
+  // Clean up after each test more thoroughly
+  afterEach(async () => {
+    await act(async () => {
+      try {
+        // Sign out first
+        await supabase.auth.signOut();
+        // Wait slightly longer to ensure all state updates complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (error) {
+        // Silently catch errors during cleanup - they shouldn't fail tests
+      }
+    });
+    
+    // Force a tick in the event loop to process any pending promises
+    await new Promise(resolve => setTimeout(resolve, 0));
+  });
+
+  // Clean up after all tests
+  afterAll(async () => {
+    try {
+      // Make sure we're signed out
+      await supabase.auth.signOut();
+      // Pause to ensure all lifecycle hooks and async operations complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (error) {
+      // Ignore errors
+    }
+  });
+  
   it('should handle user sign-in and state updates', async () => {
     const TestComponent = () => {
       const { user, displayName, email, userRoleDev, loading } = useUser();
