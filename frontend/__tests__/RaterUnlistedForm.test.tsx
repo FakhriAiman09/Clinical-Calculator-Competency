@@ -40,6 +40,7 @@ const mockRoles = [
 describe('UnlistedStudentForm', () => {
   const mockProps = {
     raterId: 'rater-123',
+    hasActiveRequestForStudent: jest.fn().mockReturnValue(false),
     existingRequests: [],
     onSuccess: jest.fn()
   };
@@ -131,7 +132,7 @@ describe('UnlistedStudentForm', () => {
   test('shows error message when student already requested', async () => {
     const propsWithExistingRequest = {
       ...mockProps,
-      existingRequests: [{ student_id: 'student-1', completed_by: 'rater-123' }]
+      hasActiveRequestForStudent: jest.fn().mockReturnValue(true)
     };
     
     render(<UnlistedStudentForm {...propsWithExistingRequest} />);
@@ -163,7 +164,8 @@ describe('UnlistedStudentForm', () => {
     fireEvent.click(screen.getByText('Submit'));
     
     // Check error message
-    expect(screen.getByText('This student has already requested you. Please check your dashboard.')).toBeInTheDocument();
+    expect(screen.getByText('This student already has an active evaluation request. Please check your dashboard.')).toBeInTheDocument();
+    expect(propsWithExistingRequest.hasActiveRequestForStudent).toHaveBeenCalledWith('student-1');
   });
 
   test('submits form successfully', async () => {
