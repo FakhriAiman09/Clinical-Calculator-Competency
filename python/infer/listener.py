@@ -149,6 +149,11 @@ def handle_new_report(payload, gemini, supabase) -> None:
 
   print('New report received:', record['id'])
 
+  (supabase.table("student_reports")
+   .update({"llm_feedback": "Generating..."})
+   .eq("id", record['id'])
+   .execute())
+
   data = record['kf_avg_data']
 
   summary = generate_report_summary(data, gemini)
@@ -156,9 +161,9 @@ def handle_new_report(payload, gemini, supabase) -> None:
   print('Uploading summary to table...')
 
   (supabase.table("student_reports")
-    .update({"llm_feedback": summary})
-    .eq("id", record['id'])
-    .execute())
+   .update({"llm_feedback": summary})
+   .eq("id", record['id'])
+   .execute())
 
 
 if __name__ == "__main__":
