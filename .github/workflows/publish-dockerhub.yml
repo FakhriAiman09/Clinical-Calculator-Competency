@@ -55,6 +55,12 @@ jobs:
         with:
           images: cccalculator/clinicalcompetencycalculator-backend
 
+      - name: Extract metadata for inference
+        id: meta-inference
+        uses: docker/metadata-action@v5
+        with:
+          images: cccalculator/clinicalcompetencycalculator-inference
+
       - name: Build and push frontend Docker image
         id: frontend-push
         uses: docker/build-push-action@v5
@@ -80,6 +86,16 @@ jobs:
           build-args: |
             NEXT_PUBLIC_SUPABASE_URL=${{ secrets.SUPABASE_URL }}
             NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVER_ROLE_KEY }}
+
+      - name: Build and push inference Docker image
+        id: inference-push
+        uses: docker/build-push-action@v5
+        with:
+            context: ./python/infer
+            file: ./python/infer/Dockerfile
+            push: true
+            tags: ${{ steps.meta-inference.outputs.tags }}
+            labels: ${{ steps.meta-inference.outputs.labels }}
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
