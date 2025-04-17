@@ -3,17 +3,6 @@ BERT Documentation
 
 :ref:`Read more <BERT>` about BERT and the state-of-the-art langauge model.
 
-bert.train
------------------
-.. autofunction::
-    bert.train.loadLatestDataset
-.. autofunction::
-    bert.train.buildClassifierModel
-.. autofunction::
-    bert.train.trainModel
-.. autofunction::
-    bert.train.plotHistory
-
 bert.supabase_to_csv
 -----------------
 .. autofunction::

@@ -24,5 +24,5 @@ Contents
    model_doc
    svm
    bert
-   api
    infer
+   api
