@@ -5,8 +5,12 @@ API Reference
     :toctree: generated
     :caption: API Reference
 
-    svm.predict
+    svm.util
     svm.fetch_data
     svm.train
-    bert.train
-    bert.csv_to_keras
+    bert.supabase_to_csv
+    bert.supabase_to_keras
+    bert.supabase_to_df
+    bert.utils
+    infer.inference
+    infer.listener
