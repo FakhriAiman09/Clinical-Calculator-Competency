@@ -17,6 +17,7 @@ frozenlist==1.5.0
 gast==0.6.0
 google-auth==2.38.0
 google-auth-oauthlib==1.2.1
+google-genai==1.10.0
 google-pasta==0.2.0
 gotrue==2.12.0
 grpcio==1.71.0
@@ -31,6 +32,7 @@ idna==3.10
 iniconfig==2.1.0
 joblib==1.4.2
 kaggle==1.7.4.2
+kagglehub==0.3.11
 keras==2.15.0
 libclang==18.1.1
 Markdown==3.7
@@ -60,6 +62,7 @@ pytest-mock==3.14.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.0
 python-slugify==8.0.4
+PyYAML==6.0.2
 realtime==2.4.2
 requests==2.32.3
 requests-oauthlib==2.0.0

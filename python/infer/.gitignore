@@ -4,3 +4,6 @@ svm-models/
 
 # Cache
 __pycache__/
+
+# Kaggle json
+kaggle.json
