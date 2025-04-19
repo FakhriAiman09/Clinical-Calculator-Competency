@@ -157,15 +157,16 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
 
   e.g.
   {{
-    "1.1": ...,
-    "1.2": ...,
+    "1.1": "...",
+    "1.2": "...",
     ...
-    "13.1": ...,
+    "13.1": "...",
     ...
   }}
   """
 
-  response: GenerateContentResponse = gemini.models.generate_content(model="gemini-2.0-flash", contents=query)
+  response: GenerateContentResponse = gemini.models.generate_content(
+      model="gemini-2.0-flash", contents=query)
   if response.text:
     return response.text
   else:
