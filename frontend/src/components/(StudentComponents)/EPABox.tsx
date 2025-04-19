@@ -1,6 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useLayoutEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
+import 'highlight.js/styles/github.css'; // you can change this theme if desired
+
 import LineGraph from '@/components/(StudentComponents)/LineGraph';
 import HalfCircleGauge from '@/components/(StudentComponents)/HalfCircleGauge';
 import { createClient } from '@/utils/supabase/client';
@@ -194,7 +199,22 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
       setEpaAvgFromKFs(
         epaKfScores.length > 0 ? Math.floor(epaKfScores.reduce((a, b) => a + b, 0) / epaKfScores.length) : null
       );
-      setLlmFeedback(targetReport.llm_feedback ?? null);
+
+      // ✅ Extract and render EPA-specific Markdown feedback
+      if (targetReport.llm_feedback && typeof targetReport.llm_feedback === 'object') {
+        const relevantEntries = Object.entries(targetReport.llm_feedback).filter(([key]) => {
+          const epaKey = key.split('.')[0];
+          return parseInt(epaKey) === epaId;
+        });
+
+        const merged = relevantEntries
+          .map(([, val]) => val)
+          .filter(Boolean)
+          .join('\n\n');
+        setLlmFeedback(merged || null);
+      } else {
+        setLlmFeedback(null);
+      }
     }
 
     const monthlyMap: Record<string, number[]> = {};
@@ -332,8 +352,16 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
 
           <div className='mb-4'>
             <h6 className='fw-bold border-bottom pb-1'>AI Summary & Recommendations</h6>
-            <div className='border rounded p-3 bg-light scrollable-box'>
-              <p className='text-muted mb-0'>{llmFeedback || <em>No AI feedback available for this EPA.</em>}</p>
+            <div className='border rounded p-3 bg-light scrollable-box markdown-preview'>
+              {llmFeedback ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                  {llmFeedback}
+                </ReactMarkdown>
+              ) : (
+                <p className='text-muted mb-0'>
+                  <em>Generating Feedback...</em>
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -116,40 +116,54 @@ export default function StatsTabsClient() {
 
           {activeTab === 'Monthly Trends' && (
             <div className='w-100 p-3'>
-              <h6 className='text-muted mb-3'>Monthly Submission Trends</h6>
-              <div style={{ width: '100%', overflowX: 'auto' }}>
-                <svg width='100%' height='200' viewBox='0 0 600 200'>
+              <h6 className='text-muted mb-3 text-center'>Monthly Submission Trends</h6>
+              <div className='d-flex justify-content-center overflow-auto px-2'>
+                <svg
+                  width={stats.monthlySubmissionTrends.length * 60 + 60}
+                  height={220}
+                  viewBox={`0 0 ${stats.monthlySubmissionTrends.length * 60 + 60} 220`}
+                  preserveAspectRatio='xMinYMin meet'
+                >
+                  {/* Axes */}
                   <line x1='40' y1='10' x2='40' y2='180' stroke='#ccc' />
-                  <line x1='40' y1='180' x2='580' y2='180' stroke='#ccc' />
+                  <line x1='40' y1='180' x2={40 + stats.monthlySubmissionTrends.length * 60} y2='180' stroke='#ccc' />
 
-                  {stats.monthlySubmissionTrends.map((_, i) => (
-                    <line key={`vline-${i}`} x1={40 + i * 50} y1={20} x2={40 + i * 50} y2={180} stroke='#f1f3f5' />
-                  ))}
-
+                  {/* Y-Axis Labels */}
                   {[0, 20, 40, 60, 80, 100].map((y) => (
-                    <text key={y} x='0' y={180 - y * 1.5} fontSize='10' fill='#999'>
+                    <text key={`y-${y}`} x='5' y={180 - y * 1.5} fontSize='10' fill='#999'>
                       {y}
                     </text>
                   ))}
 
-                  {stats.monthlySubmissionTrends.map((m, i) => (
-                    <text key={m.month} x={40 + i * 50} y={195} fontSize='10' textAnchor='middle' fill='#666'>
-                      {m.month.slice(5)}
-                    </text>
-                  ))}
+                  {/* Grid, Labels, Points */}
+                  {stats.monthlySubmissionTrends.map((m, i) => {
+                    const x = 40 + i * 60;
+                    const y = 180 - m.count * 1.5;
+                    const monthLabel = new Date(`${m.month}-01`).toLocaleString('default', { month: 'short' });
 
+                    return (
+                      <g key={`month-${m.month}`}>
+                        <line x1={x} y1={20} x2={x} y2={180} stroke='#f1f3f5' />
+                        <text x={x} y={195} fontSize='10' textAnchor='middle' fill='#666'>
+                          {monthLabel}
+                        </text>
+                        <circle cx={x} cy={y} r='4' fill='#0d6efd' />
+                        <text x={x} y={y - 8} fontSize='10' textAnchor='middle' fill='#000'>
+                          {m.count}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Line */}
                   <polyline
                     fill='none'
                     stroke='#0d6efd'
                     strokeWidth='2'
                     points={stats.monthlySubmissionTrends
-                      .map((m, i) => `${40 + i * 50},${180 - m.count * 1.5}`)
+                      .map((m, i) => `${40 + i * 60},${180 - m.count * 1.5}`)
                       .join(' ')}
                   />
-
-                  {stats.monthlySubmissionTrends.map((m, i) => (
-                    <circle key={m.month} cx={40 + i * 50} cy={180 - m.count * 1.5} r='4' fill='#0d6efd' />
-                  ))}
                 </svg>
               </div>
             </div>
@@ -157,18 +171,66 @@ export default function StatsTabsClient() {
 
           {activeTab === 'EPA Distribution' && (
             <div className='d-flex flex-wrap gap-3'>
-              {stats.epaDistribution.map((e) => (
+              {Object.entries(stats.monthlyEPADistribution).map(([epa, data]) => (
                 <div
-                  key={e.epa}
-                  className='border rounded p-3 shadow-sm flex-grow-1'
-                  style={{ minWidth: '180px', maxWidth: '200px' }}
+                  key={epa}
+                  className='border rounded shadow-sm bg-light p-3 flex-grow-1'
+                  style={{ minWidth: '250px', maxWidth: '320px' }}
                 >
-                  <div className='fw-semibold mb-2'>EPA {e.epa}</div>
-                  <svg width='100%' height='80' viewBox='0 0 100 40'>
-                    <polyline fill='none' stroke='#0d6efd' strokeWidth='2' points='0,40 25,30 50,20 75,10 100,5' />
-                    <circle cx='100' cy='5' r='2' fill='#0d6efd' />
+                  <h6 className='mb-3 text-center'>EPA {epa}</h6>
+                  <svg
+                    width='100%'
+                    height='120'
+                    viewBox={`0 0 ${data.length * 60 + 40} 120`}
+                    preserveAspectRatio='xMinYMin meet'
+                  >
+                    {/* Axes */}
+                    <line x1='40' y1='10' x2='40' y2='90' stroke='#ccc' />
+                    <line x1='40' y1='90' x2={40 + data.length * 60} y2='90' stroke='#ccc' />
+
+                    {/* Grid + Labels */}
+                    {data.map((d, i) => {
+                      const x = 40 + i * 60;
+                      const y = 90 - d.count * 3;
+                      const monthLabel = new Date(`${d.month}-01`).toLocaleString('default', { month: 'short' });
+
+                      return (
+                        <g key={`tick-${epa}-${d.month}`}>
+                          {/* Vertical grid line */}
+                          <line x1={x} y1={10} x2={x} y2={90} stroke='#eee' />
+
+                          {/* Month label below x-axis */}
+                          <text x={x} y={110} fontSize='10' textAnchor='middle' fill='#666'>
+                            {monthLabel}
+                          </text>
+
+                          {/* Count label above point */}
+                          <text x={x} y={y - 6} fontSize='10' textAnchor='middle' fill='#000'>
+                            {d.count}
+                          </text>
+                        </g>
+                      );
+                    })}
+
+                    {/* Line path */}
+                    <polyline
+                      fill='none'
+                      stroke='#198754'
+                      strokeWidth='2'
+                      points={data.map((d, i) => `${40 + i * 60},${90 - d.count * 3}`).join(' ')}
+                    />
+
+                    {/* Dots */}
+                    {data.map((d, i) => (
+                      <circle
+                        key={`point-${epa}-${d.month}`}
+                        cx={40 + i * 60}
+                        cy={90 - d.count * 3}
+                        r='3'
+                        fill='#198754'
+                      />
+                    ))}
                   </svg>
-                  <div className='mt-2 text-muted small text-center'>Total: {e.count}</div>
                 </div>
               ))}
             </div>
