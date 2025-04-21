@@ -1,15 +1,28 @@
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent, useCallback } from 'react';
 import Select, { SingleValue } from 'react-select';
 import { createClient } from '@/utils/supabase/client';
 import { useRequireRole } from '@/utils/useRequiredRole';
+import { sendEmail } from './email-api/send-email.server';
 
 const supabase = createClient();
 
 interface OptionType {
   label: string;
   value: string;
+}
+
+interface UserRecord {
+  id: string;
+  email: string;
+  role: string;
+}
+
+interface ProfileRecord {
+  id: string;
+  display_name: string;
+  account_status: string;
 }
 
 const FormRequests = () => {
@@ -19,6 +32,7 @@ const FormRequests = () => {
   const [details, setDetails] = useState('');
   const [goals, setGoals] = useState('');
   const [studentId, setStudentId] = useState<string | null>(null);
+  const [studentName, setStudentName] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -28,6 +42,44 @@ const FormRequests = () => {
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  const fetchFaculty = useCallback(async (): Promise<void> => {
+    try {
+      setLoading(true);
+      const { data: users, error: usersError } = await supabase.rpc('fetch_users');
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+        return;
+      }
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, display_name, account_status');
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        return;
+      }
+      const facultyUsers: UserRecord[] = (users as UserRecord[] ?? []).filter((user: UserRecord) => user.role === 'rater');
+
+      const options = facultyUsers
+        .map((user: UserRecord) => {
+          const profile = (profiles ?? []).find((p: ProfileRecord) => p.id === user.id);
+          if (profile && profile.account_status === 'Active') {
+            return { label: profile.display_name, value: user.email };
+          }
+          return null;
+        })
+        .filter((option): option is OptionType => option !== null);
+      setFacultyOptions(options);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error('Unexpected error in fetchFaculty:', err.message);
+      } else {
+        console.error('Unexpected error in fetchFaculty:', err);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -41,35 +93,28 @@ const FormRequests = () => {
         return;
       }
       setStudentId(user.id);
-    };
-
-    const fetchFaculty = async () => {
-      const { data: roles, error: roleErr } = await supabase.from('user_roles').select('user_id').eq('role', 'rater');
-      if (roleErr || !roles) return;
-
-      const userIds = roles.map((r) => r.user_id);
-      const { data: profiles, error: profErr } = await supabase
+      const { data: profile, error: profileErr } = await supabase
         .from('profiles')
-        .select('id, display_name')
-        .in('id', userIds)
-        .eq('account_status', 'Active');
-
-      if (profErr || !profiles) return;
-
-      setFacultyOptions(profiles.map((p) => ({ label: p.display_name, value: p.id })));
+        .select('display_name')
+        .eq('id', user.id)
+        .single();
+      if (profileErr || !profile) {
+        console.error('Error fetching profile:', profileErr?.message ?? 'Profile not found');
+        return;
+      }
+      setStudentName(profile.display_name);
     };
 
     const fetchSettings = async () => {
       const { data, error } = await supabase.from('clinical_settings').select('*');
       if (error || !data) return;
-
-      setSettingOptions(data.map((s) => ({ label: s.setting, value: s.setting })));
+      setSettingOptions(data.map((s: { setting: string }) => ({ label: s.setting, value: s.setting })));
     };
 
     fetchCurrentUser();
     fetchFaculty();
     fetchSettings();
-  }, []);
+  }, [fetchFaculty]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -78,36 +123,35 @@ const FormRequests = () => {
       setMessage({ type: 'error', text: 'Please fill in all required fields.' });
       return;
     }
-
-    if (!studentId) {
-      setMessage({ type: 'error', text: 'Unable to determine student ID.' });
+    if (!studentId || !studentName) {
+      setMessage({ type: 'error', text: 'Unable to determine student details.' });
       return;
     }
 
     setLoading(true);
     setMessage(null);
 
-    const { error } = await supabase.from('form_requests').insert([
-      {
-        student_id: studentId,
-        completed_by: faculty.value,
-        clinical_settings: setting.value,
-        notes: details,
-        goals,
-      },
-    ]);
+    const emailPayload = {
+      to: faculty.value,
+      studentName,
+    };
 
-    if (error) {
-      console.error('Insert error:', error.message);
-      setMessage({ type: 'error', text: 'Error submitting the form. Please try again.' });
-    } else {
-      setMessage({ type: 'success', text: 'Form submitted successfully!' });
+    try {
+      const result = await sendEmail(emailPayload);
+      console.log('Email sent:', result);
+      setMessage({ type: 'success', text: 'Request sent successfully!' });
       setFaculty(null);
       setSetting(null);
       setDetails('');
       setGoals('');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error('Error sending email:', err.message);
+      } else {
+        console.error('Unexpected error:', err);
+      }
+      setMessage({ type: 'error', text: 'Error sending the email.' });
     }
-
     setLoading(false);
   };
 
