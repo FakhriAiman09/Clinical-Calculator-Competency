@@ -1,4 +1,3 @@
-// Enhanced AdminAllReportsPage with collapsible sections, styled modals, and print-friendly layout
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -33,6 +32,36 @@ interface FormResult {
   results: Record<string, number>;
 }
 
+interface KeyFunctionResponse {
+  text?: string[];
+  [key: string]: boolean | string[] | undefined;
+}
+
+interface EPAResponse {
+  [kfId: string]: KeyFunctionResponse;
+}
+
+interface FullResponseStructure {
+  response?: {
+    [epaId: string]: EPAResponse;
+  };
+}
+
+interface FormResponsesInner {
+  response?: FullResponseStructure;
+  form_requests: {
+    student_id: string;
+    clinical_settings?: string;
+  };
+}
+
+interface SupabaseRow {
+  response_id: string;
+  created_at: string;
+  results: Record<string, number>;
+  form_responses: FormResponsesInner;
+}
+
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
 
 export default function AdminAllReportsPage() {
@@ -49,6 +78,7 @@ export default function AdminAllReportsPage() {
   const [editingEPA, setEditingEPA] = useState<number | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [comments, setComments] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -87,6 +117,57 @@ export default function AdminAllReportsPage() {
     const { data } = await supabase.from('form_results').select('*').in('response_id', responseIds);
     if (data) setFormResults(data);
   }, [selectedStudent]);
+
+  const fetchComments = useCallback(async () => {
+    if (!selectedStudent || editingEPA === null || !selectedFormId) return;
+    const { data: resultData, error } = await supabase
+      .from('form_results')
+      .select(
+        `
+        response_id,
+        created_at,
+        results,
+        form_responses:form_responses!form_results_response_id_fkey (
+          response,
+          form_requests:form_requests!form_responses_request_id_fkey (
+            student_id,
+            clinical_settings
+          )
+        )
+      `
+      )
+      .returns<SupabaseRow[]>();
+    if (error) {
+      console.error(error);
+      return;
+    }
+    const parsedComments: string[] = [];
+    for (const row of resultData ?? []) {
+      if (row.response_id !== selectedFormId) continue;
+      const formResponse = row.form_responses;
+      if (formResponse?.form_requests?.student_id !== selectedStudent.id) continue;
+      if (formResponse.response?.response) {
+        const epaKey = String(editingEPA);
+        const commentBlock = formResponse.response.response[epaKey];
+        if (commentBlock) {
+          Object.values(commentBlock).forEach((kfObj) => {
+            if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
+              const texts = (kfObj as KeyFunctionResponse).text;
+              if (Array.isArray(texts)) {
+                parsedComments.push(...texts.filter((t) => typeof t === 'string' && t.trim() !== ''));
+              }
+            }
+          });
+        }
+      }
+    }
+    setComments(parsedComments);
+  }, [selectedStudent, editingEPA, selectedFormId]);
+  useEffect(() => {
+    if (selectedStudent && selectedReport && editingEPA !== null && selectedFormId) {
+      fetchComments();
+    }
+  }, [selectedStudent, selectedReport, editingEPA, selectedFormId, fetchComments]);
 
   const handleGenerate = async () => {
     if (!selectedStudent) return;
@@ -140,51 +221,50 @@ export default function AdminAllReportsPage() {
   return (
     <div className='container py-5 bg-white'>
       <style>{`
-  @media print {
-    body {
-      background: white !important;
-    }
+        @media print {
+          body {
+            background: white !important;
+          }
+          header,
+          .d-print-none,
+          .modal,
+          .btn,
+          .form-control,
+          .form-select,
+          .form-label {
+            display: none !important;
+          }
+          .container {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 0 !important;
+          }
+          .epa-report-section {
+            border: none !important;
+            box-shadow: none !important;
+            padding: 1rem 0 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .print-visible {
+            display: block !important;
+            color: black !important;
+            page-break-before: always;
+          }
+        }
+        .fade-transition {
+          opacity: 0;
+          transition: opacity 0.3s ease-in-out;
+        }
+        .fade-transition.show {
+          opacity: 1;
+        }
 
-    header,
-    .d-print-none,
-    .modal,
-    .btn,
-    .form-control,
-    .form-select,
-    .form-label {
-      display: none !important;
-    }
-
-    .container {
-      width: 100% !important;
-      max-width: 100% !important;
-      padding: 0 !important;
-    }
-
-    .epa-report-section {
-      border: none !important;
-      box-shadow: none !important;
-      padding: 1rem 0 !important;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-
-    .print-visible {
-      display: block !important;
-      color: black !important;
-      page-break-before: always;
-    }
-  }
-
-  .fade-transition {
-    opacity: 0;
-    transition: opacity 0.3s ease-in-out;
-  }
-
-  .fade-transition.show {
-    opacity: 1;
-  }
-`}</style>
+        .scrollable-box {
+          max-height: 300px;
+          overflow-y: auto;
+        }
+      `}</style>
 
       <div className='card shadow-sm p-4 mt-5 mb-3 d-print-none'>
         <h2 className='mb-4 d-print-none'>Student Report Generation</h2>
@@ -296,100 +376,118 @@ export default function AdminAllReportsPage() {
               />
             </div>
           ))}
-        </div>
-      )}
 
-      {/* Modal */}
-      {editingEPA && (
-        <div
-          className='modal fade show d-block fade-transition show'
-          tabIndex={-1}
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-        >
-          <div className='modal-dialog modal-lg'>
-            <div className='modal-content'>
-              <div className='modal-header'>
-                <h5 className='modal-title'>Select a Form Result for EPA {editingEPA}</h5>
-                <button
-                  className='btn-close'
-                  onClick={() => {
-                    setEditingEPA(null);
-                    setSelectedFormId(null);
-                  }}
-                ></button>
-              </div>
-              <div className='modal-body'>
-                {formsForEPA.map((form) => (
-                  <button
-                    key={form.response_id}
-                    className={`btn btn-outline-secondary w-100 mb-2 ${
-                      selectedFormId === form.response_id ? 'active' : ''
-                    }`}
-                    onClick={() => setSelectedFormId(form.response_id)}
-                  >
-                    {new Date(form.created_at).toLocaleString()}
-                  </button>
-                ))}
-
-                {selectedFormId && (
-                  <div className='mt-4'>
-                    <h6>Edit Development Levels</h6>
-                    <div className='row'>
-                      {Object.entries(formResults.find((r) => r.response_id === selectedFormId)?.results || {})
-                        .filter(([k]) => k.startsWith(`${editingEPA}.`))
-                        .map(([key, val]) => {
-                          const [epaStr, kfStr] = key.split('.');
-                          const label = kfDescriptions?.[epaStr]?.[parseInt(kfStr) - 1] ?? key;
-                          return (
-                            <div key={key} className='col-md-4 mb-3'>
-                              <label className='form-label'>
-                                KF {key}
-                                <br />
-                                <small className='text-muted'>{label}</small>
-                              </label>
-                              <select
-                                className='form-select'
-                                value={Math.floor(Number(val))}
-                                onChange={(e) => {
-                                  const newVal = parseInt(e.target.value);
-                                  setFormResults((prev) =>
-                                    prev.map((r) =>
-                                      r.response_id === selectedFormId
-                                        ? { ...r, results: { ...r.results, [key]: newVal } }
-                                        : r
-                                    )
-                                  );
-                                }}
-                              >
-                                {[0, 1, 2, 3].map((n) => (
-                                  <option key={n} value={n}>
-                                    {n} – {['Remedial', 'Early-Developing', 'Developing', 'Entrustable'][n]}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          );
-                        })}
-                    </div>
+          {/* Modal */}
+          {editingEPA && (
+            <div
+              className='modal fade show d-block fade-transition show'
+              tabIndex={-1}
+              style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+            >
+              <div className='modal-dialog modal-lg'>
+                <div className='modal-content'>
+                  <div className='modal-header'>
+                    <h5 className='modal-title'>Select a Form Result for EPA {editingEPA}</h5>
+                    <button
+                      className='btn-close'
+                      onClick={() => {
+                        setEditingEPA(null);
+                        setSelectedFormId(null);
+                      }}
+                    ></button>
                   </div>
-                )}
-              </div>
-              <div className='modal-footer'>
-                <button
-                  className='btn btn-secondary'
-                  onClick={() => {
-                    setEditingEPA(null);
-                    setSelectedFormId(null);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button className='btn btn-primary' onClick={handleSave} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
+                  <div className='modal-body'>
+                    {formsForEPA.map((form) => (
+                      <button
+                        key={form.response_id}
+                        className={`btn btn-outline-secondary w-100 mb-2 ${
+                          selectedFormId === form.response_id ? 'active' : ''
+                        }`}
+                        onClick={() => setSelectedFormId(form.response_id)}
+                      >
+                        {new Date(form.created_at).toLocaleString()}
+                      </button>
+                    ))}
+
+                    {selectedFormId && (
+                      <div className='mt-4'>
+                        <h6>Edit Development Levels</h6>
+                        <div className='row'>
+                          {Object.entries(
+                            formResults.find((r) => r.response_id === selectedFormId)?.results || {}
+                          )
+                            .filter(([k]) => k.startsWith(`${editingEPA}.`))
+                            .map(([key, val]) => {
+                              const [epaStr, kfStr] = key.split('.');
+                              const label = kfDescriptions?.[epaStr]?.[parseInt(kfStr) - 1] ?? key;
+                              return (
+                                <div key={key} className='col-md-4 mb-3'>
+                                  <label className='form-label'>
+                                    KF {key}
+                                    <br />
+                                    <small className='text-muted'>{label}</small>
+                                  </label>
+                                  <select
+                                    className='form-select'
+                                    value={Math.floor(Number(val))}
+                                    onChange={(e) => {
+                                      const newVal = parseInt(e.target.value);
+                                      setFormResults((prev) =>
+                                        prev.map((r) =>
+                                          r.response_id === selectedFormId
+                                            ? { ...r, results: { ...r.results, [key]: newVal } }
+                                            : r
+                                        )
+                                      );
+                                    }}
+                                  >
+                                    {[0, 1, 2, 3].map((n) => (
+                                      <option key={n} value={n}>
+                                        {n} – {['Remedial', 'Early-Developing', 'Developing', 'Entrustable'][n]}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              );
+                            })}
+                        </div>
+
+                        {/* Comments Section */}
+                        <div className="mt-4">
+                          <h6>Comments</h6>
+                          <div className="border rounded p-2 scrollable-box">
+                            <ul className="list-group">
+                              {comments.length > 0 ? (
+                                comments.map((c, i) => (
+                                  <li key={i} className="list-group-item">{c}</li>
+                                ))
+                              ) : (
+                                <li className="list-group-item">No comments found</li>
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className='modal-footer'>
+                    <button
+                      className='btn btn-secondary'
+                      onClick={() => {
+                        setEditingEPA(null);
+                        setSelectedFormId(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button className='btn btn-primary' onClick={handleSave} disabled={saving}>
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

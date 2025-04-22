@@ -22,12 +22,14 @@
     "lodash": "^4.17.21",
     "markdown-it": "^14.1.0",
     "next": "15.2.4",
+    "nodemailer": "^6.10.1",
     "npm": "^11.2.0",
     "react": "^19.0.0",
     "react-bootstrap-icons": "^1.11.5",
     "react-dom": "^19.0.0",
     "react-icons": "^5.5.0",
     "react-select": "^5.10.1",
+    "rehype-highlight": "^7.0.2",
     "sanitize-html": "^2.15.0"
   },
   "devDependencies": {
@@ -45,6 +47,7 @@
     "@types/lodash": "^4.17.16",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^20",
+    "@types/nodemailer": "^6.4.17",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/sanitize-html": "^2.15.0",
