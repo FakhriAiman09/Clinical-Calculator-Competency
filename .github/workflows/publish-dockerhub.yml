@@ -97,9 +97,9 @@ jobs:
             tags: ${{ steps.meta-inference.outputs.tags }}
             labels: ${{ steps.meta-inference.outputs.labels }}
 
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-name: index.docker.io/cccalculator/clinicalcompetencycalculator-frontend
-          subject-digest: ${{ steps.frontend-push.outputs.digest }}
-          push-to-registry: true
+      # - name: Generate artifact attestation
+      #   uses: actions/attest-build-provenance@v2
+      #   with:
+      #     subject-name: index.docker.io/cccalculator/clinicalcompetencycalculator-frontend
+      #     subject-digest: ${{ steps.frontend-push.outputs.digest }}
+      #     push-to-registry: true
