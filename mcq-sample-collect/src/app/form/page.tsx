@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import Header from '@/components/header';
 import Loading from '@/components/loading';
-import { getEPAKFDescs, getLatestMCQs } from '@/utils/get-epa-data';
+import { getEPAKFDescs, getKFSampleCounts, getLatestMCQs } from '@/utils/get-epa-data';
 import { DevLevel, MCQ, type EPAKFDesc } from '@/utils/types';
-import { getDevLevelInt, getRandomItem } from '@/utils/util';
+import { getDevLevelInt } from '@/utils/util';
 
 import EpaKfDesc from './epa-kf-desc';
 import Question from './question';
@@ -20,6 +20,7 @@ export default function Form() {
   const [loading, setLoading] = useState<boolean>(true);
   const [descData, setDescData] = useState<EPAKFDesc | undefined>(undefined);
   const [mcqData, setMCQData] = useState<MCQ[] | undefined>(undefined);
+  const [sampleCounts, setSampleCounts] = useState<{ kf: string; count: number }[] | undefined>(undefined);
 
   const [questions, setQuestions] = useState<MCQ[]>([]);
   const [choices, setChoices] = useState<{ [key: string]: boolean }>({});
@@ -29,6 +30,7 @@ export default function Form() {
     supabase_authorize(['mcqs_options.select']).then((result) => setAuthorized(result));
     getEPAKFDescs().then((data) => setDescData(data));
     getLatestMCQs().then((data) => setMCQData(data));
+    getKFSampleCounts().then((counts) => setSampleCounts(counts));
   }, []);
 
   const randomizeQuestionChoices = (options: { [key: string]: string }): { [key: string]: boolean } => {
@@ -51,17 +53,29 @@ export default function Form() {
     return choices;
   };
 
+  const getWeightedRandomKf = (sampleCounts: { kf: string; count: number }[]) => {
+    const weights = sampleCounts.map((sc) => 1 / (sc.count + 1));
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+    const rand = Math.random() * totalWeight;
+    let sum = 0;
+    for (let i = 0; i < sampleCounts.length; i++) {
+      sum += weights[i];
+      if (sum >= rand) return sampleCounts[i].kf;
+    }
+    return sampleCounts[sampleCounts.length - 1].kf;
+  };
+
   const getNewQuestions = useCallback(() => {
     setLoading(true);
-    if (mcqData && descData) {
-      const kf = getRandomItem(Object.keys(descData.kf_desc));
+    if (mcqData && descData && sampleCounts) {
+      const kf = getWeightedRandomKf(sampleCounts).replace(/mcq_kf(\d+)_(\d+)/g, "$1.$2");
       const qs = mcqData.filter((q) => q.kf === kf);
       setQuestions(qs);
       if (qs.length > 0)
         setChoices(qs.map((q) => randomizeQuestionChoices(q.options)).reduce((a, o) => Object.assign(a, o), {}));
     }
     setLoading(false);
-  }, [descData, mcqData]);
+  }, [descData, mcqData, sampleCounts]);
 
   useEffect(() => {
     getNewQuestions();
@@ -73,10 +87,11 @@ export default function Form() {
       kf: questions[0] ? questions[0].kf : '',
       epa_desc: descData?.epa_desc[questions[0] ? questions[0].epa : 0] ?? '',
       kf_desc: descData?.kf_desc[questions[0] ? questions[0].kf : 0] ?? '',
+      sample_count: sampleCounts?.find((c) => c.kf === `mcq_kf${questions[0]?.kf.replace(/\./g, '_')}`)?.count,
     };
-  }, [descData, questions]);
+  }, [descData, questions, sampleCounts]);
 
-  const handleSumbit = async () => {
+  const handleSubmit = async () => {
     if (!questions) return;
     if (Object.keys(choices).length === 0) return;
 
@@ -88,7 +103,11 @@ export default function Form() {
     };
 
     const success = submitSample(tableName, row);
-    if (await success) getNewQuestions();
+
+    if (await success) {
+      getNewQuestions();
+      getKFSampleCounts().then((counts) => setSampleCounts(counts));
+    };
   };
 
   const body = () => {
@@ -119,7 +138,7 @@ export default function Form() {
           {loading || (
             <SubmitButtons
               skip={getNewQuestions}
-              submit={handleSumbit}
+              submit={handleSubmit}
               devLevel={{ set: setDevLevel, val: devLevel }}
             />
           )}

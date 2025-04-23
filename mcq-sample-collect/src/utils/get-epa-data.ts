@@ -31,6 +31,30 @@ export async function getEPAKFDescs(): Promise<EPAKFDesc | undefined> {
   } as EPAKFDesc;
 }
 
+export async function getKFSampleCounts(): Promise<{ kf: string; count: number }[] | undefined> {
+  const supabase = await createClient();
+
+  const { data, error } = (await supabase
+    .schema('trainingdata')
+    .from('mcq_table_row_counts')
+    .select('table_name, row_count'));
+
+  if (error) {
+    console.error('Failed to fetch KF sample counts:', error.message);
+    return undefined;
+  }
+
+  if (!data) {
+    console.error('Failed to fetch KF sample counts: No data');
+    return undefined;
+  }
+
+  return data.map(({ table_name, row_count }) => ({
+    kf: table_name,
+    count: row_count,
+  }));
+}
+
 export async function getLatestMCQs(): Promise<MCQ[] | undefined> {
   const supabase = await createClient();
 

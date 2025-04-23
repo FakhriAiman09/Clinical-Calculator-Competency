@@ -1,7 +1,13 @@
 export default function EpaKfDesc({
   desc,
 }: {
-  desc: { epa: string | undefined; kf: string | undefined; epa_desc: string | undefined; kf_desc: string | undefined };
+  desc: {
+    epa: string | undefined;
+    kf: string | undefined;
+    epa_desc: string | undefined;
+    kf_desc: string | undefined;
+    sample_count: number | undefined;
+  };
 }) {
   return (
     <div className='bg-secondary-subtle'>
@@ -19,6 +25,7 @@ export default function EpaKfDesc({
               >
                 <span className='d-inline-block text-truncate'>
                   View EPA {desc.epa} and Key Function {desc.kf}
+                  <span className='ms-2 badge bg-secondary'>{desc.sample_count && `${desc.sample_count} samples`}</span>
                 </span>
               </button>
             </div>
