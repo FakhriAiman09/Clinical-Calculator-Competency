@@ -9,6 +9,95 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      announcements: {
+        Row: {
+          announcement_type: string | null
+          created_at: string | null
+          created_by: string | null
+          end_date: string | null
+          id: string
+          is_active: boolean | null
+          message: string | null
+          start_date: string | null
+        }
+        Insert: {
+          announcement_type?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          end_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          message?: string | null
+          start_date?: string | null
+        }
+        Update: {
+          announcement_type?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          end_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          message?: string | null
+          start_date?: string | null
+        }
+        Relationships: []
+      }
+      clinical_settings: {
+        Row: {
+          created_at: string
+          id: string
+          setting: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          setting: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          setting?: string
+        }
+        Relationships: []
+      }
+      developer_tickets: {
+        Row: {
+          description: string
+          id: string
+          status: string | null
+          submitted_at: string | null
+          submitted_by: string | null
+          title: string
+          type: string | null
+        }
+        Insert: {
+          description: string
+          id?: string
+          status?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          title: string
+          type?: string | null
+        }
+        Update: {
+          description?: string
+          id?: string
+          status?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          title?: string
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "developer_tickets_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       epa_kf_descriptions: {
         Row: {
           epa_descriptions: Json | null
@@ -32,6 +121,108 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      form_requests: {
+        Row: {
+          active_status: boolean
+          clinical_settings: string | null
+          completed_by: string
+          created_at: string
+          goals: string | null
+          id: string
+          notes: string | null
+          student_id: string
+        }
+        Insert: {
+          active_status?: boolean
+          clinical_settings?: string | null
+          completed_by?: string
+          created_at?: string
+          goals?: string | null
+          id?: string
+          notes?: string | null
+          student_id?: string
+        }
+        Update: {
+          active_status?: boolean
+          clinical_settings?: string | null
+          completed_by?: string
+          created_at?: string
+          goals?: string | null
+          id?: string
+          notes?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_requests_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "user_roles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      form_responses: {
+        Row: {
+          created_id: string
+          professionalism: string | null
+          request_id: string
+          response: Json | null
+          response_id: string
+        }
+        Insert: {
+          created_id?: string
+          professionalism?: string | null
+          request_id: string
+          response?: Json | null
+          response_id?: string
+        }
+        Update: {
+          created_id?: string
+          professionalism?: string | null
+          request_id?: string
+          response?: Json | null
+          response_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_responses_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "form_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_results: {
+        Row: {
+          created_at: string
+          id: string
+          response_id: string
+          results: Json | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          response_id?: string
+          results?: Json | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          response_id?: string
+          results?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_results_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: false
+            referencedRelation: "form_responses"
+            referencedColumns: ["response_id"]
+          },
+        ]
       }
       mcqs_options: {
         Row: {
@@ -71,16 +262,19 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_status: string
           display_name: string | null
           id: string
           updated_at: string | null
         }
         Insert: {
+          account_status?: string
           display_name?: string | null
           id: string
           updated_at?: string | null
         }
         Update: {
+          account_status?: string
           display_name?: string | null
           id?: string
           updated_at?: string | null
@@ -132,6 +326,39 @@ export type Database = {
         }
         Relationships: []
       }
+      student_reports: {
+        Row: {
+          created_at: string | null
+          id: string
+          kf_avg_data: Json | null
+          llm_feedback: Json | null
+          report_data: Json
+          time_window: string
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          kf_avg_data?: Json | null
+          llm_feedback?: Json | null
+          report_data: Json
+          time_window: string
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          kf_avg_data?: Json | null
+          llm_feedback?: Json | null
+          report_data?: Json
+          time_window?: string
+          title?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           assigned_at: string
@@ -140,7 +367,7 @@ export type Database = {
         }
         Insert: {
           assigned_at?: string
-          role: string
+          role?: string
           user_id: string
         }
         Update: {
@@ -164,24 +391,36 @@ export type Database = {
     }
     Functions: {
       authorize: {
-        Args: {
-          requested_permission: string
-        }
+        Args: { requested_permission: string }
         Returns: boolean
       }
+      average_turnaround_days: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      collect_epa_settings: {
+        Args: { student_id_input: string; cutoff: string }
+        Returns: Json
+      }
       custom_access_token_hook: {
-        Args: {
-          event: Json
-        }
+        Args: { event: Json }
+        Returns: Json
+      }
+      extract_comments: {
+        Args: { student_id_input: string; cutoff: string }
+        Returns: Json
+      }
+      extract_latest_dates: {
+        Args: { student_id_input: string; cutoff: string }
+        Returns: Json
+      }
+      extract_settings: {
+        Args: { student_id_input: string; cutoff: string }
         Returns: Json
       }
       fetch_role_permissions: {
-        Args: {
-          role: string
-        }
-        Returns: {
-          permission: string
-        }[]
+        Args: { role: string }
+        Returns: string[]
       }
       fetch_users: {
         Args: Record<PropertyKey, never>
@@ -193,11 +432,69 @@ export type Database = {
           display_name: string
         }[]
       }
-      get_email_by_user_id: {
+      generate_report: {
         Args: {
-          user_id: string
+          student_id_input: string
+          time_range_input: number
+          report_title: string
         }
+        Returns: undefined
+      }
+      get_assessment_count: {
+        Args: { student_id_input: string; cutoff: string }
+        Returns: number
+      }
+      get_delinquent_raters: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          rater_id: string
+          display_name: string
+          email: string
+          count: number
+        }[]
+      }
+      get_email_by_user_id: {
+        Args: { user_id: string }
         Returns: string
+      }
+      get_latest_assessment_date: {
+        Args: { student_id_input: string; cutoff: string }
+        Returns: string
+      }
+      get_raw_comments: {
+        Args: { student_id_input: string; cutoff: string }
+        Returns: {
+          form_id: string
+          response: Json
+        }[]
+      }
+      get_raw_form_results: {
+        Args: { student_id_input: string; cutoff: string }
+        Returns: {
+          form_id: string
+          created_at: string
+          results: Json
+          clinical_settings: string
+        }[]
+      }
+      get_user_role_by_user_id: {
+        Args: { id: string }
+        Returns: string
+      }
+      monthly_epa_distribution: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          epa: string
+          month: string
+          count: number
+        }[]
+      }
+      monthly_form_submissions: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          month: string
+          count: number
+        }[]
       }
     }
     Enums: {
@@ -2051,6 +2348,24 @@ export type Database = {
         }
         Relationships: []
       }
+      mcq_table_row_counts: {
+        Row: {
+          last_updated: string | null
+          row_count: number
+          table_name: string
+        }
+        Insert: {
+          last_updated?: string | null
+          row_count: number
+          table_name: string
+        }
+        Update: {
+          last_updated?: string | null
+          row_count?: number
+          table_name?: string
+        }
+        Relationships: []
+      }
       text_responses: {
         Row: {
           created_at: string
@@ -2094,27 +2409,29 @@ export type Database = {
   }
 }
 
-type PublicSchema = Database[Extract<keyof Database, "public">]
+type DefaultSchema = Database[Extract<keyof Database, "public">]
 
 export type Tables<
-  PublicTableNameOrOptions extends
-    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-        Database[PublicTableNameOrOptions["schema"]]["Views"])
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
-        PublicSchema["Views"])
-    ? (PublicSchema["Tables"] &
-        PublicSchema["Views"])[PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -2122,20 +2439,22 @@ export type Tables<
     : never
 
 export type TablesInsert<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
     | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Insert: infer I
       }
       ? I
@@ -2143,20 +2462,22 @@ export type TablesInsert<
     : never
 
 export type TablesUpdate<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
     | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Update: infer U
       }
       ? U
@@ -2164,21 +2485,23 @@ export type TablesUpdate<
     : never
 
 export type Enums<
-  PublicEnumNameOrOptions extends
-    | keyof PublicSchema["Enums"]
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
     | { schema: keyof Database },
-  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = PublicEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
-    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof PublicSchema["CompositeTypes"]
+    | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof Database },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof Database
@@ -2187,6 +2510,15 @@ export type CompositeTypes<
     : never = never,
 > = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
   ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
-    ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+  trainingdata: {
+    Enums: {},
+  },
+} as const
