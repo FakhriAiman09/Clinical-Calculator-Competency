@@ -1,10 +1,16 @@
-import { createServerClient } from '@supabase/ssr';
+'use server';
+
 import { cookies } from 'next/headers';
 
-export async function createClient() {
+import { createServerClient } from '@supabase/ssr';
+
+export async function createClient(options?: object) {
   const cookieStore = await cookies();
 
+  // Create a server's supabase client with newly configured cookie,
+  // which could be used to maintain user's session
   return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    ...(options ?? {}),
     cookies: {
       getAll() {
         return cookieStore.getAll();
