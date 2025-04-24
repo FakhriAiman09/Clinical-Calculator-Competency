@@ -1,6 +1,6 @@
 {
     "name": "clinicalcompetencycalculator",
-    "version": "1.2.25",
+    "version": "1.2.26",
     "dependencies": {
         "react-markdown": "^10.1.0",
         "rehype-highlight": "^7.0.2",
