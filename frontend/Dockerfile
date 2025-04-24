@@ -15,6 +15,7 @@ ENV SMTP_PASS=$SMTP_PASS
 
 WORKDIR /usr/src/app
 
+RUN chmod -R 755 /usr/src/app && chown -R node:node /usr/src/app
 # Dependencies installation stage
 FROM base AS deps
 
