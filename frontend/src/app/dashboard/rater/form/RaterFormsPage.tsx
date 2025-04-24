@@ -335,7 +335,7 @@ export default function RaterFormsPage() {
   );
 
   const handleTextInputChange = (epaId: number, questionId: string, value: string): void => {
-    setTextInputs((prev) => ({
+    setTextInputs((prev: { [epa: number]: { [questionId: string]: string } }) => ({
       ...prev,
       [epaId]: {
         ...prev[epaId],
