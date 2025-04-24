@@ -263,9 +263,44 @@ export default function RaterFormsPage() {
     }
   }, [kfData, selectedEPAs]);
 
-  const toggleEPASelection = useCallback((epaId: number): void => {
-    setSelectedEPAs((prev: number[]) => (prev.includes(epaId) ? prev.filter((id) => id !== epaId) : [...prev, epaId]));
-  }, []);
+
+  const toggleEPASelection = useCallback(
+    (epaId: number): void => {
+      setSelectedEPAs((prev: number[]) => {
+        if (prev.includes(epaId)) {
+
+          setResponses((prevResponses) => {
+            const updatedResponses = { ...prevResponses };
+            delete updatedResponses[epaId];
+            return updatedResponses;
+          });
+          setTextInputs((prevTextInputs) => {
+            const updatedTextInputs = { ...prevTextInputs };
+            delete updatedTextInputs[epaId];
+            return updatedTextInputs;
+          });
+
+          const cachedData = localStorage.getItem(`form-progress-${studentId}`);
+          if (cachedData) {
+            try {
+              const parsedData = JSON.parse(cachedData);
+              if (parsedData.responses && parsedData.textInputs) {
+                delete parsedData.responses[epaId];
+                delete parsedData.textInputs[epaId];
+                localStorage.setItem(`form-progress-${studentId}`, JSON.stringify(parsedData));
+              }
+            } catch (error) {
+              console.error('Error updating cached JSON:', error);
+            }
+          }
+          return prev.filter((id) => id !== epaId);
+        } else {
+          return [...prev, epaId];
+        }
+      });
+    },
+    [studentId]
+  );
 
   const toggleSelectionCollapse = useCallback((): void => {
     setSelectionCollapsed((prev: boolean) => !prev);
@@ -317,7 +352,6 @@ export default function RaterFormsPage() {
 
   const moveToNextEPA = useCallback(() => {
     if (!currentEPA || selectedEPAs.length === 0) return;
-
     const currentIndex = selectedEPAs.indexOf(currentEPA);
     if (currentIndex < selectedEPAs.length - 1) {
       setCurrentEPA(selectedEPAs[currentIndex + 1]);
@@ -331,7 +365,6 @@ export default function RaterFormsPage() {
       setCompletedEPAs((prev) => ({ ...prev, [epaId]: true }));
       saveProgress();
       moveToNextEPA();
-
       window.scrollTo({
         top: 0,
         behavior: 'smooth',
