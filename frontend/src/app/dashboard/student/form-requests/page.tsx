@@ -10,7 +10,7 @@ const supabase = createClient();
 
 interface OptionType {
   label: string;
-  value: string; // rater id
+  value: string;
   email: string;
 }
 
