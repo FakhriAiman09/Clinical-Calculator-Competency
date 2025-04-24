@@ -109,7 +109,7 @@ const FormRequests = () => {
     const fetchSettings = async () => {
       const { data, error } = await supabase.from('clinical_settings').select('*');
       if (error || !data) return;
-      setSettingOptions(data.map((s: { setting: string }) => ({ label: s.setting, value: s.setting })));
+      setSettingOptions(data.map((s: { setting: string }) => ({ label: s.setting, value: s.setting, email: '' })));
     };
 
     fetchCurrentUser();
