@@ -10,7 +10,8 @@ const supabase = createClient();
 
 interface OptionType {
   label: string;
-  value: string;
+  value: string; // rater id
+  email: string;
 }
 
 interface UserRecord {
@@ -65,7 +66,7 @@ const FormRequests = () => {
         .map((user: UserRecord) => {
           const profile = (profiles ?? []).find((p: ProfileRecord) => p.id === user.id);
           if (profile && profile.account_status === 'Active') {
-            return { label: profile.display_name, value: user.email };
+            return { label: profile.display_name, value: user.id, email: user.email };
           }
           return null;
         })
@@ -131,8 +132,21 @@ const FormRequests = () => {
     setLoading(true);
     setMessage(null);
 
+    const formData = {
+      student_id: studentId,
+      completed_by: faculty.value,
+      clinical_settings: setting.value,
+    };
+
+    const { error: insertError } = await supabase.from('form_requests').insert([formData]);
+    if (insertError) {
+      console.error('Insert error:', insertError.message);
+      setMessage({ type: 'error', text: 'Error submitting the form. Please try again.' });
+      setLoading(false);
+      return;
+    }
     const emailPayload = {
-      to: faculty.value,
+      to: faculty.email,
       studentName,
     };
 
