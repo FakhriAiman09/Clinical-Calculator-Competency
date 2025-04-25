@@ -153,11 +153,11 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   {datastr}
 
   Based on this, please provide a summary/digest of the student's performance in a manner that is easy to understand. Please also suggest some actionable items for the student or clinician in this summary. For example, to increase observation on a specific aspect or activity, or to investigate specific aspects or activities.
-  Please format the response as a JSON object with the Key Functions as keys and the corresponding summaries as values. The summaries should be formatted in Markdown.
+  Please format the response as a JSON object with the Key Functions as keys and the corresponding summaries as values. The return value should be a JSON-parsable string, while the individual values should be formatted in Markdown. This string is to be stored directly in a jsonb row on a PostgreSQL database.
 
   e.g.
   {{
-    "1.1": "...",
+    "1.1": "**markdown stuff**",
     "1.2": "...",
     ...
     "13.1": "...",
