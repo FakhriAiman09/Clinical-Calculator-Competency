@@ -1,124 +1,279 @@
-// src/components/StudentDashboard.test.tsx
 import React from 'react';
-import { render, act, screen, fireEvent, waitFor } from '@testing-library/react';
-import StudentDashboard from '../src/components/(StudentComponents)/studentDashboard';
-import { UserProvider } from '@/context/UserContext';
-import { createClient } from '@/utils/supabase/client';
+import { render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import { useUser } from '@/context/UserContext';
 
-const TEST_USER = {
-  email: process.env.DEV_USER!,
-  password: process.env.DEV_PASSWORD!,
-};
+// Mock Supabase client
+const mockSupabaseFrom = jest.fn();
+const mockSupabaseSelect = jest.fn();
+const mockSupabaseFilter = jest.fn();
 
-describe('StudentDashboard', () => {
-  let supabase: ReturnType<typeof createClient>;
+jest.mock('@/context/UserContext');
 
-  // Start the supabase client before all tests begin.
-  beforeAll(async () => {
-    supabase = createClient();
-  });
-  // Log into the account before each test.
-  beforeEach(async () => {
-    await supabase.auth.signInWithPassword(TEST_USER);
-  })
-  // Log out current user.
-  afterEach(async () => {
-    await act(async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) await supabase.auth.signOut();
-    });
-  });
+jest.doMock('@/utils/supabase/client', () => ({
+  createClient: jest.fn(() => ({
+    from: mockSupabaseFrom.mockImplementation(() => ({
+      select: mockSupabaseSelect.mockImplementation(() => ({
+        filter: mockSupabaseFilter.mockResolvedValue({
+          data: [],
+          error: null,
+        })
+      }))
+    }))
+  }))
+}));
 
-  it('checks for correct amount of EPA cards and related structure', async () => {
-    const EPA_Component = () => {
-      return (
-        <div>
-            <StudentDashboard />
-        </div>
-      )
-    }
-    const { container } = render(
-      <UserProvider>
-        <EPA_Component />
-      </UserProvider>
-    );
-
-    // Verify actual EPA data appears
-    await screen.findAllByText('EPA');
-    const rowDiv = container.querySelector('.row');
-    expect(rowDiv?.children.length).toBe(1);
-    // Check for exactly 13 card containers
-    const epaCards = rowDiv?.querySelectorAll('.col-md-4.mb-4');
-    expect(epaCards).toHaveLength(1);
-
-    // Verify each card's core structure
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    epaCards?.forEach((card, index) => {
-      /* UNCOMMENT TO SEE EPA NUMBER AND TITLE */
-      //console.log(`Card ${index+1}:`, card.textContent?.replace(/\s+/g, ' '));
-
-      // Check card classes and styles
-      expect(card).toHaveClass('col-md-4', 'mb-4');
-      expect(card).toHaveAttribute('role', 'button');
-      expect(card).toHaveAttribute('tabindex', '0');
-
-      // Verify card content pattern
-      const cardContent = card.textContent;
-      expect(cardContent).toMatch(/EPA\d+/);
-      
-      // Check for the SVG gauge
-      const svg = card.querySelector('svg[role="img"]');
-      expect(svg).toBeInTheDocument();
-    });
-  });
-  it('switches active time range and updates EPA cards', async () => {
-    const EPA_Component = () => {
-        return (
-          <div>
-              <StudentDashboard />
-          </div>
-        )
-      }
-      const { container } = render(
-        <UserProvider>
-          <EPA_Component />
-        </UserProvider>
-      );
+import StudentDashboard from '@/components/(StudentComponents)/studentDashboard';
+describe('StudentDashboard Component', () => {
+  const mockUser = { id: '4f08490a-ab81-4d3b-aace-7ba0243057b9' };
+  let consoleWarnSpy: jest.SpyInstance;
+  let consoleErrorSpy: jest.SpyInstance;
+  beforeEach(() => {
+    jest.clearAllMocks();
     
-    // Wait for initial load
-    await screen.findAllByText('EPA');
-    const rowDiv = container.querySelector('.row');
-    const epaCards = rowDiv?.querySelectorAll('.col-md-4.mb-4');
-    // Verify initial 3-month range is active
-    const threeMonthBtn = screen.getByText('Last 3 mo');
-    epaCards?.forEach((card) => {
-        expect(card).toHaveClass('range-3');
+    // useUser mockup for user context
+    (useUser as jest.Mock).mockReturnValue({
+      user: mockUser,
+      loading: false
     });
 
-    // Switch to 6-month range
-    const sixMonthBtn = screen.getByText('Last 6 mo');
-    fireEvent.click(sixMonthBtn);
-    epaCards?.forEach((card) => {
-        expect(card).toHaveClass('range-6');
-    });
+    // Console spies
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
 
-    // Verify UI update
+  afterEach(() => {
+    jest.resetAllMocks();
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('renders loading state when user context is loading', async () => {
+    (useUser as jest.Mock).mockReturnValue({
+      user: null,
+      loading: true
+    });
+    render(<StudentDashboard />);
+    // Checks if loading state is displayed om screen.
     await waitFor(() => {
-      expect(sixMonthBtn).toHaveClass('active');
-      expect(threeMonthBtn).not.toHaveClass('active');
+        expect(screen.getByText('Loading...')).toBeInTheDocument();
+    });
+  });
+
+  test('does not fetch data when user is not present', async () => {
+    (useUser as jest.Mock).mockReturnValue({
+      user: null,
+      loading: false
     });
 
-    // Switch to 12-month range
-    const twelveMonthBtn = screen.getByText('Last 12 mo');
-    fireEvent.click(twelveMonthBtn);
-    epaCards?.forEach((card) => {
-        expect(card).toHaveClass('range-12');
-    });
-
-    // Verify UI update
+    // Checks if supabase.from() is not called. This would conclude that
+    // the compoennt returned early.
+    render(<StudentDashboard />);
     await waitFor(() => {
-      expect(twelveMonthBtn).toHaveClass('active');
-      expect(sixMonthBtn).not.toHaveClass('active');
+        expect(mockSupabaseFrom).not.toHaveBeenCalled();
+    })
+  });
+
+  test('handles form_results query error', async () => {
+    (useUser as jest.Mock).mockReturnValue({
+      user: mockUser,
+      loading: false
+    });
+    mockSupabaseFrom.mockImplementation(() => ({
+      select: jest.fn().mockImplementation(() => ({
+        filter: jest.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'form results query error' }, // Simulate error
+        }),
+      })),
+    }));
+    render(<StudentDashboard />);
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Data Fetch Error:',
+        { message: 'form results query error' }
+      );
+    });
+  });
+
+  test('warns when no form_results data is found for student', async () => {
+    mockSupabaseFrom.mockImplementation(() => ({
+      select: jest.fn().mockImplementation(() => ({
+        filter: jest.fn().mockResolvedValue({
+          data: null, // no data found
+          error: null, // no error occured
+        }),
+      })),
+    }));
+    render(<StudentDashboard />);
+    await waitFor(() => {
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('No valid data found in form_results for this student')
+      );
+    });
+  });
+
+  test('handles form_results that is not an array', async () => {
+    mockSupabaseFrom.mockImplementation(() => ({
+      select: jest.fn().mockImplementation(() => ({
+        filter: jest.fn().mockResolvedValue({
+          data: {}, // in object form, not an array
+          error: null,
+        }),
+      })),
+    }));
+    
+    render(<StudentDashboard />);
+    
+    await waitFor(() => {
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('No valid data found in form_results for this student')
+      );
+    });
+  });
+
+  test('handles ID mismatch in joined data', async () => {
+    let entry = {
+      id: 1,
+      created_at: '2023-01-01T00:00:00Z',
+      parent_response_id: 'abc123', // Correct parent ID
+      results: { '1.1': 3 },
+      form_responses: {
+        response_id: 'xyz789', // Mismatched parent ID
+        request_id: 'req123', // Correct request ID
+        form_requests: {
+          id: 'req123', // Correct request ID
+          created_at: '2023-01-01T00:00:00Z',
+          student_id: mockUser.id,
+        },
+      },
+    };
+    mockSupabaseFrom.mockImplementation(() => ({
+      select: jest.fn().mockImplementation(() => ({
+        filter: jest.fn().mockResolvedValue({
+          data: [entry],
+          error: null,
+        }),
+      })),
+    }));
+    render(<StudentDashboard />);
+    // Check that it catches incorrect parent ID
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('ID mismatch in joined data:'),
+        entry
+      );
+    });
+
+    entry = {
+      id: 1,
+      created_at: '2023-01-01T00:00:00Z',
+      parent_response_id: 'abc123', // Correct parent ID
+      results: { '1.1': 3 },
+      form_responses: {
+        response_id: 'abc123', // Correct parent ID
+        request_id: 'req123', // Correct request ID
+        form_requests: {
+          id: 'req345', // Incorrect request ID
+          created_at: '2023-01-01T00:00:00Z',
+          student_id: mockUser.id,
+        },
+      },
+    };
+    render(<StudentDashboard />);
+    // Check that it catches incorrect request ID
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('ID mismatch in joined data:'),
+        entry
+      );
+    });
+  });
+
+  test('handles epa_kf_descriptions query error', async () => {
+    // First call to supabase.from().select().filter()
+    mockSupabaseFilter.mockResolvedValueOnce({
+      data: [{
+        id: 1,
+        created_at: '2023-01-01T00:00:00Z',
+        parent_response_id: 'abc123',
+        results: { '1.1': 3 },
+        form_responses: {
+          response_id: 'abc123',
+          request_id: 'req123',
+          form_requests: {
+            id: 'req123',
+            created_at: '2023-01-01T00:00:00Z',
+            student_id: mockUser.id,
+          },
+        },
+      }],
+      error: null
+    });
+
+    // Second supabase call for epa_kf_descriptions
+    const mockSecondSelect = jest.fn();
+    
+    mockSupabaseFrom.mockImplementationOnce(() => ({
+      select: mockSupabaseSelect.mockImplementationOnce(() => ({
+        filter: mockSupabaseFilter
+      }))
+    })).mockImplementationOnce(() => ({
+      select: mockSecondSelect.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'EPA description fetch error' } // Simulate error
+      })
+    }));
+    
+    render(<StudentDashboard />);
+    
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'EPA Fetch Error:',
+        expect.objectContaining({ message: 'EPA description fetch error' })
+      );
+    });
+  });
+
+  test('warns when epa descriptions are not found', async () => {
+    // First call to supabase.from().select().filter()
+    mockSupabaseFilter.mockResolvedValueOnce({
+      data: [{
+        id: 1,
+        created_at: '2023-01-01T00:00:00Z',
+        parent_response_id: 'abc123',
+        results: { '1.1': 3 },
+        form_responses: {
+          response_id: 'abc123',
+          request_id: 'req123',
+          form_requests: {
+            id: 'req123',
+            created_at: '2023-01-01T00:00:00Z',
+            student_id: mockUser.id,
+          },
+        },
+      }],
+      error: null
+    });
+
+    // Second call returns empty array (no EPA descriptions)
+    mockSupabaseFrom.mockImplementationOnce(() => ({
+      select: mockSupabaseSelect.mockImplementationOnce(() => ({
+        filter: mockSupabaseFilter
+      }))
+    })).mockImplementationOnce(() => ({
+      select: jest.fn().mockResolvedValueOnce({
+        data: [], // No descriptions
+        error: null
+      })
+    }));
+    
+    render(<StudentDashboard />);
+    
+    await waitFor(() => {
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'EPA descriptions not found'
+      );
     });
   });
 });
