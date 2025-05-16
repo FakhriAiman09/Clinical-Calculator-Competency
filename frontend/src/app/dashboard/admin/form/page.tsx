@@ -32,10 +32,10 @@ export default function Form() {
     getKFSampleCounts().then((counts) => setSampleCounts(counts));
   }, []);
 
-  const randomizeQuestionChoices = (options: { [key: string]: string }): { [key: string]: boolean } => {
+  const mapToFalse = (options: { [key: string]: string }): { [key: string]: boolean } => {
     const keys = Object.keys(options);
     const length = keys.length;
-    let choices = {};
+    // let choices = {};
 
     // If options is empty, return an empty object
     if (length === 0) return {};
@@ -43,13 +43,13 @@ export default function Form() {
     // Randomly select choices from options
     // Ensure at least one choice and <= 50% of the options are selected
     // Accept when selected == 50% for case of 2 options
-    let selectedCount = 0;
-    while (selectedCount === 0 || selectedCount / length > 0.5) {
-      choices = keys.reduce((o, k) => ({ ...o, [k]: Math.random() < 0.5 }), {});
-      selectedCount = Object.values(choices).filter((v) => v).length;
-    }
+    // let selectedCount = 0;
+    // while (selectedCount === 0 || selectedCount / length > 0.5) {
+    //   choices = keys.reduce((o, k) => ({ ...o, [k]: Math.random() < 0.5 }), {});
+    //   selectedCount = Object.values(choices).filter((v) => v).length;
+    // }
 
-    return choices;
+    return keys.reduce((o, k) => ({ ...o, [k]: false }), {});
   };
 
   const getWeightedRandomKf = (sampleCounts: { kf: string; count: number }[]) => {
@@ -71,7 +71,7 @@ export default function Form() {
       const qs = mcqData.filter((q) => q.kf === kf);
       setQuestions(qs);
       if (qs.length > 0)
-        setChoices(qs.map((q) => randomizeQuestionChoices(q.options)).reduce((a, o) => Object.assign(a, o), {}));
+        setChoices(qs.map((q) => mapToFalse(q.options)).reduce((a, o) => Object.assign(a, o), {}));
     }
     setLoading(false);
   }, [descData, mcqData, sampleCounts]);
@@ -118,12 +118,12 @@ export default function Form() {
           your administrator.
         </div>
       );
-    return questions.map((q, i) => <Question key={i} question={q} choices={choices} />);
+    return questions.map((q, i) => <Question key={i} question={q} choices={choices} setChoices={setChoices} />);
   };
 
   return (
     <>
-      <div className='d-flex flex-column min-vh-100'>
+      <div className='d-flex flex-column' style={{ minHeight: '80vh' }}>
         <div className='row sticky-top'>{loading || <EpaKfDesc desc={desc} />}</div>
         <div className='row flex-grow-1'>
           <div className='container px-5 pt-3 text-center' style={{ maxWidth: '720px' }}>
