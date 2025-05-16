@@ -93,12 +93,14 @@ export default function RaterFormsPage() {
       (
         newResponses: Responses,
         newTextInputs: { [epa: number]: { [questionId: string]: string } },
-        newProfessionalism: string
+        newProfessionalism: string,
+        newSelectedEPAs: number[]
       ) => {
         const formProgress = {
           responses: newResponses,
           textInputs: newTextInputs,
           professionalism: newProfessionalism,
+          selectedEPAs: newSelectedEPAs,
         };
         localStorage.setItem(`form-progress-${studentId}`, JSON.stringify(formProgress));
         setSaveStatus('Autosaved at ' + new Date().toLocaleTimeString());
@@ -108,30 +110,28 @@ export default function RaterFormsPage() {
     );
     return debouncedFunction;
   }, [studentId])();
-
-  useEffect(() => {
-    return () => {
-      debouncedSave.cancel();
-    };
-  }, [debouncedSave]);
-
   const saveProgress = useCallback(() => {
-    debouncedSave(responses, textInputs, professionalism);
-  }, [debouncedSave, responses, textInputs, professionalism]);
+    debouncedSave(responses, textInputs, professionalism, selectedEPAs);
+  }, [debouncedSave, responses, textInputs, professionalism, selectedEPAs]);
 
   useEffect(() => {
     if (studentId) {
-      const cachedData = localStorage.getItem(`form-progress-${studentId}`);
+      const cacheKey = `form-progress-${studentId}`;
+      const cachedData = localStorage.getItem(cacheKey);
       if (cachedData) {
         try {
           const parsedData = JSON.parse(cachedData) as {
             responses: Responses;
             textInputs: { [epa: number]: { [questionId: string]: string } };
             professionalism: string;
+            selectedEPAs?: number[];
           };
           setResponses(parsedData.responses || {});
           setTextInputs(parsedData.textInputs || {});
           setProfessionalism(parsedData.professionalism || '');
+          if (parsedData.selectedEPAs) {
+            setSelectedEPAs(parsedData.selectedEPAs);
+          }
         } catch (error: unknown) {
           console.error('Error parsing cached data', error);
         }
@@ -308,10 +308,34 @@ export default function RaterFormsPage() {
 
   const submitEPAs = useCallback((): void => {
     if (selectedEPAs.length > 0) {
+      const cacheKey = `form-progress-${studentId}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      if (cachedData) {
+        try {
+          const formProgress = JSON.parse(cachedData);
+          if (formProgress.responses) {
+            Object.keys(formProgress.responses).forEach((epaKey) => {
+              if (!selectedEPAs.includes(Number(epaKey))) {
+                delete formProgress.responses[epaKey];
+              }
+            });
+          }
+          if (formProgress.textInputs) {
+            Object.keys(formProgress.textInputs).forEach((epaKey) => {
+              if (!selectedEPAs.includes(Number(epaKey))) {
+                delete formProgress.textInputs[epaKey];
+              }
+            });
+          }
+          localStorage.setItem(cacheKey, JSON.stringify(formProgress));
+        } catch (error) {
+          console.error("Error updating cached JSON:", error);
+        }
+      }
       setCurrentEPA(selectedEPAs[0]);
       setSelectionCollapsed(true);
     }
-  }, [selectedEPAs]);
+  }, [selectedEPAs, studentId]);
 
   const handleOptionChange = useCallback(
     (epaId: number, questionId: string, optionKey: string, value: boolean): void => {
