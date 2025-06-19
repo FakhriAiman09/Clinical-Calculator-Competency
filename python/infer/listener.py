@@ -11,6 +11,7 @@ It requires the following environment variables to be set:
 import asyncio
 import os
 
+import tensorflow_text as text
 from dotenv import load_dotenv
 from google import genai
 import kagglehub
