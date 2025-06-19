@@ -9,6 +9,7 @@ import re
 
 import supabase as spb
 import tensorflow as tf
+import tensorflow_text as text
 from google import genai
 from google.genai.types import GenerateContentResponse
 from sklearn import svm
