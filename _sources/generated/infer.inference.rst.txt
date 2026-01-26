@@ -1,0 +1,17 @@
+﻿infer.inference
+===============
+
+.. automodule:: infer.inference
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      bert_infer
+      download_svm_models
+      generate_report_summary
+      load_bert_model
+      load_svm_models
+      svm_infer
+   

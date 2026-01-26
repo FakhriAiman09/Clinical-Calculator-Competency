@@ -1,0 +1,14 @@
+﻿infer.listener
+==============
+
+.. automodule:: infer.listener
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      handle_new_report
+      handle_new_response
+      main
+   

@@ -1,0 +1,13 @@
+﻿svm.train
+=========
+
+.. automodule:: svm.train
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      main
+      train_svm
+   

@@ -1,0 +1,14 @@
+﻿svm.util
+========
+
+.. automodule:: svm.util
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      export_upload_model
+      log
+      percent_bar
+   
