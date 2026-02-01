@@ -26,7 +26,8 @@ const NavLinks = () => {
     links.push(
       link('/dashboard', 'Dashboard'),
       link('/dashboard/student/form-requests', 'Request Assessment'),
-      link('/dashboard/student/report', 'Comprehensive Report')
+      link('/dashboard/student/report', 'Comprehensive Report'),
+      link('/dashboard/AboutUsPage', 'About Us')
     );
   }
 
@@ -36,13 +37,17 @@ const NavLinks = () => {
       link('/dashboard/admin/userList', 'Manage Users'),
       link('/dashboard/admin/all-reports', 'All Reports'),
       link('/dashboard/admin/edit-questions-options', 'Edit Questions'),
-      link('/dashboard/admin/form', 'Add MCQ Data')
+      link('/dashboard/admin/form', 'Add MCQ Data'),
+      link('/dashboard/AboutUsPage', 'About Us')
     );
   }
 
   // Rater-only view (non-admin, non-dev)
   if (userRoleRater && !userRoleAuthorized && !userRoleDev) {
-    links.push(link('/dashboard', 'Home'));
+    links.push(
+      link('/dashboard', 'Home'),
+      link('/dashboard/AboutUsPage', 'About Us')
+    );
   }
 
   if (userRoleDev) {
