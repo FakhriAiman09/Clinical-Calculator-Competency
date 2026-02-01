@@ -26,7 +26,7 @@ export default function AboutPage() {
       const supabase = createClient();
 
       const { data, error: fetchError } = await supabase
-        .from('about_us_page') // ✅ Updated to match your table name
+        .from('about_us_page') 
         .select('*')
         .order('dev_name', { ascending: true });
 
