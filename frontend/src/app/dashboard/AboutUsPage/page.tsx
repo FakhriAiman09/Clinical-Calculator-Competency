@@ -26,7 +26,7 @@ export default function AboutPage() {
     try {
       const supabase = createClient();
 
-      // Fetch developers info from Supabase
+      // Fetch developers info from Supabase about us table
       const { data, error: fetchError } = await supabase
       .from('about_us_page')
       .select('*')
