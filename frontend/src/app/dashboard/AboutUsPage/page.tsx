@@ -22,13 +22,15 @@ export default function AboutPage() {
     setLoading(true);
     setError(null);
 
+
     try {
       const supabase = createClient();
 
+      // Fetch developers info from Supabase about us table
       const { data, error: fetchError } = await supabase
-        .from('about_us_page') 
-        .select('*')
-        .order('dev_name', { ascending: true });
+      .from('about_us_page')
+      .select('*')
+      .order('dev_name', { ascending: true });
 
       if (fetchError) {
         throw fetchError;
@@ -43,10 +45,7 @@ export default function AboutPage() {
     }
   };
 
-  /**
-   * Generate initials from developer name
-   * e.g., "John Doe" -> "JD"
-   */
+  // generate initials from name for profile avatar
   const getInitials = (name: string): string => {
     return name
       .split(' ')
@@ -55,9 +54,9 @@ export default function AboutPage() {
       .substring(0, 2);
   };
 
-  /**
-   * Generate a consistent color based on name (for avatar background)
-   */
+
+  //Generate a consistent color based on name (for avatar background)
+  
   const getAvatarColor = (name: string): string => {
     const colors = [
       '#6C757D', // Gray
