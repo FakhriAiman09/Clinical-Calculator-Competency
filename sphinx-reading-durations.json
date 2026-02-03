@@ -1,6 +1,6 @@
 {
     "api": 0.025,
-    "bert": 0.063,
+    "bert": 0.071,
     "changelog": 0.001,
     "generated/bert.utils": 0.015,
     "generated/infer.inference": 0.014,
