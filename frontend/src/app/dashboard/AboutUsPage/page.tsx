@@ -9,10 +9,19 @@ interface Developer {
   created_at?: string;
 }
 
+interface DeveloperDetail {
+  role: string | null;
+  contribution: string | null;
+}
+
 export default function AboutPage() {
   const [developers, setDevelopers] = useState<Developer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [selectedDev, setSelectedDev] = useState<Developer|null>(null);
+  const [devLoading, setDevLoading] = useState (false);
+  const [devDetails, setDevDetails] = useState<DeveloperDetail|null>(null);
 
   useEffect(() => {
     fetchDevelopers();
@@ -73,6 +82,45 @@ export default function AboutPage() {
     return colors[index];
   };
 
+  //developer's details
+  const fetchDevDetails = async (dev:Developer) => {
+    setSelectedDev(dev);
+    setDevLoading(true);
+    setDevDetails(null);
+
+
+    try {
+      const supabase = createClient();
+
+      // Fetch developers details info from Supabase about_us_details table
+      const { data, error: fetchError } = await supabase
+      .from('about_us_details')
+      .select('role,contribution')
+      .eq('about_us_id', dev.id)
+      .maybeSingle();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      setDevDetails({
+      role: data?.role ?? null,
+      contribution: data?.contribution ?? null,
+    });
+
+    } catch (err) {
+      console.error('Error fetching developer detail:', err);
+      setSelectedDev(null);
+    } finally {
+      setDevLoading(false);
+    }
+  };
+
+  const closeDevDetails = () => {
+    setSelectedDev(null);
+    setDevDetails(null);
+  };
+
   return (
     <div className='container py-5'>
       {/* Header Section */}
@@ -119,7 +167,14 @@ export default function AboutPage() {
             // Developers Grid
             developers.map((dev) => (
               <div key={dev.id} className='col-12 col-md-6 col-lg-4 mb-4'>
-                <div className='card h-100 shadow-sm border-0 developer-card'>
+                <div className='card h-100 shadow-sm border-0 developer-card'
+                  role='button'
+                  tabIndex={0}
+                  onClick={() => fetchDevDetails(dev)}
+                  onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') fetchDevDetails(dev);
+                  }}
+                >
                   <div className='card-body text-center p-4'>
                     {/* Avatar */}
                     <div
@@ -173,6 +228,58 @@ export default function AboutPage() {
         </div>
       </footer>
 
+      {/* Developer's Details Section */}
+      {selectedDev && (
+        <div
+          style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000,
+          }}
+          onClick={closeDevDetails}
+        >
+        <div
+          className="card shadow"
+          style={{ width: 420, maxWidth: '95%' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="card-body">
+            <div className="d-flex justify-content-between align-items-start mb-3">
+              <h5 className="mb-0">{selectedDev.dev_name}</h5>
+              <button className="btn-close" onClick={closeDevDetails}></button>
+            </div>
+
+            {devLoading ? (
+            <p className="text-muted mb-0">Loading profile...</p>
+            ) : (
+            <>
+            <div className="mb-3">
+              <div className="text-muted small">Role</div>
+              <div className="fw-semibold">{devDetails?.role ?? '---'}</div>
+            </div>
+
+            <div>
+              <div className="text-muted small">Contribution</div>
+              <div>{devDetails?.contribution ?? '---'}</div>
+            </div>
+            </>
+            )}
+
+            <div className="text-end mt-4">
+              <button className="btn btn-secondary btn-sm" onClick={closeDevDetails}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+        </div>
+      )}
+
+
       {/* Custom Styles */}
       <style>{`
         .developer-card {
@@ -192,7 +299,17 @@ export default function AboutPage() {
 
         .developer-card:hover .avatar-circle {
           transform: scale(1.1);
+          cursor: pointer;
         }
+        
+        .modal { 
+          z-index: 1055; 
+        }
+        
+        .modal-backdrop { 
+          z-index: 1050; 
+        }
+
       `}</style>
     </div>
   );
