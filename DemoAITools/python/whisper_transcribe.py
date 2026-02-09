@@ -1,15 +1,17 @@
 import sys
 from faster_whisper import WhisperModel
 
-# Options: "tiny", "base", "small", "medium", "large-v3"
-# Device: "cuda" for GPU (requires NVIDIA drivers) or "cpu"
-model = WhisperModel("small")
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python3 transcribe_whisper.py <audio_path>")
+        sys.exit(1)
 
-# Transcribe the audio file provided as a command-line argument
-segments, _ = model.transcribe(sys.argv[1])
+    audio_path = sys.argv[1]
+    model = WhisperModel("small", device="cpu")  # change to device="cuda" if you have GPU
 
-#print the entire transcription
-print(" ".join(s.text for s in segments))
+    segments, _ = model.transcribe(audio_path)
+    text = " ".join(s.text.strip() for s in segments if s.text.strip())
+    print(text)
 
-
-#
+if __name__ == "__main__":
+    main()

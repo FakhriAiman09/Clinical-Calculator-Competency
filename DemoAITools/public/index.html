@@ -1,45 +1,259 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Voice AI Demo</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice → Transcribe + AI Overview</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-    textarea { width: 100%; height: 140px; }
-    button { margin-right: 10px; padding: 8px 14px; }
-    h3 { margin-top: 0; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    button {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      font-weight: 600;
+      background: #fff;
+    }
+    textarea {
+      width: 100%;
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      font-size: 14px;
+      resize: vertical;
+    }
+    .status {
+      margin-left: 10px;
+      font-size: 12px;
+      color: #666;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .aiBox {
+      margin-top: 12px;
+      border: 1px solid #ddd;
+      padding: 12px;
+      border-radius: 8px;
+    }
+    .muted {
+      color: #666;
+      font-size: 13px;
+    }
+    h3 {
+      margin: 0 0 6px 0;
+      font-size: 14px;
+    }
+    pre {
+      white-space: pre-wrap;
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 13px;
+    }
   </style>
 </head>
+
 <body>
+  <h1>Voice AI Feedback Prototype</h1>
+  <p class="muted">
+    Click <b>Start Recording</b>, speak, then click <b>Stop</b>. It will upload audio to your backend:
+    <code>POST /api/transcribe-and-overview</code>, then show transcription + AI overview.
+  </p>
 
-<h2> Voice :AI Transcription Demo</h2>
+  <div class="card">
+    <div class="row">
+      <button id="recBtn" type="button">🎙️ Start Recording</button>
+      <span class="status" id="status"></span>
+    </div>
 
-<button id="record"> Record</button>
-<button id="stop"> Stop</button>
-<button onclick="transcribeAll()"> Transcribe with All AIs</button>
+    <textarea
+      id="commentBox"
+      rows="6"
+      placeholder="Transcription will appear here..."
+    ></textarea>
 
-<upload id="audioUpload" style="display:none;">
-  <input type="file" id="audioFile" accept="audio/*" />
-</upload>
+    <div style="margin-top: 12px" class="row">
+      <button id="overviewBtn" type="button">🧠 AI Overview (from text)</button>
+      <button id="clearBtn" type="button">🧹 Clear</button>
+    </div>
 
-<div class="grid">
-  <div>
-    <h3>Faster-Whisper</h3>
-    <textarea id="whisper"></textarea>
+    <div id="aiOutput"></div>
   </div>
 
-  <div>
-    <h3>Qwen2-Audio</h3>
-    <textarea id="qwen"></textarea>
-  </div>
+  <script>
+    // ====== CONFIG ======
+    // If your backend is running on localhost:3000 (from server.js)
+    const API_BASE = "http://localhost:3000";
 
-  <div>
-    <h3>Google GenAI</h3>
-    <textarea id="google"></textarea>
-  </div>
-</div>
+    // ====== ELEMENTS ======
+    const recBtn = document.getElementById("recBtn");
+    const overviewBtn = document.getElementById("overviewBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const statusEl = document.getElementById("status");
+    const commentBox = document.getElementById("commentBox");
+    const aiOutput = document.getElementById("aiOutput");
 
-<script src="app.js"></script>
+    // ====== AUDIO RECORDING (MediaRecorder) ======
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let currentStream = null;
+
+    async function startRecording() {
+      aiOutput.innerHTML = "";
+      audioChunks = [];
+
+      // Ask for microphone permission
+      currentStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Most browsers record as audio/webm; backend transcriber should handle it or convert if needed.
+      mediaRecorder = new MediaRecorder(currentStream);
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        try {
+          const blob = new Blob(audioChunks, { type: "audio/webm" });
+          await uploadAudioForTranscriptAndOverview(blob);
+        } finally {
+          // stop mic
+          if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+          currentStream = null;
+        }
+      };
+
+      mediaRecorder.start();
+      isRecording = true;
+      recBtn.textContent = "■ Stop";
+      statusEl.textContent = "Recording...";
+    }
+
+    function stopRecording() {
+      if (!mediaRecorder) return;
+      mediaRecorder.stop();
+      isRecording = false;
+      recBtn.textContent = "🎙️ Start Recording";
+      statusEl.textContent = "Uploading...";
+    }
+
+    recBtn.addEventListener("click", async () => {
+      try {
+        if (!isRecording) {
+          await startRecording();
+        } else {
+          stopRecording();
+        }
+      } catch (err) {
+        statusEl.textContent = "Mic error: " + (err.message || err);
+      }
+    });
+
+    // ====== UPLOAD AUDIO -> BACKEND (transcribe + overview) ======
+    async function uploadAudioForTranscriptAndOverview(blob) {
+      statusEl.textContent = "Uploading & transcribing...";
+      aiOutput.innerHTML = `<div class="aiBox"><p>Processing audio...</p></div>`;
+
+      const formData = new FormData();
+      formData.append("audio", blob, "recording.webm");
+
+      const res = await fetch(`${API_BASE}/api/transcribe-and-overview`, {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        aiOutput.innerHTML = `<div class="aiBox"><p>Error: ${escapeHtml(data.error || "unknown")}</p></div>`;
+        statusEl.textContent = "Error.";
+        return;
+      }
+
+      // Fill textarea with transcript
+      commentBox.value = data.transcript || "";
+
+      // Show overview
+      aiOutput.innerHTML = `
+        <div class="aiBox">
+          <h3>AI Overview (Gemini)</h3>
+          <pre>${escapeHtml(data.overview || "")}</pre>
+        </div>
+      `;
+
+      statusEl.textContent = "Done.";
+    }
+
+    // ====== AI OVERVIEW FROM TEXT (if user typed or edited transcript) ======
+    overviewBtn.addEventListener("click", async () => {
+      const text = commentBox.value.trim();
+      if (!text) {
+        aiOutput.innerHTML = `<div class="aiBox"><p>Please add feedback text first.</p></div>`;
+        return;
+      }
+
+      statusEl.textContent = "Generating overview...";
+      aiOutput.innerHTML = `<div class="aiBox"><p>Generating overview...</p></div>`;
+
+      const res = await fetch(`${API_BASE}/api/overview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        aiOutput.innerHTML = `<div class="aiBox"><p>Error: ${escapeHtml(data.error || "unknown")}</p></div>`;
+        statusEl.textContent = "Error.";
+        return;
+      }
+
+      aiOutput.innerHTML = `
+        <div class="aiBox">
+          <h3>AI Overview (Gemini)</h3>
+          <pre>${escapeHtml(data.overview || "")}</pre>
+        </div>
+      `;
+      statusEl.textContent = "Done.";
+    });
+
+    // ====== CLEAR ======
+    clearBtn.addEventListener("click", () => {
+      commentBox.value = "";
+      aiOutput.innerHTML = "";
+      statusEl.textContent = "";
+      if (isRecording && mediaRecorder) {
+        try { mediaRecorder.stop(); } catch {}
+      }
+      isRecording = false;
+      recBtn.textContent = "🎙️ Start Recording";
+    });
+
+    // ====== HTML ESCAPE ======
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+  </script>
 </body>
 </html>

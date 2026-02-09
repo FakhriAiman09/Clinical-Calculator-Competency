@@ -2,8 +2,32 @@
     "name": "clinicalcompetencycalculator",
     "version": "1.2.35",
     "dependencies": {
+        "@google/generative-ai": "^0.24.1",
+        "cors": "^2.8.6",
+        "dotenv": "^17.2.4",
+        "express": "^5.2.1",
+        "multer": "^2.0.2",
         "react-markdown": "^10.1.0",
         "rehype-highlight": "^7.0.2",
         "remark-gfm": "^4.0.1"
-    }
+    },
+    "description": "<a id=\"readme-top\"></a>",
+    "main": "jest.config.js",
+    "directories": {
+        "doc": "doc"
+    },
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/FakhriAiman09/Clinical-Calculator-Competency.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/FakhriAiman09/Clinical-Calculator-Competency/issues"
+    },
+    "homepage": "https://github.com/FakhriAiman09/Clinical-Calculator-Competency#readme"
 }
