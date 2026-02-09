@@ -4,7 +4,7 @@
     "changelog": 0.001,
     "generated/bert.utils": 0.015,
     "generated/infer.inference": 0.014,
-    "generated/infer.listener": 0.009,
+    "generated/infer.listener": 0.01,
     "generated/svm.fetch_data": 0.007,
     "generated/svm.train": 0.009,
     "generated/svm.util": 0.008,
