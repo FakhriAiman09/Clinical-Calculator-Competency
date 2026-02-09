@@ -7,12 +7,17 @@ interface Developer {
   id: string;
   dev_name: string;
   created_at?: string;
+  role: string;
+  contribution?: string;
 }
 
 export default function AboutPage() {
   const [developers, setDevelopers] = useState<Developer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // new
+  const [selectedDev, setSelectedDev] = useState<Developer|null>(null);
 
   useEffect(() => {
     fetchDevelopers();
@@ -73,6 +78,10 @@ export default function AboutPage() {
     return colors[index];
   };
 
+  const closeDevDetails = () => {
+    setSelectedDev(null);
+  };
+
   return (
     <div className='container py-5'>
       {/* Header Section */}
@@ -119,7 +128,14 @@ export default function AboutPage() {
             // Developers Grid
             developers.map((dev) => (
               <div key={dev.id} className='col-12 col-md-6 col-lg-4 mb-4'>
-                <div className='card h-100 shadow-sm border-0 developer-card'>
+                <div className='card h-100 shadow-sm border-0 developer-card'
+                  role='button'
+                  tabIndex={0}
+                  onClick={() => setSelectedDev(dev)}
+                  onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setSelectedDev(dev);
+                  }}
+                >
                   <div className='card-body text-center p-4'>
                     {/* Avatar */}
                     <div
@@ -159,7 +175,7 @@ export default function AboutPage() {
             <h6 className='text-muted mb-3'>Acknowledgements</h6>
             <p className='text-muted small'>
               We would like to thank our advisors, faculty members, and the medical education community for their
-              guidance and support throughout the development of this project.
+              guidance and support throughout the development of this project and help us throughtou this semester(final yer).
             </p>
             <p className='text-muted small mb-0'>
               <strong>Disclaimer:</strong> This application was developed for educational and academic purposes. It is
@@ -172,6 +188,54 @@ export default function AboutPage() {
           </div>
         </div>
       </footer>
+
+      {/* Developer's Details Section (new)*/}
+      {selectedDev && (
+        <div
+          style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000,
+          }}
+          onClick={closeDevDetails}
+        >
+        <div
+          className="card shadow"
+          style={{ width: 420, maxWidth: '95%' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="card-body">
+            <div className="d-flex justify-content-between align-items-start mb-3">
+              <h5 className="mb-0">{selectedDev.dev_name}</h5>
+              <button className="btn-close" onClick={closeDevDetails}></button>
+            </div>
+
+            <>
+            <div className="mb-3">
+              <div className="text-muted small">Role</div>
+              <div className="fw-semibold">{selectedDev.role}</div>
+            </div>
+
+            <div>
+              <div className="text-muted small">Contribution</div>
+              <div>{selectedDev.contribution || '---'}</div>
+            </div>
+            </>
+
+            <div className="text-end mt-4">
+              <button className="btn btn-secondary btn-sm" onClick={closeDevDetails}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+        </div>
+      )}
+
 
       {/* Custom Styles */}
       <style>{`
@@ -192,7 +256,17 @@ export default function AboutPage() {
 
         .developer-card:hover .avatar-circle {
           transform: scale(1.1);
+          cursor: pointer;
         }
+        
+        .modal { 
+          z-index: 1055; 
+        }
+        
+        .modal-backdrop { 
+          z-index: 1050; 
+        }
+
       `}</style>
     </div>
   );
