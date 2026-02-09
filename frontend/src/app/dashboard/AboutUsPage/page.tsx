@@ -7,11 +7,8 @@ interface Developer {
   id: string;
   dev_name: string;
   created_at?: string;
-}
-
-interface DeveloperDetail {
-  role: string | null;
-  contribution: string | null;
+  role: string;
+  contribution?: string;
 }
 
 export default function AboutPage() {
@@ -19,9 +16,8 @@ export default function AboutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // new
   const [selectedDev, setSelectedDev] = useState<Developer|null>(null);
-  const [devLoading, setDevLoading] = useState (false);
-  const [devDetails, setDevDetails] = useState<DeveloperDetail|null>(null);
 
   useEffect(() => {
     fetchDevelopers();
@@ -82,43 +78,8 @@ export default function AboutPage() {
     return colors[index];
   };
 
-  //developer's details
-  const fetchDevDetails = async (dev:Developer) => {
-    setSelectedDev(dev);
-    setDevLoading(true);
-    setDevDetails(null);
-
-
-    try {
-      const supabase = createClient();
-
-      // Fetch developers details info from Supabase about_us_details table
-      const { data, error: fetchError } = await supabase
-      .from('about_us_details')
-      .select('role,contribution')
-      .eq('about_us_id', dev.id)
-      .maybeSingle();
-
-      if (fetchError) {
-        throw fetchError;
-      }
-
-      setDevDetails({
-      role: data?.role ?? null,
-      contribution: data?.contribution ?? null,
-    });
-
-    } catch (err) {
-      console.error('Error fetching developer detail:', err);
-      setSelectedDev(null);
-    } finally {
-      setDevLoading(false);
-    }
-  };
-
   const closeDevDetails = () => {
     setSelectedDev(null);
-    setDevDetails(null);
   };
 
   return (
@@ -170,9 +131,9 @@ export default function AboutPage() {
                 <div className='card h-100 shadow-sm border-0 developer-card'
                   role='button'
                   tabIndex={0}
-                  onClick={() => fetchDevDetails(dev)}
+                  onClick={() => setSelectedDev(dev)}
                   onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') fetchDevDetails(dev);
+                  if (e.key === 'Enter' || e.key === ' ') setSelectedDev(dev);
                   }}
                 >
                   <div className='card-body text-center p-4'>
@@ -228,7 +189,7 @@ export default function AboutPage() {
         </div>
       </footer>
 
-      {/* Developer's Details Section */}
+      {/* Developer's Details Section (new)*/}
       {selectedDev && (
         <div
           style={{
@@ -253,21 +214,17 @@ export default function AboutPage() {
               <button className="btn-close" onClick={closeDevDetails}></button>
             </div>
 
-            {devLoading ? (
-            <p className="text-muted mb-0">Loading profile...</p>
-            ) : (
             <>
             <div className="mb-3">
               <div className="text-muted small">Role</div>
-              <div className="fw-semibold">{devDetails?.role ?? '---'}</div>
+              <div className="fw-semibold">{selectedDev.role}</div>
             </div>
 
             <div>
               <div className="text-muted small">Contribution</div>
-              <div>{devDetails?.contribution ?? '---'}</div>
+              <div>{selectedDev.contribution || '---'}</div>
             </div>
             </>
-            )}
 
             <div className="text-end mt-4">
               <button className="btn btn-secondary btn-sm" onClick={closeDevDetails}>
