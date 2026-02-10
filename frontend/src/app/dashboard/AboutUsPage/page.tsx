@@ -175,7 +175,7 @@ export default function AboutPage() {
             <h6 className='text-muted mb-3'>Acknowledgements</h6>
             <p className='text-muted small'>
               We would like to thank our advisors, faculty members, and the medical education community for their
-              guidance and support throughout the development of this project and help us throughtou this semester(final yer).
+              guidance and support throughout the development of this project and help us in this final semester ).
             </p>
             <p className='text-muted small mb-0'>
               <strong>Disclaimer:</strong> This application was developed for educational and academic purposes. It is
