@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react'; // <-- added useRef only
 import { debounce } from 'lodash';
 import { createClient } from '@/utils/supabase/client';
 import { getLatestMCQs } from '@/utils/get-epa-data';
@@ -87,6 +87,136 @@ export default function RaterFormsPage() {
 
   const searchParams = useSearchParams();
   const studentId = searchParams?.get('id') ?? '';
+
+  // =========================================================
+  // VOICE TO TEXT (prototype style: interimResults + continuous)
+  // Only additions. Adds pretty emoji Speak/Stop and live status.
+  // =========================================================
+  const recognitionRef = useRef<any>(null);
+  const activeTargetRef = useRef<{ epaId: number; questionId: string } | null>(null);
+
+  const [listeningByField, setListeningByField] = useState<Record<string, boolean>>({});
+  const [statusByField, setStatusByField] = useState<Record<string, string>>({});
+
+  const makeFieldKey = (epaId: number, questionId: string) => `${epaId}::${questionId}`;
+
+  useEffect(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      recognitionRef.current = null;
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';          // change to 'ms-MY' if needed
+    recognition.interimResults = true;   // like your prototype
+    recognition.continuous = true;       // like your prototype
+
+    recognition.onstart = () => {
+      const target = activeTargetRef.current;
+      if (!target) return;
+      const key = makeFieldKey(target.epaId, target.questionId);
+      setListeningByField((prev) => ({ ...prev, [key]: true }));
+      setStatusByField((prev) => ({ ...prev, [key]: 'Listening…' }));
+    };
+
+    recognition.onend = () => {
+      const target = activeTargetRef.current;
+      if (!target) return;
+      const key = makeFieldKey(target.epaId, target.questionId);
+      setListeningByField((prev) => ({ ...prev, [key]: false }));
+      setStatusByField((prev) => ({ ...prev, [key]: '' }));
+    };
+
+    recognition.onerror = (e: any) => {
+      const target = activeTargetRef.current;
+      if (!target) return;
+      const key = makeFieldKey(target.epaId, target.questionId);
+      setListeningByField((prev) => ({ ...prev, [key]: false }));
+      setStatusByField((prev) => ({ ...prev, [key]: `Error: ${e?.error || 'unknown'}` }));
+    };
+
+    recognition.onresult = (event: any) => {
+      const target = activeTargetRef.current;
+      if (!target) return;
+
+      const key = makeFieldKey(target.epaId, target.questionId);
+
+      let finalText = '';
+      let interimText = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalText += transcript;
+        else interimText += transcript;
+      }
+
+      // Append final text into the correct textarea
+      if (finalText.trim()) {
+        setTextInputs((prev) => {
+          const existing = prev[target.epaId]?.[target.questionId] ?? '';
+          const newValue = (existing ? existing.trimEnd() + ' ' : '') + finalText.trim();
+
+          return {
+            ...prev,
+            [target.epaId]: {
+              ...prev[target.epaId],
+              [target.questionId]: newValue,
+            },
+          };
+        });
+
+        // keep your existing behavior (shows saving)
+        setSaveStatus('Saving...');
+      }
+
+      // Show interim text in status line (pretty like prototype)
+      if (interimText.trim()) {
+        setStatusByField((prev) => ({ ...prev, [key]: `Listening… “${interimText.trim()}”` }));
+      } else {
+        setStatusByField((prev) => ({ ...prev, [key]: 'Listening…' }));
+      }
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      try {
+        recognition.stop();
+      } catch {}
+    };
+  }, []);
+
+  const toggleDictation = (epaId: number, questionId: string) => {
+    if (!recognitionRef.current) {
+      setSaveStatus('Speech-to-text not supported. Use Chrome/Edge.');
+      setTimeout(() => setSaveStatus(''), 5000);
+      return;
+    }
+
+    const key = makeFieldKey(epaId, questionId);
+    const isListening = !!listeningByField[key];
+
+    try {
+      if (isListening) {
+        recognitionRef.current.stop();
+      } else {
+        // if user clicks a different question while listening, stop first
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+        activeTargetRef.current = { epaId, questionId };
+        recognitionRef.current.start();
+      }
+    } catch {
+      // ignore
+    }
+  };
+  // =========================================================
+  // END VOICE TO TEXT additions
+  // =========================================================
 
   const debouncedSave = useCallback(() => {
     const debouncedFunction = debounce(
@@ -263,12 +393,10 @@ export default function RaterFormsPage() {
     }
   }, [kfData, selectedEPAs]);
 
-
   const toggleEPASelection = useCallback(
     (epaId: number): void => {
       setSelectedEPAs((prev: number[]) => {
         if (prev.includes(epaId)) {
-
           setResponses((prevResponses) => {
             const updatedResponses = { ...prevResponses };
             delete updatedResponses[epaId];
@@ -531,6 +659,13 @@ export default function RaterFormsPage() {
           bottom: auto;
           left: auto;
         }
+
+        /* Only for voice-to-text status line (small + nice) */
+        .vtt-status {
+          font-size: 12px;
+          color: #6c757d;
+          margin-top: 6px;
+        }
       `}</style>
       <div className='container-fluid d-flex'>
         {/* Sidebar */}
@@ -702,6 +837,11 @@ export default function RaterFormsPage() {
                   .map((kf) => {
                     const questionKey = kf.questionId;
                     const currentText = textInputs[currentEPA]?.[questionKey] || '';
+
+                    const fieldKey = makeFieldKey(currentEPA, questionKey);
+                    const isListening = !!listeningByField[fieldKey];
+                    const vttStatus = statusByField[fieldKey] || '';
+
                     return (
                       <div key={questionKey} className='mb-4'>
                         <p className='fw-bold'>{kf.question}</p>
@@ -729,8 +869,24 @@ export default function RaterFormsPage() {
                             </div>
                           ))}
                         </div>
+
                         <div>
-                          <h6>Additional comments:</h6>
+                          {/* ONLY UI addition: pretty emoji button + live status */}
+                          <div className='d-flex align-items-center justify-content-between'>
+                            <h6 className='mb-0'>Additional comments:</h6>
+
+                            <button
+                              type='button'
+                              className='btn btn-outline-secondary btn-sm'
+                              onClick={() => toggleDictation(currentEPA, questionKey)}
+                              title={isListening ? 'Stop voice input' : 'Start voice input'}
+                            >
+                              {isListening ? '🛑✨ Stop' : '🎙️✨ Speak'}
+                            </button>
+                          </div>
+
+                          {vttStatus ? <div className='vtt-status'>{vttStatus}</div> : null}
+
                           <textarea
                             className='form-control'
                             placeholder='Additional comments ...'
@@ -738,10 +894,12 @@ export default function RaterFormsPage() {
                             onChange={(e) => handleTextInputChange(currentEPA, questionKey, e.target.value)}
                           ></textarea>
                         </div>
+
                         <hr />
                       </div>
                     );
                   })}
+
                 <button
                   className='btn btn-success mt-3'
                   onClick={() => {
