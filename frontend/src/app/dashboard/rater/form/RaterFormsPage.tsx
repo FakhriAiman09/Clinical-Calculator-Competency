@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react'; // <-- added useRef only
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { debounce } from 'lodash';
 import { createClient } from '@/utils/supabase/client';
 import { getLatestMCQs } from '@/utils/get-epa-data';
@@ -90,7 +90,6 @@ export default function RaterFormsPage() {
 
   // =========================================================
   // VOICE TO TEXT (prototype style: interimResults + continuous)
-  // Only additions. Adds pretty emoji Speak/Stop and live status.
   // =========================================================
   const recognitionRef = useRef<any>(null);
   const activeTargetRef = useRef<{ epaId: number; questionId: string } | null>(null);
@@ -101,8 +100,7 @@ export default function RaterFormsPage() {
   const makeFieldKey = (epaId: number, questionId: string) => `${epaId}::${questionId}`;
 
   useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       recognitionRef.current = null;
@@ -110,9 +108,9 @@ export default function RaterFormsPage() {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';          // change to 'ms-MY' if needed
-    recognition.interimResults = true;   // like your prototype
-    recognition.continuous = true;       // like your prototype
+    recognition.lang = 'en-US'; // change to 'ms-MY' if needed
+    recognition.interimResults = true;
+    recognition.continuous = true;
 
     recognition.onstart = () => {
       const target = activeTargetRef.current;
@@ -168,11 +166,10 @@ export default function RaterFormsPage() {
           };
         });
 
-        // keep your existing behavior (shows saving)
         setSaveStatus('Saving...');
       }
 
-      // Show interim text in status line (pretty like prototype)
+      // Show interim text in status line
       if (interimText.trim()) {
         setStatusByField((prev) => ({ ...prev, [key]: `Listening… “${interimText.trim()}”` }));
       } else {
@@ -215,7 +212,7 @@ export default function RaterFormsPage() {
     }
   };
   // =========================================================
-  // END VOICE TO TEXT additions
+  // END VOICE TO TEXT
   // =========================================================
 
   const debouncedSave = useCallback(() => {
@@ -240,6 +237,7 @@ export default function RaterFormsPage() {
     );
     return debouncedFunction;
   }, [studentId])();
+
   const saveProgress = useCallback(() => {
     debouncedSave(responses, textInputs, professionalism, selectedEPAs);
   }, [debouncedSave, responses, textInputs, professionalism, selectedEPAs]);
@@ -284,11 +282,7 @@ export default function RaterFormsPage() {
   useEffect(() => {
     async function fetchFormRequestDetails(): Promise<void> {
       if (!studentId) return;
-      const { data: formData, error: formError } = await supabase
-        .from('form_requests')
-        .select('*')
-        .eq('id', studentId)
-        .single();
+      const { data: formData, error: formError } = await supabase.from('form_requests').select('*').eq('id', studentId).single();
       if (formError || !formData) {
         console.error('Failed to fetch form request:', formError?.message);
         return;
@@ -338,8 +332,8 @@ export default function RaterFormsPage() {
       const { data: epaData, error: epaError } = await supabase.from('epa_kf_descriptions').select('*');
       if (epaError) {
         console.error('EPA Fetch Error:', epaError);
-      } else if (epaData && epaData.length > 0 && epaData[0].epa_descriptions) {
-        const formattedEPAs: EPA[] = Object.entries(epaData[0].epa_descriptions).map(([key, value]) => ({
+      } else if (epaData && epaData.length > 0 && (epaData as any)[0].epa_descriptions) {
+        const formattedEPAs: EPA[] = Object.entries((epaData as any)[0].epa_descriptions).map(([key, value]) => ({
           id: parseInt(key, 10),
           description: value as string,
         }));
@@ -457,7 +451,7 @@ export default function RaterFormsPage() {
           }
           localStorage.setItem(cacheKey, JSON.stringify(formProgress));
         } catch (error) {
-          console.error("Error updating cached JSON:", error);
+          console.error('Error updating cached JSON:', error);
         }
       }
       setCurrentEPA(selectedEPAs[0]);
@@ -465,26 +459,22 @@ export default function RaterFormsPage() {
     }
   }, [selectedEPAs, studentId]);
 
-  const handleOptionChange = useCallback(
-    (epaId: number, questionId: string, optionKey: string, value: boolean): void => {
-      setResponses((prev: Responses) => {
-        const epaResponses = prev[epaId] || {};
-        const questionResponses = epaResponses[questionId] || { text: '' };
-        return {
-          ...prev,
-          [epaId]: {
-            ...epaResponses,
-            [questionId]: {
-              ...questionResponses,
-              [optionKey]: value,
-            },
+  const handleOptionChange = useCallback((epaId: number, questionId: string, optionKey: string, value: boolean): void => {
+    setResponses((prev: Responses) => {
+      const epaResponses = prev[epaId] || {};
+      const questionResponses = epaResponses[questionId] || { text: '' };
+      return {
+        ...prev,
+        [epaId]: {
+          ...epaResponses,
+          [questionId]: {
+            ...questionResponses,
+            [optionKey]: value,
           },
-        };
-      });
-      //setSaveStatus('Saving...');
-    },
-    []
-  );
+        },
+      };
+    });
+  }, []);
 
   const handleTextInputChange = (epaId: number, questionId: string, value: string): void => {
     setTextInputs((prev: { [epa: number]: { [questionId: string]: string } }) => ({
@@ -526,7 +516,7 @@ export default function RaterFormsPage() {
   );
 
   async function finalSubmit() {
-    if (!formRequest || submittingFinal) return; // prevent double submission
+    if (!formRequest || submittingFinal) return;
 
     setSubmittingFinal(true);
 
@@ -603,19 +593,14 @@ export default function RaterFormsPage() {
         };
     localData.response = sortedAggregatedResponses as unknown as Responses;
 
-    // Update the form request status to false
-    const { error: updateError } = await supabase
-      .from('form_requests')
-      .update({ active_status: false })
-      .eq('id', formRequest.id);
+    const { error: updateError } = await supabase.from('form_requests').update({ active_status: false }).eq('id', formRequest.id);
 
     if (updateError) {
       console.error('Error updating form request status:', updateError.message);
-      setSubmittingFinal(false); // unlock button
+      setSubmittingFinal(false);
       return;
     }
 
-    // Insert the form response with professionalism
     const { error } = await supabase.from('form_responses').insert({
       request_id: formRequest.id,
       response: localData,
@@ -624,7 +609,7 @@ export default function RaterFormsPage() {
 
     if (error) {
       console.error('Error submitting form:', error.message);
-      setSubmittingFinal(false); // unlock button
+      setSubmittingFinal(false);
     } else {
       console.log('Form submitted successfully.');
       localStorage.removeItem(`form-progress-${formRequest.id}`);
@@ -660,13 +645,51 @@ export default function RaterFormsPage() {
           left: auto;
         }
 
-        /* Only for voice-to-text status line (small + nice) */
+        /* Voice inside textarea */
+        .comment-wrapper {
+          position: relative;
+          width: 100%;
+        }
+
+        .comment-textarea {
+          padding-right: 55px; /* space so text does not overlap button */
+          min-height: 90px;
+          resize: vertical;
+        }
+
+        .vtt-btn {
+          position: absolute;
+          bottom: 8px;
+          right: 8px;
+          border: none;
+          background: #f8f9fa;
+          border-radius: 6px;
+          padding: 6px 8px;
+          cursor: pointer;
+          font-size: 18px;
+          transition: 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 2;
+        }
+
+        .vtt-btn:hover {
+          background: #e2e6ea;
+        }
+
+        .vtt-btn.recording {
+          background: #ffe5e5;
+          color: #dc3545;
+        }
+
         .vtt-status {
           font-size: 12px;
           color: #6c757d;
           margin-top: 6px;
         }
       `}</style>
+
       <div className='container-fluid d-flex'>
         {/* Sidebar */}
         <div className='col-md-3 bg-light p-4 border-end'>
@@ -729,9 +752,9 @@ export default function RaterFormsPage() {
               </>
             )}
           </ul>
+
           {/* Save status indicator */}
           <div className='col-md-3 bg-light p-4 border-end position-relative'>
-            {/* Save status container - helps with scroll detection */}
             <div className='save-status-container'>
               <div
                 className={`save-status alert alert-info ${saveStatus ? '' : 'opacity-0'}`}
@@ -788,6 +811,7 @@ export default function RaterFormsPage() {
                   </div>
                 </div>
               )}
+
               {selectionCollapsed ? (
                 <button className='btn btn-secondary mb-3' onClick={toggleSelectionCollapse}>
                   Modify EPA Selection
@@ -802,13 +826,8 @@ export default function RaterFormsPage() {
                       epas.map((epa) => (
                         <button
                           key={epa.id}
-                          className={`btn ${
-                            selectedEPAs.includes(epa.id) ? 'btn-primary' : 'btn-outline-secondary'
-                          } text-start`}
-                          style={{
-                            minWidth: '150px',
-                            maxWidth: '300px',
-                          }}
+                          className={`btn ${selectedEPAs.includes(epa.id) ? 'btn-primary' : 'btn-outline-secondary'} text-start`}
+                          style={{ minWidth: '150px', maxWidth: '300px' }}
                           onClick={() => toggleEPASelection(epa.id)}
                         >
                           <span className='badge bg-primary me-2'>EPA {epa.id}</span>
@@ -831,6 +850,7 @@ export default function RaterFormsPage() {
               <div className='card-header bg-primary text-white'>
                 {epas.find((e) => e.id === currentEPA)?.description || 'EPA Not Found'}
               </div>
+
               <div className='card-body'>
                 {kfData
                   .filter((kf) => kf.epa === currentEPA)
@@ -845,6 +865,7 @@ export default function RaterFormsPage() {
                     return (
                       <div key={questionKey} className='mb-4'>
                         <p className='fw-bold'>{kf.question}</p>
+
                         <div className='row'>
                           {Object.entries(kf.options).map(([optionKey, optionLabel]) => (
                             <div key={optionKey} className='col-md-6 mb-2'>
@@ -855,14 +876,9 @@ export default function RaterFormsPage() {
                                   id={`epa-${currentEPA}-q-${questionKey}-option-${optionKey}`}
                                   name={`epa-${currentEPA}-q-${questionKey}-option-${optionKey}`}
                                   checked={!!responses[currentEPA]?.[questionKey]?.[optionKey]}
-                                  onChange={(e) =>
-                                    handleOptionChange(currentEPA, questionKey, optionKey, e.target.checked)
-                                  }
+                                  onChange={(e) => handleOptionChange(currentEPA, questionKey, optionKey, e.target.checked)}
                                 />
-                                <label
-                                  className='form-check-label'
-                                  htmlFor={`epa-${currentEPA}-q-${questionKey}-option-${optionKey}`}
-                                >
+                                <label className='form-check-label' htmlFor={`epa-${currentEPA}-q-${questionKey}-option-${optionKey}`}>
                                   {optionLabel}
                                 </label>
                               </div>
@@ -870,29 +886,29 @@ export default function RaterFormsPage() {
                           ))}
                         </div>
 
+                        {/* ✅ Additional comments with mic INSIDE the textarea */}
                         <div>
-                          {/* ONLY UI addition: pretty emoji button + live status */}
-                          <div className='d-flex align-items-center justify-content-between'>
-                            <h6 className='mb-0'>Additional comments:</h6>
+                          <h6 className='mb-2'>Additional comments:</h6>
+
+                          <div className='comment-wrapper'>
+                            <textarea
+                              className='form-control comment-textarea'
+                              placeholder='Additional comments ...'
+                              value={currentText}
+                              onChange={(e) => handleTextInputChange(currentEPA, questionKey, e.target.value)}
+                            />
 
                             <button
                               type='button'
-                              className='btn btn-outline-secondary btn-sm'
+                              className={`vtt-btn ${isListening ? 'recording' : ''}`}
                               onClick={() => toggleDictation(currentEPA, questionKey)}
                               title={isListening ? 'Stop voice input' : 'Start voice input'}
                             >
-                              {isListening ? '🛑✨ Stop' : '🎙️✨ Speak'}
+                              {isListening ? '🛑' : '🎙️'}
                             </button>
                           </div>
 
                           {vttStatus ? <div className='vtt-status'>{vttStatus}</div> : null}
-
-                          <textarea
-                            className='form-control'
-                            placeholder='Additional comments ...'
-                            value={currentText}
-                            onChange={(e) => handleTextInputChange(currentEPA, questionKey, e.target.value)}
-                          ></textarea>
                         </div>
 
                         <hr />
