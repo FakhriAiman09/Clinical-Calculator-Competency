@@ -136,18 +136,29 @@ const FormRequests = () => {
       student_id: studentId,
       completed_by: faculty.value,
       clinical_settings: setting.value,
+      goals: goals.trim() || null,          //Optional
+      notes: details.trim(),                //Additional notes
     };
 
-    const { error: insertError } = await supabase.from('form_requests').insert([formData]);
+    const { data, error: insertError } = await supabase
+    .from('form_requests')
+    .insert([formData])
+    .select('id') // retrieve assessment form ID
+    .single(); 
+
     if (insertError) {
       console.error('Insert error:', insertError.message);
       setMessage({ type: 'error', text: 'Error submitting the form. Please try again.' });
       setLoading(false);
       return;
     }
+
+    const requestId = data?.id; // assessment form ID
+
     const emailPayload = {
       to: faculty.email,
       studentName,
+      requestId,// assessment form ID
     };
 
     try {
