@@ -1,8 +1,8 @@
 {
     "api": 0.025,
-    "bert": 0.055,
+    "bert": 0.079,
     "changelog": 0.001,
-    "generated/bert.utils": 0.015,
+    "generated/bert.utils": 0.016,
     "generated/infer.inference": 0.014,
     "generated/infer.listener": 0.01,
     "generated/svm.fetch_data": 0.007,
