@@ -268,6 +268,23 @@ export default function RaterFormsPage() {
     setSaveStatus('Saving...');
   };
 
+  // ✅ NEW: Replace textarea with AI summary (deletes original comments)
+  const replaceTextareaWithSummary = (epaId: number, questionId: string) => {
+    const key = makeFieldKey(epaId, questionId);
+    const summary = (summaryByField[key] ?? '').trim();
+    if (!summary) return;
+
+    setTextInputs((prev) => ({
+      ...prev,
+      [epaId]: {
+        ...prev[epaId],
+        [questionId]: `AI Summary:\n${summary}\n`,
+      },
+    }));
+
+    setSaveStatus('Saving...');
+  };
+
   // =========================================================
   // AUTOSAVE
   // =========================================================
@@ -965,14 +982,28 @@ export default function RaterFormsPage() {
                             <div className='mt-2 p-2 border rounded bg-light'>
                               <div className='d-flex justify-content-between align-items-center mb-1'>
                                 <small className='text-muted'>AI Summary</small>
-                                <button
-                                  type='button'
-                                  className='btn btn-sm btn-outline-secondary'
-                                  onClick={() => insertSummaryIntoTextarea(currentEPA, questionKey)}
-                                >
-                                  Insert
-                                </button>
+
+                                {/* ✅ Insert + Replace buttons */}
+                                <div className='d-flex gap-2'>
+                                  <button
+                                    type='button'
+                                    className='btn btn-sm btn-outline-secondary'
+                                    onClick={() => insertSummaryIntoTextarea(currentEPA, questionKey)}
+                                  >
+                                    Insert
+                                  </button>
+
+                                  <button
+                                    type='button'
+                                    className='btn btn-sm btn-outline-danger'
+                                    onClick={() => replaceTextareaWithSummary(currentEPA, questionKey)}
+                                    title='Replace comments with AI summary (deletes original)'
+                                  >
+                                    Replace
+                                  </button>
+                                </div>
                               </div>
+
                               <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{summary}</div>
                             </div>
                           ) : null}
