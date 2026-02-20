@@ -17,6 +17,27 @@ export default function Login() {
   const searchParams = useSearchParams();
   const supabase = createClient();
 
+  // Check if user is already authenticated and redirect them
+  useEffect(() => {
+    const checkAuth = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        // User is already authenticated
+        const redirectTo = searchParams?.get('redirectTo');
+        if (redirectTo) {
+          router.push(redirectTo);
+        } else {
+          router.push('/dashboard');
+        }
+      }
+    };
+
+    checkAuth();
+  }, [router, searchParams, supabase.auth]);
+
   // Handle post-login redirection based on localStorage flags (for email link redirection)
   useEffect(() => {
     const redirectTo = localStorage.getItem('redirectTo');
