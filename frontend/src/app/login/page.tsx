@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { SyntheticEvent, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import logo from '@/components/ccc-logo-color.svg';
 import { login, signup } from './actions';
@@ -14,12 +14,23 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [alertColor, setAlertColor] = useState<string>('');
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
+  // Handle post-login redirection based on localStorage flags (for email link redirection)
   useEffect(() => {
-    if (localStorage.getItem('redirectToDashboard') === 'true') {
+    const redirectTo = localStorage.getItem('redirectTo');
+    const wasRedirectSet = localStorage.getItem('redirectToDashboard') === 'true';
+    
+    if (wasRedirectSet || redirectTo) {
       localStorage.removeItem('redirectToDashboard');
-      router.push('/loading-user');
+      localStorage.removeItem('redirectTo');
+      
+      if (redirectTo) {
+        router.push(redirectTo);
+      } else {
+        router.push('/loading-user');
+      }
     }
   }, [router]);
 
@@ -35,7 +46,7 @@ export default function Login() {
     const email = form.email.value.trim();
     const password = form.password.value;
 
-    // 🔹 Validate email
+    // Validate email
     if (typeof email !== 'string' || email.length === 0 || !email.includes('@')) {
       valid = false;
       setEmailValidationClass('is-invalid');
@@ -43,7 +54,7 @@ export default function Login() {
       setEmailValidationClass('is-valid');
     }
 
-    // 🔹 Validate password
+    // Validate password
     if (typeof password !== 'string' || password.length < 8) {
       valid = false;
       setPasswordValidationClass('is-invalid');
@@ -61,13 +72,18 @@ export default function Login() {
       setError(error);
 
       if (!error) {
-        // ✅ Ensure session updates properly
+        //Ensure session updates properly
         await supabase.auth.getSession();
 
         if (isSignup) {
           router.push('/postsignup/verify');
         } else {
-          localStorage.setItem('redirectToDashboard', 'true');
+          const redirectTo = searchParams?.get('redirectTo');
+          if (redirectTo) {
+            localStorage.setItem('redirectTo', redirectTo);
+          } else {
+            localStorage.setItem('redirectToDashboard', 'true');
+          }
           window.location.reload();
         }
       }

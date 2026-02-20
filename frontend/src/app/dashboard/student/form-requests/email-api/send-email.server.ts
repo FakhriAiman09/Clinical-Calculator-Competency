@@ -13,6 +13,8 @@ export interface SendEmailPayload {
   @param payload
   @returns
  **/
+
+  //sends email to rater when student submits form request
 export async function sendEmail({
   to,
   studentName,
@@ -30,7 +32,8 @@ export async function sendEmail({
   });
 
   try {
-    const link = `${process.env.NEXT_PUBLIC_SITE_URL}/form?id=${requestId}`;//direct link to the form
+    const formPath = `/dashboard/rater/form?id=${requestId}`;
+    const loginLink = `${process.env.NEXT_PUBLIC_SITE_URL}/login?redirectTo=${formPath}`;
 
     const info = await transporter.sendMail({
       from: '"Clinical Competency Calculator" <clinicalcompetencycalculator@gmail.com>',
@@ -40,7 +43,7 @@ export async function sendEmail({
             <p>You have been requested to fill out an assessment form by ${studentName}.</p>
             <p>
             Click here to open the form:<br/>
-            <a href="${link}">${link}</a>
+            <a href="${loginLink}">${process.env.NEXT_PUBLIC_SITE_URL}${formPath}</a>
             </p>
           `,
     });

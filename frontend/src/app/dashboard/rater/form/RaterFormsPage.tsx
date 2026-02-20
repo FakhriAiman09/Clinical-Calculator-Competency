@@ -7,6 +7,7 @@ import { getLatestMCQs } from '@/utils/get-epa-data';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useRequireRole } from '@/utils/useRequiredRole';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { sendEmail as sendRaterEmail } from './rater-email-api/send-email-rater.server';
 
 const supabase = createClient();
 
@@ -655,6 +656,19 @@ export default function RaterFormsPage() {
       console.error('Error submitting form:', error.message);
       setSubmittingFinal(false);
       return;
+    }
+
+    // notify student via email that their evaluation is completed
+    try {
+      if (formRequest?.email) {
+        await sendRaterEmail({
+          to: formRequest.email,
+          studentName: formRequest.display_name ?? 'Student',
+        });
+        console.log('Rater notification email sent');
+      }
+    } catch (err: unknown) {
+      console.error('Error sending rater notification email:', err);
     }
 
     localStorage.removeItem(`form-progress-${formRequest.id}`);
