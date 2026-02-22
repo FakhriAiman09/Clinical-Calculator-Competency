@@ -300,7 +300,7 @@ export default function AdminAllReportsPage() {
                 id='time-range-select'
                 className='form-select'
                 value={timeRange}
-                onChange={(e) => setTimeRange(parseInt(e.target.value) as 3 | 6 | 12)}
+                onChange={(e) => setTimeRange(Number.parseInt(e.target.value) as 3 | 6 | 12)}
               >
                 {[3, 6, 12].map((m) => (
                   <option key={m} value={m}>

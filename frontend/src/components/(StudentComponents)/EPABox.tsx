@@ -149,7 +149,7 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
 
       for (const [kfKey, level] of Object.entries(row.results)) {
         const [epaKey, kfNum] = kfKey.split('.');
-        if (parseInt(epaKey) === epaId) {
+        if (Number.parseInt(epaKey) === epaId) {
           parsedAssessments.push({
             epaId,
             keyFunctionId: `kf${kfNum}`,

@@ -7,3 +7,7 @@ __pycache__/
 
 # Kaggle json
 kaggle.json
+
+.venv/
+.venv_wsl/
+
