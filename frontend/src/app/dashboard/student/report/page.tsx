@@ -121,7 +121,7 @@ const ReportPage = () => {
   if (!user) return <p>Please sign in to view reports.</p>;
 
   return (
-    <main className='container-fluid px-5' style={{ backgroundColor: 'white' }}>
+    <main className='container-fluid px-5'>
       {!selectedReport ? (
         <>
           <div className='mb-4'>

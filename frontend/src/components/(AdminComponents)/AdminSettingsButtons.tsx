@@ -39,13 +39,13 @@ const AdminSettingsButtons = () => {
   };
 
   return (
-    <div className='p-4 rounded' style={{ backgroundColor: '#f1f3f5', maxWidth: '39vw', width: '100%' }}>
+    <div className='p-4 rounded bg-body-secondary' style={{ maxWidth: '39vw', width: '100%' }}>
       <div className='card shadow-sm p-3 border-0'>
         <div
-          className='card-header d-flex justify-content-between align-items-center bg-white border-bottom pb-2 sticky-top'
+          className='card-header d-flex justify-content-between align-items-center bg-body border-bottom pb-2 sticky-top'
           style={{ zIndex: 10 }}
         >
-          <h5 className='m-0 text-dark'>Settings</h5>
+          <h5 className='m-0 text-body'>Settings</h5>
         </div>
         <div className='card-body p-2'>
           <button className='btn btn-primary w-100 mt-3' onClick={() => setShowModal(true)}>

@@ -185,7 +185,7 @@ export default function AdminAllReportsPage() {
         const grouped: Record<string, string[]> = {};
         for (const key in descs.kf_desc) {
           const [epaIdRaw] = key.split('-');
-          const epaId = String(parseInt(epaIdRaw, 10));
+          const epaId = String(Number.parseInt(epaIdRaw, 10));
           if (!grouped[epaId]) grouped[epaId] = [];
           grouped[epaId].push(descs.kf_desc[key]);
         }
@@ -219,7 +219,7 @@ export default function AdminAllReportsPage() {
   };
 
   return (
-    <div className='container py-5 bg-white'>
+    <div className="container py-5">
       <style>{`
         @media print {
           body {
@@ -271,8 +271,9 @@ export default function AdminAllReportsPage() {
         {/* Student Picker */}
         <div className='d-print-none'>
           <div className='mb-3 d-print-none'>
-            <label className='form-label d-print-none'>Select Student</label>
+            <label htmlFor='student-select' className='form-label d-print-none'>Select Student</label>
             <select
+              id='student-select'
               className='form-select'
               value={selectedStudent?.id || ''}
               onChange={(e) => {
@@ -294,11 +295,12 @@ export default function AdminAllReportsPage() {
 
           <div className='d-flex gap-3 align-items-end mb-4 d-print-none'>
             <div>
-              <label className='form-label'>Time Range</label>
+              <label htmlFor='time-range-select' className='form-label'>Time Range</label>
               <select
+                id='time-range-select'
                 className='form-select'
                 value={timeRange}
-                onChange={(e) => setTimeRange(parseInt(e.target.value) as 3 | 6 | 12)}
+                onChange={(e) => setTimeRange(Number.parseInt(e.target.value) as 3 | 6 | 12)}
               >
                 {[3, 6, 12].map((m) => (
                   <option key={m} value={m}>
@@ -324,14 +326,14 @@ export default function AdminAllReportsPage() {
             <h5>Past Reports for {selectedStudent.display_name}</h5>
             <ul className='list-group'>
               {reports.map((r) => (
-                <li
+                <button
                   key={r.id}
                   className={`list-group-item list-group-item-action ${selectedReport?.id === r.id ? 'active' : ''}`}
                   onClick={() => handleReportSelect(r)}
                   style={{ cursor: 'pointer' }}
                 >
                   {r.title} ({r.time_window}) – {new Date(r.created_at).toLocaleDateString()}
-                </li>
+                </button>
               ))}
             </ul>
           </div>

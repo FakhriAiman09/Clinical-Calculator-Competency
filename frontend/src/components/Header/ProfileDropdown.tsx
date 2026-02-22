@@ -1,19 +1,21 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
-import { useUser } from '@/context/UserContext'; // exposes displayName & email :contentReference[oaicite:0]{index=0}
+import Link from 'next/link';
+import { useUser } from '@/context/UserContext';
 
 /**
  * ProfileDropdown
  *
- * ▸ Shows the signed‑in user’s name / email.
+ * ▸ Shows the signed‑in user's name / email.
  * ▸ Opens either the Profile‑Settings modal or the Developer‑Ticket modal via
  *   callback props (keeps all modal logic in React).
+ * ▸ Includes a link to the /dashboard/settings page.
  * ▸ Closes itself when you click outside the menu.
  */
 interface ProfileDropdownProps {
-  onOpenProfile: () => void; // open ProfileSettingsModal
-  onOpenTicket: () => void; // open DeveloperTicketModal
+  readonly onOpenProfile: () => void; // open ProfileSettingsModal
+  readonly onOpenTicket: () => void;  // open DeveloperTicketModal
 }
 
 export default function ProfileDropdown({ onOpenProfile, onOpenTicket }: ProfileDropdownProps) {
@@ -58,21 +60,40 @@ export default function ProfileDropdown({ onOpenProfile, onOpenTicket }: Profile
           {/* open profile settings */}
           <li>
             <button className='dropdown-item' onClick={onOpenProfile}>
-              Profile Settings
+              <i className='bi bi-person me-2' />
+              {'Profile Settings'}
             </button>
+          </li>
+
+          {/* settings page */}
+          <li>
+            <Link
+              className='dropdown-item'
+              href='/dashboard/settings'
+              onClick={() => setShowMenu(false)}
+            >
+              <i className='bi bi-gear me-2' />
+              {' Settings'}
+            </Link>
           </li>
 
           {/* open developer ticket modal */}
           <li>
             <button className='dropdown-item' onClick={onOpenTicket}>
-              Report Issue/ Feature
+              <i className='bi bi-bug me-2'/>
+              Report Issue / Feature
             </button>
+          </li>
+
+          <li>
+            <hr className='dropdown-divider' />
           </li>
 
           {/* logout */}
           <li>
             <form action='/auth/signout' method='post'>
-              <button className='dropdown-item' type='submit'>
+              <button className='dropdown-item text-danger' type='submit'>
+                <i className='bi bi-box-arrow-right me-2' />
                 Logout
               </button>
             </form>

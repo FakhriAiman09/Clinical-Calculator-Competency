@@ -149,7 +149,7 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
 
       for (const [kfKey, level] of Object.entries(row.results)) {
         const [epaKey, kfNum] = kfKey.split('.');
-        if (parseInt(epaKey) === epaId) {
+        if (Number.parseInt(epaKey) === epaId) {
           parsedAssessments.push({
             epaId,
             keyFunctionId: `kf${kfNum}`,
@@ -352,7 +352,7 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
 
           <div className='mb-4'>
             <h6 className='fw-bold border-bottom pb-1'>AI Summary & Recommendations</h6>
-            <div className='border rounded p-3 bg-light scrollable-box markdown-preview'>
+            <div className='border rounded p-3 bg-body-secondary scrollable-box markdown-preview'>
               {llmFeedback ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                   {llmFeedback}

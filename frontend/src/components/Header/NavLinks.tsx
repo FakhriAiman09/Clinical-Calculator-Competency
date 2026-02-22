@@ -27,7 +27,6 @@ const NavLinks = () => {
       link('/dashboard', 'Dashboard'),
       link('/dashboard/student/form-requests', 'Request Assessment'),
       link('/dashboard/student/report', 'Comprehensive Report'),
-      link('/dashboard/AboutUsPage', 'About Us')
     );
   }
 
@@ -38,7 +37,6 @@ const NavLinks = () => {
       link('/dashboard/admin/all-reports', 'All Reports'),
       link('/dashboard/admin/edit-questions-options', 'Edit Questions'),
       link('/dashboard/admin/form', 'Add MCQ Data'),
-      link('/dashboard/AboutUsPage', 'About Us')
     );
   }
 
@@ -46,9 +44,11 @@ const NavLinks = () => {
   if (userRoleRater && !userRoleAuthorized && !userRoleDev) {
     links.push(
       link('/dashboard', 'Home'),
-      link('/dashboard/AboutUsPage', 'About Us')
     );
   }
+
+  // About Us always appears once at the end for all roles
+  links.push(link('/dashboard/AboutUsPage', 'About Us'));
 
   if (userRoleDev) {
     links.push(link('/tickets', 'Tickets'));

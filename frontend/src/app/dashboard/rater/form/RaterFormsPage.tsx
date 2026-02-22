@@ -7,6 +7,7 @@ import { getLatestMCQs } from '@/utils/get-epa-data';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useRequireRole } from '@/utils/useRequiredRole';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { sendEmail as sendRaterEmail } from './rater-email-api/send-email-rater.server';
 
 const supabase = createClient();
 
@@ -674,6 +675,19 @@ export default function RaterFormsPage() {
       return;
     }
 
+    // notify student via email that their evaluation is completed
+    try {
+      if (formRequest?.email) {
+        await sendRaterEmail({
+          to: formRequest.email,
+          studentName: formRequest.display_name ?? 'Student',
+        });
+        console.log('Rater notification email sent');
+      }
+    } catch (err: unknown) {
+      console.error('Error sending rater notification email:', err);
+    }
+
     localStorage.removeItem(`form-progress-${formRequest.id}`);
     localStorage.removeItem(`form-progress-${studentId}`);
     setSubmitSuccess(true);
@@ -747,7 +761,7 @@ export default function RaterFormsPage() {
 
       <div className='container-fluid d-flex'>
         {/* Sidebar */}
-        <div className='col-md-3 bg-light p-4 border-end'>
+        <div className='col-md-3 bg-body-secondary p-4 border-end'>
           <h3 className='mb-3'>Selected EPAs</h3>
 
           <ul className='list-group'>
@@ -808,7 +822,7 @@ export default function RaterFormsPage() {
           </ul>
 
           {/* Save status indicator */}
-          <div className='col-md-3 bg-light p-4 border-end position-relative'>
+          <div className='col-md-3 bg-body-secondary p-4 border-end position-relative'>
             <div className='save-status-container'>
               <div
                 className={`save-status alert alert-info ${saveStatus ? '' : 'opacity-0'}`}
@@ -842,7 +856,7 @@ export default function RaterFormsPage() {
           ) : (
             <>
               {formRequest && (
-                <div className='card p-3 mb-4 shadow-sm bg-light'>
+                <div className='card p-3 mb-4 shadow-sm bg-body-secondary'>
                   <div className='row'>
                     <div className='col-md-4'>
                       <h5 className='fw-bold mb-1'>{formRequest.display_name}</h5>
@@ -979,7 +993,7 @@ export default function RaterFormsPage() {
                           {summaryErr ? <div className='vtt-status' style={{ color: '#dc3545' }}>{summaryErr}</div> : null}
 
                           {summary ? (
-                            <div className='mt-2 p-2 border rounded bg-light'>
+                            <div className='mt-2 p-2 border rounded bg-body-secondary'>
                               <div className='d-flex justify-content-between align-items-center mb-1'>
                                 <small className='text-muted'>AI Summary</small>
 

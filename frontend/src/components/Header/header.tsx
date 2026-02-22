@@ -27,12 +27,12 @@ export default function Header() {
   const [showTicketModal, setShowTicketModal] = useState(false);
 
   return (
-    <header className='bg-white text-gray-800 p-2 shadow-md'>
+    <header className='bg-body border-bottom p-2'>
       <div className='container mx-auto d-flex justify-content-between align-items-center flex-wrap'>
         {/* ── Logo ───────────────────────────────────────────── */}
         <Link href='/dashboard' className='d-flex align-items-center text-decoration-none'>
           <Image src={logo} alt='Logo' width={40} height={40} priority />
-          <span className='ms-2 fs-4 fw-bold'>Clinical Competency Calculator</span>
+          <span className='ms-2 fs-4 fw-bold text-body'>Clinical Competency Calculator</span>
         </Link>
 
         {/* ── Nav + profile (only when signed in) ───────────── */}

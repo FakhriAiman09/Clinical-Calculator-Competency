@@ -88,7 +88,7 @@ const devLevelColors: { [key in DevLevel]: string } = {
 const EPAprogress: React.FC = () => {
   return (
     <div className='container mt-4'>
-      <div className='card bg-light text-black'>
+      <div className='card bg-body-secondary text-body'>
         {' '}
         <div className='card-body'>
           <h2 className='card-title text-center mb-4'>EPA Competency Progress (By Key Function)</h2>
@@ -125,7 +125,7 @@ const EPAprogress: React.FC = () => {
                         style={{
                           width: `${((devLevelCounts[level as DevLevel] || 0) / epa.keyFunctions.length) * 100}%`,
                           backgroundColor: devLevelColors[level as DevLevel],
-                          color: 'black',
+                          color: 'inherit',
                           fontWeight: 'bold',
                         }}
                       >

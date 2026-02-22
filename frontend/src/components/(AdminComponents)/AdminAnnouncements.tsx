@@ -205,8 +205,8 @@ export default function AdminAnnouncements() {
         };
       default:
         return {
-          backgroundColor: '#f1f3f5',
-          color: '#212529',
+          backgroundColor: 'var(--bs-secondary-bg)',
+          color: 'var(--bs-body-color)',
           padding: '1rem',
           borderRadius: '6px',
         };
@@ -218,10 +218,10 @@ export default function AdminAnnouncements() {
   // -------------------
 
   return (
-    <div className='p-3 rounded' style={{ backgroundColor: '#f1f3f5' }}>
-      <div className='card shadow-sm p-3 rounded border-0' style={{ backgroundColor: 'white' }}>
-        <div className='card-header bg-white border-bottom pb-2'>
-          <h5 className='m-0 text-dark'>{editingId ? 'Edit Announcement' : 'Create System Announcement'}</h5>
+    <div className='p-3 rounded bg-body-secondary'>
+      <div className='card shadow-sm p-3 rounded border-0 bg-body'>
+        <div className='card-header bg-body border-bottom pb-2'>
+          <h5 className='m-0 text-body'>{editingId ? 'Edit Announcement' : 'Create System Announcement'}</h5>
         </div>
 
         <div className='card-body px-2'>
@@ -310,7 +310,7 @@ export default function AdminAnnouncements() {
 
       {/* Announcement List */}
       <div className='mt-4'>
-        <h6 className='text-dark'>Existing Announcements</h6>
+        <h6 className='text-body'>Existing Announcements</h6>
         {announcements.length === 0 ? (
           <p className='text-muted'>No announcements found.</p>
         ) : (
