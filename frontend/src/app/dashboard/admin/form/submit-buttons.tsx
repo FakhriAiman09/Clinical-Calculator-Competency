@@ -44,7 +44,7 @@ export default function SubmitButtons({
   };
 
   return (
-    <div className='bg-light text-center'>
+    <div className='bg-body-secondary text-center'>
       <div className='container p-3' style={{ maxWidth: '720px' }}>
         <div className='row'>
           <div className='btn-toolbar' role='toolbar' aria-label='Toolbar with button groups'>

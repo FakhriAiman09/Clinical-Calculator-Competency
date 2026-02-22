@@ -34,10 +34,10 @@ export default function StatsTabsClient() {
   if (!stats) return <div className='text-danger'>Failed to load statistics.</div>;
 
   return (
-    <div className='p-3 rounded' style={{ backgroundColor: '#f1f3f5' }}>
-      <div className='card shadow-sm p-3 border-0 bg-white'>
-        <div className='card-header d-flex justify-content-between align-items-center bg-white border-bottom'>
-          <h5 className='m-0 text-dark'>System Statistics</h5>
+    <div className='p-3 rounded bg-body-secondary'>
+      <div className='card shadow-sm p-3 border-0 bg-body'>
+        <div className='card-header d-flex justify-content-between align-items-center bg-body border-bottom'>
+          <h5 className='m-0 text-body'>System Statistics</h5>
           <div className='d-flex align-items-center gap-2'>
             <div className='dropdown'>
               <button
@@ -174,7 +174,7 @@ export default function StatsTabsClient() {
               {Object.entries(stats.monthlyEPADistribution).map(([epa, data]) => (
                 <div
                   key={epa}
-                  className='border rounded shadow-sm bg-light p-3 flex-grow-1'
+                  className='border rounded shadow-sm bg-body-secondary p-3 flex-grow-1'
                   style={{ minWidth: '250px', maxWidth: '320px' }}
                 >
                   <h6 className='mb-3 text-center'>EPA {epa}</h6>
@@ -244,7 +244,7 @@ export default function StatsTabsClient() {
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className='border rounded p-3 text-center flex-grow-1' style={{ minWidth: '150px' }}>
-      <div className='fw-bold fs-5 text-dark'>{value}</div>
+      <div className='fw-bold fs-5 text-body'>{value}</div>
       <div className='text-muted small'>{label}</div>
     </div>
   );

@@ -39,7 +39,7 @@ const EPACard: React.FC<EPACardProps> = ({ epa, onClick, getEPADevLevel, getAver
       onKeyDown={(e) => e.key === 'Enter' && onClick(epa)}
     >
       <div
-        className='card h-100 border-0 rounded-4 bg-light shadow-sm'
+        className='card h-100 border-0 rounded-4 bg-body-secondary shadow-sm'
         style={{
           transition: 'transform 0.3s ease, box-shadow 0.3s ease',
           cursor: 'pointer',
@@ -53,13 +53,13 @@ const EPACard: React.FC<EPACardProps> = ({ epa, onClick, getEPADevLevel, getAver
           e.currentTarget.style.boxShadow = '0 0.125rem 0.25rem rgba(0, 0, 0, 0.075)';
         }}
       >
-        <div className='card-header bg-secondary bg-opacity-10 text-dark rounded-top-4 px-3 py-2'>
+        <div className='card-header bg-secondary bg-opacity-10 text-body rounded-top-4 px-3 py-2'>
           <div className='d-flex align-items-center gap-3'>
-            <div className='bg-white text-primary rounded text-center px-2 py-1' style={{ minWidth: '48px' }}>
+            <div className='bg-body text-primary rounded text-center px-2 py-1' style={{ minWidth: '48px' }}>
               <div style={{ fontSize: '0.65rem', lineHeight: '1rem' }}>EPA</div>
               <div style={{ fontSize: '1rem', fontWeight: 'bold' }}>{epa.epa}</div>
             </div>
-            <p className='fw-semibold mb-0 text-dark' style={{ fontSize: '0.9rem', lineHeight: '1.2rem' }}>
+            <p className='fw-semibold mb-0 text-body' style={{ fontSize: '0.9rem', lineHeight: '1.2rem' }}>
               {epa.title || ''}
             </p>
           </div>

@@ -15,9 +15,7 @@ export default function AboutPage() {
   const [developers, setDevelopers] = useState<Developer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // new
-  const [selectedDev, setSelectedDev] = useState<Developer|null>(null);
+  const [selectedDev, setSelectedDev] = useState<Developer | null>(null);
 
   useEffect(() => {
     fetchDevelopers();
@@ -26,21 +24,13 @@ export default function AboutPage() {
   const fetchDevelopers = async () => {
     setLoading(true);
     setError(null);
-
-
     try {
       const supabase = createClient();
-
-      // Fetch developers info from Supabase about us table
       const { data, error: fetchError } = await supabase
-      .from('about_us_page')
-      .select('*')
-      .order('dev_name', { ascending: true });
-
-      if (fetchError) {
-        throw fetchError;
-      }
-
+        .from('about_us_page')
+        .select('*')
+        .order('dev_name', { ascending: true });
+      if (fetchError) throw fetchError;
       setDevelopers(data || []);
     } catch (err) {
       console.error('Error fetching developers:', err);
@@ -50,7 +40,6 @@ export default function AboutPage() {
     }
   };
 
-  // generate initials from name for profile avatar
   const getInitials = (name: string): string => {
     return name
       .split(' ')
@@ -59,28 +48,22 @@ export default function AboutPage() {
       .substring(0, 2);
   };
 
-
-  //Generate a consistent color based on name (for avatar background)
-  
   const getAvatarColor = (name: string): string => {
     const colors = [
-      '#6C757D', // Gray
-      '#619efa', // Blue
-      '#4aa47a', // Green
-      '#0DCAF0', // Cyan
-      '#6b45a8', // Purple
-      '#dfc67b', // Yellow
-      '#DC3545', // Red
-      '#FD7E14', // Orange
+      '#6C757D',
+      '#619efa',
+      '#4aa47a',
+      '#0DCAF0',
+      '#6b45a8',
+      '#dfc67b',
+      '#DC3545',
+      '#FD7E14',
     ];
-
     const index = (name.codePointAt(0) || 0) % colors.length;
     return colors[index];
   };
 
-  const closeDevDetails = () => {
-    setSelectedDev(null);
-  };
+  const closeDevDetails = () => setSelectedDev(null);
 
   return (
     <div className='container py-5'>
@@ -94,11 +77,10 @@ export default function AboutPage() {
         </p>
       </header>
 
-      {/* Developers List Section */}
+      {/* Developers Grid */}
       <section className='py-4'>
         <div className='row justify-content-center'>
           {loading && (
-            // Loading State
             <div className='col-12 text-center py-5'>
               <div className='spinner-border text-primary' role='status'>
                 <span className='visually-hidden'>Loading developers...</span>
@@ -107,7 +89,6 @@ export default function AboutPage() {
             </div>
           )}
           {error && (
-            // Error State
             <div className='col-12 text-center py-5'>
               <div className='alert alert-danger' role='alert'>
                 <i className='bi bi-exclamation-triangle me-2'></i>
@@ -116,7 +97,6 @@ export default function AboutPage() {
             </div>
           )}
           {!loading && !error && developers.length === 0 && (
-            // Empty State
             <div className='col-12 text-center py-5'>
               <i className='bi bi-people display-1 text-muted'></i>
               <p className='text-muted mt-3'>No developers available at this time.</p>
@@ -125,42 +105,39 @@ export default function AboutPage() {
           {!loading &&
             !error &&
             developers.length > 0 &&
-            // Developers Grid
             developers.map((dev) => (
-              <div key={dev.id} className='col-12 col-md-6 col-lg-4 mb-4'>
-                <div className='card h-100 shadow-sm border-0 developer-card'
+              <div key={dev.id} className='col-6 col-md-4 col-lg-3 mb-4'>
+                <div
+                  className='card developer-card h-100 border'
                   role='button'
                   tabIndex={0}
                   onClick={() => setSelectedDev(dev)}
                   onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setSelectedDev(dev);
+                    if (e.key === 'Enter' || e.key === ' ') setSelectedDev(dev);
                   }}
                 >
-                  <div className='card-body text-center p-4'>
+                  <div className='card-body text-center p-4 d-flex flex-column align-items-center justify-content-center'>
                     {/* Avatar */}
                     <div
                       className='avatar-circle mx-auto mb-3'
                       style={{
-                        width: '80px',
-                        height: '80px',
+                        width: '72px',
+                        height: '72px',
+                        minWidth: '72px',
                         borderRadius: '50%',
                         backgroundColor: getAvatarColor(dev.dev_name),
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.5rem',
+                        fontSize: '1.4rem',
                         fontWeight: 'bold',
                         color: 'white',
                       }}
                     >
                       {getInitials(dev.dev_name)}
                     </div>
-
-                    {/* Developer Name */}
-                    <h5 className='card-title mb-2'>{dev.dev_name}</h5>
-
-                    {/* Subtitle */}
-                    <p className='card-text text-muted small'>Developer</p>
+                    <h6 className='card-title mb-1 fw-semibold'>{dev.dev_name}</h6>
+                    <p className='card-text text-muted small mb-0'>Developer</p>
                   </div>
                 </div>
               </div>
@@ -168,19 +145,21 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Acknowledgement / Disclaimer Section */}
+      {/* Acknowledgement Section */}
       <footer className='text-center py-5 mt-5 border-top'>
         <div className='row justify-content-center'>
           <div className='col-lg-8'>
             <h6 className='text-muted mb-3'>Acknowledgements</h6>
             <p className='text-muted small'>
-              We would like to thank our advisors, faculty members, and the medical education community for their
-              guidance and support throughout the development of this project and help us in this final semester ).
+              We would like to thank our advisors, faculty members, and the medical education
+              community for their guidance and support throughout the development of this project
+              and help us in this final semester ).
             </p>
             <p className='text-muted small mb-0'>
-              <strong>Disclaimer:</strong> This application was developed for educational and academic purposes. It is
-              designed to support clinical competency assessment in medical education settings. All data should be
-              handled in accordance with institutional policies and applicable privacy regulations.
+              <strong>Disclaimer:</strong> This application was developed for educational and
+              academic purposes. It is designed to support clinical competency assessment in medical
+              education settings. All data should be handled in accordance with institutional
+              policies and applicable privacy regulations.
             </p>
             <p className='text-muted small mt-3'>
               <span>Built with Next.js, React, TypeScript, and Supabase</span>
@@ -189,84 +168,72 @@ export default function AboutPage() {
         </div>
       </footer>
 
-      {/* Developer's Details Section (new)*/}
+      {/* Developer Detail Modal */}
       {selectedDev && (
         <div
           style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.35)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 2000,
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
           }}
           onClick={closeDevDetails}
         >
-        <div
-          className="card shadow"
-          style={{ width: 420, maxWidth: '95%' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="card-body">
-            <div className="d-flex justify-content-between align-items-start mb-3">
-              <h5 className="mb-0">{selectedDev.dev_name}</h5>
-              <button className="btn-close" onClick={closeDevDetails}></button>
-            </div>
-
-            <>
-            <div className="mb-3">
-              <div className="text-muted small">Role</div>
-              <div className="fw-semibold">{selectedDev.role}</div>
-            </div>
-
-            <div>
-              <div className="text-muted small">Contribution</div>
-              <div>{selectedDev.contribution || '---'}</div>
-            </div>
-            </>
-
-            <div className="text-end mt-4">
-              <button className="btn btn-secondary btn-sm" onClick={closeDevDetails}>
-                Close
-              </button>
+          <div
+            className='card shadow bg-body'
+            style={{ width: 420, maxWidth: '95%' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className='card-body'>
+              <div className='d-flex justify-content-between align-items-start mb-3'>
+                <h5 className='mb-0'>{selectedDev.dev_name}</h5>
+                <button className='btn-close' onClick={closeDevDetails}></button>
+              </div>
+              <div className='mb-3'>
+                <div className='text-muted small'>Role</div>
+                <div className='fw-semibold'>{selectedDev.role}</div>
+              </div>
+              <div>
+                <div className='text-muted small'>Contribution</div>
+                <div>{selectedDev.contribution || '---'}</div>
+              </div>
+              <div className='text-end mt-4'>
+                <button className='btn btn-secondary btn-sm' onClick={closeDevDetails}>
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
-        </div>
       )}
-
 
       {/* Custom Styles */}
       <style>{`
         .developer-card {
           transition: transform 0.2s ease, box-shadow 0.2s ease;
-          background-color: white;
-          border-radius: 0.5rem;
+          border-radius: 0.75rem;
+          cursor: pointer;
+          /* Use Bootstrap's CSS variable so border adapts to dark/light */
+          border-color: var(--bs-border-color) !important;
         }
 
         .developer-card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+          transform: translateY(-4px);
+          box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.15) !important;
+          border-color: var(--bs-primary) !important;
         }
 
         .avatar-circle {
           transition: transform 0.2s ease;
+          flex-shrink: 0;
         }
 
         .developer-card:hover .avatar-circle {
-          transform: scale(1.1);
-          cursor: pointer;
+          transform: scale(1.08);
         }
-        
-        .modal { 
-          z-index: 1055; 
-        }
-        
-        .modal-backdrop { 
-          z-index: 1050; 
-        }
-
       `}</style>
     </div>
   );

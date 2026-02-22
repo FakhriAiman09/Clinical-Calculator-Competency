@@ -6,26 +6,9 @@ import { useRequireRole } from '@/utils/useRequiredRole';
 
 const supabase = createClient();
 
-/**
- * AdminDashboard Component
- *
- * A management panel for administrators to:
- * - View all users
- * - Search and filter users by name, email, or role
- * - Edit user roles
- * - Activate or deactivate users
- *
- * Data is pulled from Supabase using an RPC and direct table queries.
- */
 const AdminDashboard = () => {
   useRequireRole(['admin', 'dev']);
-  // ----------------------
-  // Types
-  // ----------------------
 
-  /**
-   * Represents a user fetched from Supabase.
-   */
   interface User {
     id: string;
     user_id: string;
@@ -34,24 +17,14 @@ const AdminDashboard = () => {
     display_name: string;
   }
 
-  /**
-   * Represents a user's profile containing account status.
-   */
   interface Profile {
     id: string;
     account_status: string;
   }
 
-  /**
-   * Represents a role object from the `roles` table.
-   */
   interface Role {
     role: string;
   }
-
-  // ----------------------
-  // State Management
-  // ----------------------
 
   const [users, setUsers] = useState<(User & { account_status: string })[]>([]);
   const [roles, setRoles] = useState<string[]>([]);
@@ -62,23 +35,14 @@ const AdminDashboard = () => {
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  /**
-   * Fetches all users and joins them with account status from the `profiles` table.
-   */
   const fetchUsers = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       const { data: users, error: usersError } = await supabase.rpc('fetch_users');
-      if (usersError) {
-        console.error('Error fetching users:', usersError);
-        return;
-      }
+      if (usersError) { console.error('Error fetching users:', usersError); return; }
 
       const { data: profiles, error: profilesError } = await supabase.from('profiles').select('id, account_status');
-      if (profilesError) {
-        console.error('Error fetching account statuses:', profilesError);
-        return;
-      }
+      if (profilesError) { console.error('Error fetching account statuses:', profilesError); return; }
 
       const usersWithStatus = users.map((user: User) => {
         const profile = profiles.find((p: Profile) => p.id === user.user_id);
@@ -93,85 +57,37 @@ const AdminDashboard = () => {
     }
   }, []);
 
-  /**
-   * Fetches all available roles from the `roles` table.
-   */
   const fetchRoles = useCallback(async (): Promise<void> => {
     const { data, error } = await supabase.from('roles').select('role');
-    if (error) {
-      console.error('Error fetching roles:', error);
-    } else {
-      setRoles(data.map((r: Role) => r.role));
-    }
+    if (error) { console.error('Error fetching roles:', error); }
+    else { setRoles(data.map((r: Role) => r.role)); }
   }, []);
 
-  // ----------------------
-  // Role Update Logic
-  // ----------------------
+  const handleCloseModal = () => { setShowModal(false); setSelectedUser(null); };
 
-  /**
-   * Closes the Edit Role modal.
-   */
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setSelectedUser(null);
-  };
-
-  /**
-   * Updates the user's role in the database and refreshes the list.
-   */
   const updateUserRole = async () => {
     if (!selectedUser) return;
-
     const { error } = await supabase
       .from('user_roles')
       .update({ role: selectedUser.role })
       .eq('user_id', selectedUser.user_id);
-
-    if (error) {
-      console.error('Error updating role:', error);
-      return;
-    }
-
+    if (error) { console.error('Error updating role:', error); return; }
     fetchUsers();
     setShowModal(false);
   };
 
-  // ----------------------
-  // Status Toggle Logic
-  // ----------------------
-
-  /**
-   * Toggles the user's account status between Active and Deactivated.
-   */
   const toggleUserStatus = async () => {
     if (!selectedUser) return;
-
     const newStatus = selectedUser.account_status === 'Active' ? 'Deactivated' : 'Active';
-
     const { error } = await supabase
       .from('profiles')
       .update({ account_status: newStatus })
       .eq('id', selectedUser.user_id);
-
-    if (error) {
-      console.error(`Error changing status to ${newStatus}:`, error);
-      alert(`Failed to ${newStatus.toLowerCase()} the user.`);
-      return;
-    }
-
+    if (error) { console.error(`Error changing status to ${newStatus}:`, error); return; }
     fetchUsers();
     setShowDeactivateModal(false);
   };
 
-  // ----------------------
-  // Filter & Sort Logic
-  // ----------------------
-
-  /**
-   * Filters users based on search term and selected role,
-   * and pushes deactivated users to the bottom.
-   */
   const filteredUsers = users
     .filter(
       (user) =>
@@ -190,17 +106,11 @@ const AdminDashboard = () => {
     await fetchRoles();
   }, [fetchUsers, fetchRoles]);
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
-
-  // ----------------------
-  // Render UI
-  // ----------------------
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   return (
     <div className='container text-center'>
-      <h1 className='my-4 text-dark fw-bold'>Manage Users</h1>
+      <h1 className='my-4 fw-bold text-body'>Manage Users</h1>
 
       {/* Search & Filter */}
       <div className='mb-4 row gx-3 align-items-center'>
@@ -217,9 +127,7 @@ const AdminDashboard = () => {
           <select className='form-select' value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
             <option value=''>All Roles</option>
             {roles.map((role) => (
-              <option key={role} value={role}>
-                {role}
-              </option>
+              <option key={role} value={role}>{role}</option>
             ))}
           </select>
         </div>
@@ -233,7 +141,7 @@ const AdminDashboard = () => {
           </div>
         </div>
       ) : (
-        <table className='table table-hover shadow rounded bg-white'>
+        <table className='table table-hover shadow rounded'>
           <thead className='table-dark'>
             <tr>
               <th>Display Name</th>
@@ -253,30 +161,21 @@ const AdminDashboard = () => {
                 <td>{user.email}</td>
                 <td>{user.role}</td>
                 <td>
-                  <span
-                    className={`badge rounded-pill ${user.account_status === 'Active' ? 'bg-success' : 'bg-secondary'}`}
-                  >
+                  <span className={`badge rounded-pill ${user.account_status === 'Active' ? 'bg-success' : 'bg-secondary'}`}>
                     {user.account_status}
                   </span>
                 </td>
-
                 <td>
                   <button
                     className='btn btn-primary btn-sm me-2'
-                    onClick={() => {
-                      setSelectedUser(user);
-                      setShowModal(true);
-                    }}
+                    onClick={() => { setSelectedUser(user); setShowModal(true); }}
                     disabled={user.account_status === 'Deactivated'}
                   >
                     Edit
                   </button>
                   <button
                     className='btn btn-danger btn-sm'
-                    onClick={() => {
-                      setSelectedUser(user);
-                      setShowDeactivateModal(true);
-                    }}
+                    onClick={() => { setSelectedUser(user); setShowDeactivateModal(true); }}
                   >
                     {user.account_status === 'Active' ? 'Deactivate' : 'Activate'}
                   </button>
@@ -289,95 +188,79 @@ const AdminDashboard = () => {
 
       {/* Edit Role Modal */}
       {showModal && selectedUser && (
-        <div className='modal show' tabIndex={-1} style={{ display: 'block' }}>
-          <div className='modal-dialog'>
-            <div className='modal-content rounded shadow-lg'>
-              <div className='modal-header bg-primary text-white'>
-                <h5 className='modal-title'>Edit User Role</h5>
-                <button type='button' className='btn-close' onClick={handleCloseModal}></button>
-              </div>
-              <div className='modal-body text-start'>
-                <div className='p-3 border rounded mb-3'>
-                  <p>
-                    <strong>ID:</strong> {selectedUser.user_id}
-                  </p>
-                  <p>
-                    <strong>Display Name:</strong> {selectedUser.display_name}
-                  </p>
-                  <p>
-                    <strong>Email:</strong> {selectedUser.email}
-                  </p>
+        <>
+          <div className='modal-backdrop fade show'></div>
+          <div className='modal show d-block' tabIndex={-1}>
+            <div className='modal-dialog'>
+              <div className='modal-content rounded shadow-lg'>
+                <div className='modal-header bg-primary text-white'>
+                  <h5 className='modal-title'>Edit User Role</h5>
+                  <button type='button' className='btn-close btn-close-white' onClick={handleCloseModal}></button>
                 </div>
-                <div className='p-3 border rounded'>
-                  <label htmlFor='formRole' className='form-label fw-bold'>
-                    Role
-                  </label>
-                  <select
-                    id='formRole'
-                    className='form-select shadow-sm'
-                    value={selectedUser.role}
-                    onChange={(e) => setSelectedUser({ ...selectedUser, role: e.target.value })}
-                  >
-                    {roles.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
+                <div className='modal-body text-start'>
+                  <div className='p-3 border rounded mb-3'>
+                    <p><strong>ID:</strong> {selectedUser.user_id}</p>
+                    <p><strong>Display Name:</strong> {selectedUser.display_name}</p>
+                    <p><strong>Email:</strong> {selectedUser.email}</p>
+                  </div>
+                  <div className='p-3 border rounded'>
+                    <label htmlFor='formRole' className='form-label fw-bold'>Role</label>
+                    <select
+                      id='formRole'
+                      className='form-select shadow-sm'
+                      value={selectedUser.role}
+                      onChange={(e) => setSelectedUser({ ...selectedUser, role: e.target.value })}
+                    >
+                      {roles.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
-              <div className='modal-footer'>
-                <button type='button' className='btn btn-secondary' onClick={handleCloseModal}>
-                  Close
-                </button>
-                <button type='button' className='btn btn-primary' onClick={updateUserRole}>
-                  Save
-                </button>
+                <div className='modal-footer'>
+                  <button type='button' className='btn btn-secondary' onClick={handleCloseModal}>Close</button>
+                  <button type='button' className='btn btn-primary' onClick={updateUserRole}>Save</button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Deactivate/Activate Confirmation Modal */}
       {showDeactivateModal && selectedUser && (
-        <div className='modal show' tabIndex={-1} style={{ display: 'block' }}>
-          <div className='modal-dialog'>
-            <div className='modal-content rounded shadow-lg'>
-              <div className='modal-header bg-danger text-white'>
-                <h5 className='modal-title'>
-                  Confirm {selectedUser.account_status === 'Active' ? 'Deactivation' : 'Activation'}
-                </h5>
-                <button type='button' className='btn-close' onClick={() => setShowDeactivateModal(false)}></button>
-              </div>
-              <div className='modal-body text-start'>
-                <p>
-                  Are you sure you want to{' '}
-                  <strong>{selectedUser.account_status === 'Active' ? 'deactivate' : 'activate'}</strong> this user?
-                </p>
-                <div className='p-3 border rounded'>
-                  <p>
-                    <strong>ID:</strong> {selectedUser.user_id}
-                  </p>
-                  <p>
-                    <strong>Display Name:</strong> {selectedUser.display_name}
-                  </p>
-                  <p>
-                    <strong>Email:</strong> {selectedUser.email}
-                  </p>
+        <>
+          <div className='modal-backdrop fade show'></div>
+          <div className='modal show d-block' tabIndex={-1}>
+            <div className='modal-dialog'>
+              <div className='modal-content rounded shadow-lg'>
+                <div className='modal-header bg-danger text-white'>
+                  <h5 className='modal-title'>
+                    Confirm {selectedUser.account_status === 'Active' ? 'Deactivation' : 'Activation'}
+                  </h5>
+                  <button type='button' className='btn-close btn-close-white' onClick={() => setShowDeactivateModal(false)}></button>
                 </div>
-              </div>
-              <div className='modal-footer'>
-                <button type='button' className='btn btn-secondary' onClick={() => setShowDeactivateModal(false)}>
-                  Cancel
-                </button>
-                <button type='button' className='btn btn-danger' onClick={toggleUserStatus}>
-                  {selectedUser.account_status === 'Active' ? 'Deactivate' : 'Activate'}
-                </button>
+                <div className='modal-body text-start'>
+                  <p>
+                    Are you sure you want to{' '}
+                    <strong>{selectedUser.account_status === 'Active' ? 'deactivate' : 'activate'}</strong> this user?
+                  </p>
+                  <div className='p-3 border rounded'>
+                    <p><strong>ID:</strong> {selectedUser.user_id}</p>
+                    <p><strong>Display Name:</strong> {selectedUser.display_name}</p>
+                    <p><strong>Email:</strong> {selectedUser.email}</p>
+                  </div>
+                </div>
+                <div className='modal-footer'>
+                  <button type='button' className='btn btn-secondary' onClick={() => setShowDeactivateModal(false)}>Cancel</button>
+                  <button type='button' className='btn btn-danger' onClick={toggleUserStatus}>
+                    {selectedUser.account_status === 'Active' ? 'Deactivate' : 'Activate'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
