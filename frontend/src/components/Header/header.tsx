@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { useUser } from '@/context/UserContext'; // user auth state :contentReference[oaicite:0]{index=0}
+import { useUser } from '@/context/UserContext';
 import logo from '@/components/ccc-logo-color.svg';
 
 import NavLinks from './NavLinks';
@@ -28,10 +28,32 @@ export default function Header() {
 
   return (
     <header className='bg-body border-bottom p-2'>
+      <style>{`
+        /* Prevent the logo link from turning white or blue on hover/focus —
+           keep colour consistent with the rest of the nav */
+        .header-logo-link {
+          color: inherit !important;
+          text-decoration: none !important;
+        }
+        .header-logo-link:hover,
+        .header-logo-link:focus {
+          color: inherit !important;
+          opacity: 0.85;
+        }
+
+        /* The SVG logo has a near-black fill (#1d1d1b) for the C shape
+           which disappears on dark backgrounds.
+           invert(1) flips it to near-white; hue-rotate(180deg) corrects
+           the blue checkmark hue back after the invert. */
+        [data-bs-theme="dark"] .logo-img {
+          filter: invert(1) hue-rotate(180deg);
+        }
+      `}</style>
+
       <div className='container mx-auto d-flex justify-content-between align-items-center flex-wrap'>
         {/* ── Logo ───────────────────────────────────────────── */}
-        <Link href='/dashboard' className='d-flex align-items-center text-decoration-none'>
-          <Image src={logo} alt='Logo' width={40} height={40} priority />
+        <Link href='/dashboard' className='header-logo-link d-flex align-items-center'>
+          <Image src={logo} alt='Logo' width={40} height={40} priority className='logo-img' />
           <span className='ms-2 fs-4 fw-bold text-body'>Clinical Competency Calculator</span>
         </Link>
 

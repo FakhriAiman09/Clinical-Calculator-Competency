@@ -94,58 +94,84 @@ const RaterDashboard = () => {
 
   return (
     <div className='container mt-4'>
-      <div className='card p-3 border-0 bg-body'>
-        <h1 className='mb-3 text-center text-primary'>Rater Dashboard</h1>
+      <div className='card border-0 bg-body px-4 pt-4 pb-2'>
+
+        <h1 className='mb-1 text-center text-primary fw-bold'>Rater Dashboard</h1>
+        <p className='text-center text-muted small mb-4'>
+          {formRequests.length} pending evaluation{formRequests.length !== 1 ? 's' : ''}
+        </p>
 
         {/* Top Controls */}
         <div className='d-flex justify-content-between align-items-center mb-3'>
-          <button className='btn btn-success' onClick={() => setShowModal(true)} disabled={!user}>
-            Rate Unlisted Student
+          <button className='btn btn-success btn-sm px-3' onClick={() => setShowModal(true)} disabled={!user}>
+            <i className='bi bi-plus-lg me-1'></i>Rate Unlisted Student
           </button>
-          <button className='btn btn-secondary' onClick={toggleSortOrder}>
-            Sort by Date Requested {sortOrder === 'asc' ? <FaSortUp data-testid="sort-up-icon" /> : <FaSortDown data-testid="sort-down-icon" />}
+          <button className='btn btn-outline-secondary btn-sm px-3' onClick={toggleSortOrder}>
+            <i className='bi bi-calendar me-1'></i>
+            Sort by Date {sortOrder === 'asc' ? <FaSortUp data-testid='sort-up-icon' /> : <FaSortDown data-testid='sort-down-icon' />}
           </button>
         </div>
 
         {/* Scrollable List */}
-        <div className='card overflow-auto' style={{ maxHeight: '500px' }}>
-          <div className='list-group' data-testid='list-group'>
-            {formRequests.map((request) => (
+        <div className='overflow-auto' style={{ maxHeight: '520px' }} data-testid='list-group'>
+          {formRequests.length === 0 ? (
+            <div className='text-center text-muted py-5'>
+              <i className='bi bi-inbox display-4 d-block mb-2'></i>
+              No pending evaluations
+            </div>
+          ) : (
+            formRequests.map((request) => (
               <div
                 key={request.id}
-                className='list-group-item d-flex justify-content-between align-items-stretch p-3 mb-2 bg-body rounded shadow-sm'
+                className='rounded border bg-body-secondary mb-3 p-3'
+                data-testid='request-item'
               >
-                <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <h4 className='fw-bold text-body' data-testid='request-item'> {request.display_name}</h4>
-                  <p className='text-muted small mb-0'>{request.email}</p>
-                  <p className='text-muted small mb-0'> Setting: {request.clinical_settings ?? 'N/A'}</p>
+                {/* Row 1: student info + evaluate button */}
+                <div className='d-flex justify-content-between align-items-start mb-2'>
+                  <div>
+                    <h5 className='fw-bold text-body mb-0'>{request.display_name}</h5>
+                    <span className='text-muted small'>{request.email}</span>
+                    <span className='text-muted small ms-2'>·</span>
+                    <span className='text-muted small ms-2'>
+                      <i className='bi bi-hospital me-1'></i>
+                      {request.clinical_settings ?? 'N/A'}
+                    </span>
+                  </div>
+                  <div className='d-flex flex-column align-items-end gap-1'>
+                    <button
+                      className='btn btn-primary btn-sm px-3'
+                      onClick={() => router.push(`/dashboard/rater/form?id=${request.id}`)}
+                    >
+                      Evaluate
+                    </button>
+                    <small className='text-muted' style={{ fontSize: '0.7rem' }}>
+                      {new Date(request.created_at).toLocaleDateString()} {new Date(request.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </small>
+                  </div>
                 </div>
-                <div
-                  className='border rounded p-2 bg-body-secondary'
-                  style={{ flex: '2', overflowY: 'auto', fontSize: '14px', marginLeft: '10px' }}
-                >
-                  <div className='text-secondary fw-bold mb-1'>Relevant Activity:</div>
-                  <span>{request.notes || 'No notes provided'}</span>
-                </div>
-                <div
-                  className='border rounded p-2 bg-body-secondary'
-                  style={{ flex: '2', overflowY: 'auto', fontSize: '14px', marginLeft: '10px' }}
-                >
-                  <div className='text-secondary fw-bold mb-1'>Stated Goals:</div>
-                  <span>{request.goals || 'No goals provided'}</span>
-                </div>
-                <div className='d-flex flex-column justify-content-between align-items-end' style={{ flex: '1' }}>
-                  <button
-                    className='btn btn-primary btn-md mb-2'
-                    onClick={() => router.push(`/dashboard/rater/form?id=${request.id}`)}
-                  >
-                    Evaluate
-                  </button>
-                  <small className='text-muted mt-2'>{new Date(request.created_at).toLocaleString()}</small>
+
+                {/* Row 2: notes + goals boxes */}
+                <div className='row g-2'>
+                  <div className='col-6'>
+                    <div className='rounded bg-body border p-2 h-100' style={{ fontSize: '0.82rem' }}>
+                      <div className='text-muted fw-semibold mb-1' style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Relevant Activity
+                      </div>
+                      <span className='text-body'>{request.notes || <span className='text-muted fst-italic'>No notes provided</span>}</span>
+                    </div>
+                  </div>
+                  <div className='col-6'>
+                    <div className='rounded bg-body border p-2 h-100' style={{ fontSize: '0.82rem' }}>
+                      <div className='text-muted fw-semibold mb-1' style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Stated Goals
+                      </div>
+                      <span className='text-body'>{request.goals || <span className='text-muted fst-italic'>No goals provided</span>}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
+            ))
+          )}
         </div>
       </div>
 

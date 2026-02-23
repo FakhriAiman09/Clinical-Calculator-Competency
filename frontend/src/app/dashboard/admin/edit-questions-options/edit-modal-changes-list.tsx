@@ -16,8 +16,8 @@ const EditModalChangesList = memo(function EditModalChangesList({
     history?.map((h, i) => (
       <li className='list-group-item' key={i}>
         <div className='mb-1'>
-          <span className='badge bg-body-secondary text-dark me-2'>{h.updated_at.toLocaleDateString()}</span>
-          <span className='badge bg-body-secondary text-dark'>
+          <span className='badge bg-body-secondary text-body me-2'>{h.updated_at.toLocaleDateString()}</span>
+          <span className='badge bg-body-secondary text-body'>
             by {h.updater_display_name ?? h.updater_email ?? h.updated_by}
           </span>
         </div>

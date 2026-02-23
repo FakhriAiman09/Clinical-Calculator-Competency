@@ -17,6 +17,66 @@ interface Props {
   onSuccess: (newRequestId: string) => void;
 }
 
+// Custom styles for react-select that respect Bootstrap's CSS variables,
+// ensuring the dropdown adapts correctly in both light and dark mode.
+const selectStyles = {
+  control: (base: object) => ({
+    ...base,
+    backgroundColor: 'var(--bs-body-bg)',
+    borderColor: 'var(--bs-border-color)',
+    color: 'var(--bs-body-color)',
+    boxShadow: 'none',
+    '&:hover': { borderColor: 'var(--bs-primary)' },
+  }),
+  menu: (base: object) => ({
+    ...base,
+    backgroundColor: 'var(--bs-body-bg)',
+    border: '1px solid var(--bs-border-color)',
+    zIndex: 9999,
+  }),
+  menuList: (base: object) => ({
+    ...base,
+    backgroundColor: 'var(--bs-body-bg)',
+    padding: 0,
+  }),
+  option: (base: object, state: { isFocused: boolean; isSelected: boolean }) => ({
+    ...base,
+    backgroundColor: state.isSelected
+      ? 'var(--bs-primary)'
+      : state.isFocused
+        ? 'var(--bs-secondary-bg)'
+        : 'var(--bs-body-bg)',
+    color: state.isSelected ? '#fff' : 'var(--bs-body-color)',
+    cursor: 'pointer',
+  }),
+  singleValue: (base: object) => ({
+    ...base,
+    color: 'var(--bs-body-color)',
+  }),
+  input: (base: object) => ({
+    ...base,
+    color: 'var(--bs-body-color)',
+  }),
+  placeholder: (base: object) => ({
+    ...base,
+    color: 'var(--bs-secondary-color)',
+  }),
+  clearIndicator: (base: object) => ({
+    ...base,
+    color: 'var(--bs-secondary-color)',
+    '&:hover': { color: 'var(--bs-body-color)' },
+  }),
+  dropdownIndicator: (base: object) => ({
+    ...base,
+    color: 'var(--bs-secondary-color)',
+    '&:hover': { color: 'var(--bs-body-color)' },
+  }),
+  indicatorSeparator: (base: object) => ({
+    ...base,
+    backgroundColor: 'var(--bs-border-color)',
+  }),
+};
+
 const UnlistedStudentForm = ({ raterId, hasActiveRequestForStudent, onSuccess }: Props) => {
   const [student, setStudent] = useState<OptionType | null>(null);
   const [setting, setSetting] = useState<OptionType | null>(null);
@@ -102,6 +162,7 @@ const UnlistedStudentForm = ({ raterId, hasActiveRequestForStudent, onSuccess }:
           onChange={(option: SingleValue<OptionType>) => setStudent(option)}
           placeholder='Search student...'
           isClearable
+          styles={selectStyles}
         />
       </div>
 
@@ -114,6 +175,7 @@ const UnlistedStudentForm = ({ raterId, hasActiveRequestForStudent, onSuccess }:
           onChange={(option: SingleValue<OptionType>) => setSetting(option)}
           placeholder='Search setting...'
           isClearable
+          styles={selectStyles}
         />
       </div>
 

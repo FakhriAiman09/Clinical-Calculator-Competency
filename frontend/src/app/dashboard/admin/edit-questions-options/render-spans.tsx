@@ -6,6 +6,6 @@ export const renderQuestion = ((kf: string, question: string) => (
 
 export const renderOption = (key: string, text: string) => (
   <span>
-    <span className='badge border text-dark'>{key}</span> {text}
+    <span className='badge border text-body'>{key}</span> {text}
   </span>
 );

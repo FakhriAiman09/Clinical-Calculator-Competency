@@ -181,27 +181,27 @@ export default function AdminAnnouncements() {
     switch (type) {
       case 'info':
         return {
-          backgroundColor: '#cff4fc',
-          color: '#055160',
+          backgroundColor: 'var(--bs-info-bg-subtle)',
+          color: 'var(--bs-info-text-emphasis)',
           padding: '1rem',
           borderRadius: '6px',
-          border: '1px solid #b6effb',
+          border: '1px solid var(--bs-info-border-subtle)',
         };
       case 'warning':
         return {
-          backgroundColor: '#fff3cd',
-          color: '#664d03',
+          backgroundColor: 'var(--bs-warning-bg-subtle)',
+          color: 'var(--bs-warning-text-emphasis)',
           padding: '1rem',
           borderRadius: '6px',
-          border: '1px solid #ffeeba',
+          border: '1px solid var(--bs-warning-border-subtle)',
         };
       case 'danger':
         return {
-          backgroundColor: '#f8d7da',
-          color: '#842029',
+          backgroundColor: 'var(--bs-danger-bg-subtle)',
+          color: 'var(--bs-danger-text-emphasis)',
           padding: '1rem',
           borderRadius: '6px',
-          border: '1px solid #f5c2c7',
+          border: '1px solid var(--bs-danger-border-subtle)',
         };
       default:
         return {

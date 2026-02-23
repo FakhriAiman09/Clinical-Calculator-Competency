@@ -6,6 +6,9 @@
   padding-top: var(--header-height);
 }
 
+/* Removed hardcoded --background and --foreground variables —
+   Bootstrap's theme system handles these via data-bs-theme */
+
 html,
 body {
   max-width: 100vw;
@@ -29,8 +32,11 @@ a {
   text-decoration: none;
 }
 
+/* color-scheme is managed by Bootstrap's data-bs-theme attribute via ThemeContext */
+
 header {
-  color: gray;
+  /* Background and color are handled by Bootstrap's bg-body + text-body classes.
+     Removing hardcoded white/gray here so dark mode works correctly. */
   padding: 1rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -43,11 +49,12 @@ header a {
 }
 
 header a:hover {
-  background-color: #f0f0f0;
+  /* Use a translucent overlay so it works on both light and dark backgrounds */
+  background-color: rgba(128, 128, 128, 0.15);
 }
 
 header a.active {
-  background-color: #e0e0e0;
+  background-color: rgba(128, 128, 128, 0.25);
 }
 
 /* Ensure dropdown is mobile responsive and shifts when going off the screen */
