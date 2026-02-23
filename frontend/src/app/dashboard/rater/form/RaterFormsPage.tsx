@@ -269,7 +269,6 @@ export default function RaterFormsPage() {
     setSaveStatus('Saving...');
   };
 
-  // ✅ NEW: Replace textarea with AI summary (deletes original comments)
   const replaceTextareaWithSummary = (epaId: number, questionId: string) => {
     const key = makeFieldKey(epaId, questionId);
     const summary = (summaryByField[key] ?? '').trim();
