@@ -9,6 +9,7 @@ import { useRequireRole } from '@/utils/useRequiredRole';
 import { useUser } from '@/context/UserContext';
 import { useAIPreferences } from '@/utils/useAIPreferences';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap-icons/font/bootstrap-icons.css'; // ✅ Bootstrap Icons
 import { sendEmail as sendRaterEmail } from './rater-email-api/send-email-rater.server';
 
 const supabase = createClient();
@@ -747,7 +748,6 @@ export default function RaterFormsPage() {
           border-radius: 6px;
           padding: 6px 8px;
           cursor: pointer;
-          font-size: 18px;
           transition: 0.2s ease;
           display: flex;
           align-items: center;
@@ -761,6 +761,12 @@ export default function RaterFormsPage() {
         .vtt-btn.recording {
           background: #ffe5e5;
           color: #dc3545;
+        }
+
+        /* ✅ icon size */
+        .vtt-btn i {
+          font-size: 20px;
+          line-height: 1;
         }
 
         .vtt-status {
@@ -957,7 +963,10 @@ export default function RaterFormsPage() {
                                   checked={!!responses[currentEPA]?.[questionKey]?.[optionKey]}
                                   onChange={(e) => handleOptionChange(currentEPA, questionKey, optionKey, e.target.checked)}
                                 />
-                                <label className='form-check-label' htmlFor={`epa-${currentEPA}-q-${questionKey}-option-${optionKey}`}>
+                                <label
+                                  className='form-check-label'
+                                  htmlFor={`epa-${currentEPA}-q-${questionKey}-option-${optionKey}`}
+                                >
                                   {optionLabel}
                                 </label>
                               </div>
@@ -978,37 +987,41 @@ export default function RaterFormsPage() {
                             />
 
                             <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 8, zIndex: 2 }}>
+                              {/* ✅ AI Summary button using Bootstrap icon */}
                               <button
                                 type='button'
                                 className='vtt-btn'
                                 onClick={() => requestAISummary(currentEPA, questionKey)}
                                 title='Generate AI summary from comments'
                                 disabled={isSummarizing}
-                                style={{ fontSize: 16 }}
                               >
-                                {isSummarizing ? '⏳' : '✨'}
+                                <i className={`bi ${isSummarizing ? 'bi-hourglass-split' : 'bi-stars'}`} />
                               </button>
 
+                              {/* ✅ Mic button using Bootstrap icon */}
                               <button
                                 type='button'
                                 className={`vtt-btn ${isListening ? 'recording' : ''}`}
                                 onClick={() => toggleDictation(currentEPA, questionKey)}
                                 title={isListening ? 'Stop voice input' : 'Start voice input'}
                               >
-                                {isListening ? '🛑' : '🎙️'}
+                                <i className={`bi ${isListening ? 'bi-stop-circle-fill' : 'bi-mic-fill'}`} />
                               </button>
                             </div>
                           </div>
 
                           {vttStatus ? <div className='vtt-status'>{vttStatus}</div> : null}
-                          {summaryErr ? <div className='vtt-status' style={{ color: '#dc3545' }}>{summaryErr}</div> : null}
+                          {summaryErr ? (
+                            <div className='vtt-status' style={{ color: '#dc3545' }}>
+                              {summaryErr}
+                            </div>
+                          ) : null}
 
                           {summary ? (
                             <div className='mt-2 p-2 border rounded bg-body-secondary'>
                               <div className='d-flex justify-content-between align-items-center mb-1'>
                                 <small className='text-muted'>Summary</small>
 
-                                {/* ✅ Insert + Replace buttons */}
                                 <div className='d-flex gap-2'>
                                   <button
                                     type='button'
