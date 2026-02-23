@@ -1,63 +1,57 @@
-/**
- * Free models available on OpenRouter.
- * All models listed here are $0/token (free tier).
- * Rate limit: 50 req/day (free), 1,000 req/day with ≥$10 credits purchased.
- *
- * Latency / throughput figures are approximate medians observed on OpenRouter.
- * "tokensPerSec" is output throughput.
- */
-
 export type AIModelTier = 'balanced' | 'powerful';
 
-export interface AIModel {
-  id: string;           // OpenRouter model slug
-  name: string;         // Human-readable name
-  provider: string;     // Company
-  providerIcon: string; // Bootstrap icon class
+export interface AIModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  providerIcon: string;
   tier: AIModelTier;
-  contextWindow: number; // tokens
-  latencyMs: number;    // approx time-to-first-token (ms)
-  tokensPerSec: number; // approx output throughput
+  contextWindow: number;
+  latencyMs: number;
+  tokensPerSec: number;
   description: string;
   strengths: string[];
   bestFor: string;
   badge?: string;
 }
 
-export const FREE_AI_MODELS: AIModel[] = [
-  {
-    id: 'qwen/qwen3-8b:free',
-    name: 'Qwen3 8B',
-    provider: 'Alibaba',
-    providerIcon: 'bi-cpu',
-    tier: 'balanced',
-    contextWindow: 40960,
-    latencyMs: 700,
-    tokensPerSec: 55,
-    description:
-      'A strong 8B model with solid instruction following and multilingual capabilities. The sweet spot between speed and quality — ideal for everyday clinical report summarization.',
-    strengths: ['Fast responses', 'Strong reasoning', 'Multilingual support'],
-    bestFor: 'Everyday summarization & quick reports',
-    badge: 'Recommended',
-  },
+// Confirmed free from live OpenRouter API Feb 2026
+export const FREE_AI_MODELS: AIModelOption[] = [
   {
     id: 'meta-llama/llama-3.3-70b-instruct:free',
     name: 'Llama 3.3 70B',
     provider: 'Meta',
-    providerIcon: 'bi-meta',
-    tier: 'powerful',
+    providerIcon: 'bi-cpu',
+    tier: 'balanced',
     contextWindow: 131072,
-    latencyMs: 1800,
-    tokensPerSec: 30,
+    latencyMs: 800,
+    tokensPerSec: 50,
     description:
-      "Meta's flagship open-source 70B model. Near-frontier quality for nuanced, detailed clinical summaries. Takes a bit longer but produces noticeably richer output.",
-    strengths: ['Near-GPT-4 quality', '128K context window', 'Deep reasoning'],
-    bestFor: 'High-stakes summaries & complex reports',
+      "Meta's flagship open-source 70B model. Reliable, well-tested, and consistently available. Strong instruction following for clinical summarization.",
+    strengths: ['128K context', 'Reliable', 'Strong instruction following'],
+    bestFor: 'Everyday summarization & quick reports',
+    badge: 'Fast',
+  },
+  {
+    id: 'qwen/qwen3-235b-a22b:free',
+    name: 'Qwen3 235B',
+    provider: 'Qwen',
+    providerIcon: 'bi-stars',
+    tier: 'powerful',
+    contextWindow: 262144,
+    latencyMs: 1200,
+    tokensPerSec: 35,
+    description:
+      'Qwen3 flagship MoE model with 235B total parameters. Exceptional reasoning and instruction following with a 262K context window.',
+    strengths: ['262K context', 'Top reasoning', 'MoE efficiency'],
+    bestFor: 'High-quality clinical summaries',
     badge: 'Best Quality',
   },
 ];
 
-export const DEFAULT_MODEL_ID = 'qwen/qwen3-8b:free';
+export const DEFAULT_MODEL_ID = 'meta-llama/llama-3.3-70b-instruct:free';
+
+export const VALID_MODEL_IDS = new Set(FREE_AI_MODELS.map((m) => m.id));
 
 export function getTierLabel(tier: AIModelTier): string {
   return { balanced: 'Balanced', powerful: 'Powerful' }[tier];
@@ -68,6 +62,7 @@ export function getTierColor(tier: AIModelTier): string {
 }
 
 export function formatContext(tokens: number): string {
+  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
   return `${tokens}`;
 }

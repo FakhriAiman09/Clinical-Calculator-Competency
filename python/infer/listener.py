@@ -63,9 +63,10 @@ async def main() -> None:
   svm_models = load_svm_models()
 
   print("Downloading BERT model...")
-  bert_path = kagglehub.model_download("cccalc/ccc-bert/keras/250401-80_7114")
-  bert_model = load_bert_model(os.path.join(bert_path, 'model'))
-
+  bert_path = "models/bert"
+  bert_model = load_bert_model(bert_path)
+  print("Path to model files:", bert_path)
+  
   print("Connecting to Supabase Realtime server...", end=' ')
 
   await asupabase.realtime.connect()
