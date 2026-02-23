@@ -14,10 +14,9 @@ import os
 import tensorflow_text as text
 from dotenv import load_dotenv
 from google import genai
-import kagglehub
 import supabase as spb
 
-from inference import (bert_infer, download_svm_models, generate_report_summary, load_bert_model,
+from inference import (bert_infer, generate_report_summary, load_bert_model,
                        load_svm_models, svm_infer)
 
 
@@ -44,25 +43,17 @@ async def main() -> None:
   if not gemini_key:
     raise ValueError("GOOGLE_GENAI_API_KEY environment variable is not set")
 
-  kaggle_username: str = os.environ.get("KAGGLE_USERNAME", "")
-  if not kaggle_username:
-    raise ValueError("KAGGLE_USERNAME environment variable is not set")
-
-  kaggle_key: str = os.environ.get("KAGGLE_KEY", "")
-  if not kaggle_key:
-    raise ValueError("KAGGLE_KEY environment variable is not set")
-
+  # Kaggle not required - BERT and SVM models already downloaded manually
   print("Environment variables loaded.")
 
   gemini = genai.Client(api_key=gemini_key)
   supabase: spb.Client = spb.create_client(supabase_url, supabase_key)
   asupabase: spb.AClient = await spb.acreate_client(supabase_url, supabase_key)
 
-  print("Downloading SVM models...")
-  download_svm_models(supabase)
+  print("Loading SVM models...")
   svm_models = load_svm_models()
 
-  print("Downloading BERT model...")
+  print("Loading BERT model...")
   bert_path = "models/bert"
   bert_model = load_bert_model(bert_path)
   print("Path to model files:", bert_path)
@@ -135,6 +126,7 @@ def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
   (supabase.table("form_results")
    .insert({"response_id": record['response_id'], "results": res})
    .execute())
+  print('Results written to form_results successfully.', flush=True)
 
 
 def handle_new_report(payload, gemini, supabase) -> None:

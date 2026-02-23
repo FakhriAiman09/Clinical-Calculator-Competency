@@ -294,6 +294,7 @@ export default function RaterFormsPage() {
     }));
 
     setSaveStatus('Saving...');
+    setSummaryByField((prev) => ({ ...prev, [key]: '' }));
   };
 
   // =========================================================

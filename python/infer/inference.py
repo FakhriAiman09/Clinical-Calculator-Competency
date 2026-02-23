@@ -61,8 +61,8 @@ def svm_infer(models: dict[str, svm.SVC], data: dict[str, list[bool]]) -> dict[s
   print('Running inference on SVM models...')
 
   def get_class(kf, response: list[bool]) -> int:
-    kf = 'mcq_kf' + re.sub(r'\.', '_', kf)
-    return models[kf].predict([response])[0]
+    model_key = 'mcq_kf' + re.sub(r'\.', '_', kf)
+    return models[model_key].predict([response])[0]
 
   return {k: get_class(k, v) for k, v in data.items()}
 
