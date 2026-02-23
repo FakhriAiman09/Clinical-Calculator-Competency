@@ -9,7 +9,6 @@ const devLevelLabels = ['Remedial', 'Early-Developing', 'Developing', 'Entrustab
 const devLevelColors = ['#ea3636', '#ffb800', '#90ee90', '#3ead16'];
 const gaugeGrey = '#cccccc';
 
-// Corresponding angles for needle positions (in degrees)
 const needleAngles = [23, 68, 113, 158];
 
 const HalfCircleGauge: React.FC<HalfCircleGaugeProps> = ({ average }) => {
@@ -19,11 +18,11 @@ const HalfCircleGauge: React.FC<HalfCircleGaugeProps> = ({ average }) => {
   const cy = height;
   const radius = 60;
 
-  const [needleAngleDeg, setNeedleAngleDeg] = useState(180); // default to left
+  const [needleAngleDeg, setNeedleAngleDeg] = useState(180);
 
   useEffect(() => {
     if (average === null) {
-      setNeedleAngleDeg(0); // no data = 180°
+      setNeedleAngleDeg(0);
     } else {
       setNeedleAngleDeg(needleAngles[average]);
     }
@@ -56,9 +55,11 @@ const HalfCircleGauge: React.FC<HalfCircleGaugeProps> = ({ average }) => {
         );
       })}
       <g style={{ transition: 'transform 0.5s ease' }} transform={`rotate(${needleAngleDeg - 90}, ${cx}, ${cy})`}>
-        <line x1={cx} y1={cy} x2={cx} y2={cy - radius} stroke='#000' strokeWidth='2' />
+        {/* needle color uses currentColor so it adapts to light/dark */}
+        <line x1={cx} y1={cy} x2={cx} y2={cy - radius} stroke='currentColor' strokeWidth='2' />
       </g>
-      <text x={cx} y={height + 10} textAnchor='middle' fontSize='12'>
+      {/* label text uses currentColor */}
+      <text x={cx} y={height + 15} textAnchor='middle' fontSize='12' fill='currentColor'>
         {average === null ? 'No Data' : devLevelLabels[average]}
       </text>
     </svg>

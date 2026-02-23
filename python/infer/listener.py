@@ -76,8 +76,6 @@ async def main() -> None:
 
   print('Subscribed.')
 
-  await asupabase.realtime.listen()
-
   print('Subscribing to the "student_reports_insert" channel...', end=' ')
 
   await (asupabase.realtime
@@ -90,6 +88,7 @@ async def main() -> None:
 
   print('Subscribed.')
 
+  print('Listening for events...', flush=True)
   while True:
     await asyncio.sleep(1)
 
@@ -140,24 +139,53 @@ def handle_new_report(payload, gemini, supabase) -> None:
   '''
 
   record = payload['data']['record']
+  report_id = record['id']
 
-  print('New report received:', record['id'])
+  print('New report received:', report_id, flush=True)
 
-  (supabase.table("student_reports")
-   .update({"llm_feedback": "Generating..."})
-   .eq("id", record['id'])
-   .execute())
+  try:
+    (supabase.table("student_reports")
+     .update({"llm_feedback": "Generating..."})
+     .eq("id", report_id)
+     .execute())
 
-  data = record['kf_avg_data']
+    # Realtime payload may not include kf_avg_data if it was set by the RPC
+    # Fetch the full row directly to get the latest data
+    import time
+    time.sleep(2)  # brief wait for RPC to finish writing kf_avg_data
+    full_row = (supabase.table("student_reports")
+     .select("kf_avg_data")
+     .eq("id", report_id)
+     .single()
+     .execute())
 
-  summary = generate_report_summary(data, gemini)
+    data = full_row.data.get('kf_avg_data') if full_row.data else None
+    print('kf_avg_data:', data, flush=True)
 
-  print('Uploading summary to table...')
+    if not data:
+      print('ERROR: kf_avg_data is empty - cannot generate summary', flush=True)
+      (supabase.table("student_reports")
+       .update({"llm_feedback": "No assessment data found for this time range."})
+       .eq("id", report_id)
+       .execute())
+      return
 
-  (supabase.table("student_reports")
-   .update({"llm_feedback": summary})
-   .eq("id", record['id'])
-   .execute())
+    print('Calling Gemini...', flush=True)
+    summary = generate_report_summary(data, gemini)
+    print('Gemini response received.', flush=True)
+
+    (supabase.table("student_reports")
+     .update({"llm_feedback": summary})
+     .eq("id", report_id)
+     .execute())
+    print('AI feedback written successfully.', flush=True)
+
+  except Exception as e:
+    print(f'ERROR in handle_new_report: {e}', flush=True)
+    (supabase.table("student_reports")
+     .update({"llm_feedback": f"Error generating feedback: {str(e)}"})
+     .eq("id", report_id)
+     .execute())
 
 
 if __name__ == "__main__":

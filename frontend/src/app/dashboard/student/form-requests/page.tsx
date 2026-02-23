@@ -2,6 +2,54 @@
 
 import { useEffect, useState, FormEvent, useCallback } from 'react';
 import Select, { SingleValue } from 'react-select';
+
+// Dark-mode aware styles for react-select
+const reactSelectStyles = {
+  control: (base: any) => ({
+    ...base,
+    backgroundColor: 'var(--bs-body-bg)',
+    borderColor: 'var(--bs-border-color)',
+    color: 'var(--bs-body-color)',
+    '&:hover': { borderColor: 'var(--bs-primary)' },
+  }),
+  menu: (base: any) => ({
+    ...base,
+    backgroundColor: 'var(--bs-body-bg)',
+    border: '1px solid var(--bs-border-color)',
+    zIndex: 9999,
+  }),
+  menuPortal: (base: any) => ({ ...base, zIndex: 9999 }),
+  option: (base: any, state: any) => ({
+    ...base,
+    backgroundColor: state.isFocused
+      ? 'var(--bs-primary)'
+      : state.isSelected
+      ? 'rgba(var(--bs-primary-rgb),0.2)'
+      : 'var(--bs-body-bg)',
+    color: state.isFocused ? '#fff' : 'var(--bs-body-color)',
+    cursor: 'pointer',
+  }),
+  singleValue: (base: any) => ({
+    ...base,
+    color: 'var(--bs-body-color)',
+  }),
+  input: (base: any) => ({
+    ...base,
+    color: 'var(--bs-body-color)',
+  }),
+  placeholder: (base: any) => ({
+    ...base,
+    color: 'var(--bs-secondary-color, #6c757d)',
+  }),
+  indicatorSeparator: (base: any) => ({
+    ...base,
+    backgroundColor: 'var(--bs-border-color)',
+  }),
+  dropdownIndicator: (base: any) => ({
+    ...base,
+    color: 'var(--bs-secondary-color, #6c757d)',
+  }),
+};
 import { createClient } from '@/utils/supabase/client';
 import { useRequireRole } from '@/utils/useRequiredRole';
 import { sendEmail } from './email-api/send-email.server';
@@ -202,6 +250,7 @@ const FormRequests = () => {
                 menuPlacement='auto'
                 menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
                 isDisabled={loading}
+                styles={reactSelectStyles}
               />
             </div>
 
@@ -218,6 +267,7 @@ const FormRequests = () => {
                 menuPlacement='auto'
                 menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
                 isDisabled={loading}
+                styles={reactSelectStyles}
               />
             </div>
 

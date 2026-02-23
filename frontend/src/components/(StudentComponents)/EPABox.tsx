@@ -200,31 +200,44 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
         epaKfScores.length > 0 ? Math.floor(epaKfScores.reduce((a, b) => a + b, 0) / epaKfScores.length) : null
       );
 
-      // ✅ Extract and render EPA-specific Markdown feedback
-      if (targetReport.llm_feedback && typeof targetReport.llm_feedback === 'object') {
-        const relevantEntries = Object.entries(targetReport.llm_feedback).filter(([key]) => {
-          const epaKey = key.split('.')[0];
-          return parseInt(epaKey) === epaId;
-        });
+      // Extract EPA-specific Markdown feedback
+      // llm_feedback may be a JSON object or a JSON string depending on how Supabase stored it
+      if (targetReport.llm_feedback) {
+        let feedbackObj: Record<string, string> | null = null;
 
-        const merged = relevantEntries
-          .map(([, val]) => val)
-          .filter(Boolean)
-          .join('\n\n');
-        setLlmFeedback(merged || null);
+        if (typeof targetReport.llm_feedback === 'object') {
+          feedbackObj = targetReport.llm_feedback as Record<string, string>;
+        } else if (typeof targetReport.llm_feedback === 'string') {
+          try {
+            feedbackObj = JSON.parse(targetReport.llm_feedback);
+          } catch {
+            feedbackObj = null;
+          }
+        }
+
+        if (feedbackObj) {
+          const relevantEntries = Object.entries(feedbackObj).filter(([key]) => {
+            return parseInt(key.split('.')[0]) === epaId;
+          });
+          const merged = relevantEntries.map(([, val]) => val).filter(Boolean).join('\n\n');
+          setLlmFeedback(merged || null);
+        } else {
+          setLlmFeedback(null);
+        }
       } else {
         setLlmFeedback(null);
       }
     }
 
+    // Build graph from raw assessments grouped by month
     const monthlyMap: Record<string, number[]> = {};
     const lifetimeScores: number[] = [];
 
-    for (const r of reportData ?? []) {
-      const val = r.report_data?.[epaStr];
+    for (const a of parsedAssessments) {
+      const val = a.devLevel;
       if (typeof val === 'number') {
-        const date = new Date(r.created_at);
-        const key = new Date(date.getFullYear(), Math.floor(date.getMonth() / 3) * 3, 1).toISOString().slice(0, 10);
+        const date = new Date(a.date);
+        const key = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10);
         if (!monthlyMap[key]) monthlyMap[key] = [];
         monthlyMap[key].push(val);
         lifetimeScores.push(val);
@@ -252,6 +265,42 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Poll for llm_feedback every 5s until it arrives (Gemini can take 2-3 minutes)
+  useEffect(() => {
+    if (!expanded) return;
+    if (llmFeedback && llmFeedback !== 'Generating...') return;
+
+    const poll = async () => {
+      const { data } = await supabase
+        .from('student_reports')
+        .select('llm_feedback')
+        .eq('user_id', studentId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!data?.llm_feedback) return;
+      if (data.llm_feedback === 'Generating...') return;
+
+      // Handle both object and string formats
+      let feedbackObj: Record<string, string> | null = null;
+      if (typeof data.llm_feedback === 'object') {
+        feedbackObj = data.llm_feedback as Record<string, string>;
+      } else if (typeof data.llm_feedback === 'string') {
+        try { feedbackObj = JSON.parse(data.llm_feedback); } catch { return; }
+      }
+      if (!feedbackObj) return;
+      const relevantEntries = Object.entries(feedbackObj).filter(([key]) => {
+        return parseInt(key.split('.')[0]) === epaId;
+      });
+      const merged = relevantEntries.map(([, val]) => val).filter(Boolean).join('\n\n');
+      if (merged) setLlmFeedback(merged);
+    };
+
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, [expanded, llmFeedback, studentId, epaId]);
 
   const filtered = assessments.filter((a) => new Date(a.date) >= cutoff);
   const settings = Array.from(new Set(filtered.map((a) => a.setting).filter(Boolean)));
@@ -289,11 +338,11 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
             </div>
             <div className='col-md-6'>
               <h6 className='fw-bold border-bottom pb-1'>EPA Stats</h6>
-              <ul className='list-group mb-3'>
-                <li className='list-group-item'>Assessments: {assessmentCount}</li>
-                <li className='list-group-item'>Days Since Last: {daysSinceLast}</li>
-                <li className='list-group-item'>Settings: {settings.join(', ')}</li>
-                <li className='list-group-item'>
+              <ul className='list-group list-group-flush mb-3'>
+                <li className='list-group-item bg-transparent'>Assessments: {assessmentCount}</li>
+                <li className='list-group-item bg-transparent'>Days Since Last: {daysSinceLast}</li>
+                <li className='list-group-item bg-transparent'>Settings: {settings.join(', ')}</li>
+                <li className='list-group-item bg-transparent'>
                   Lifetime Average:{' '}
                   {lifetimeAverage !== null
                     ? `${['Remedial', 'Early-Developing', 'Developing', 'Entrustable'][Math.floor(lifetimeAverage)]}`
@@ -306,7 +355,7 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
           <div className='mb-4'>
             <h6 className='fw-bold border-bottom pb-1'>Key Functions</h6>
             <table className='table table-sm table-bordered'>
-              <thead className='table-light'>
+              <thead className='table-active'>
                 <tr>
                   <th>Key Function</th>
                   <th>Avg Level</th>
@@ -336,15 +385,15 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
           <div className='mb-4'>
             <h6 className='fw-bold border-bottom pb-1'>Comments</h6>
             <div className='border rounded p-2 scrollable-box'>
-              <ul className='list-group'>
+              <ul className='list-group list-group-flush'>
                 {comments.length > 0 ? (
                   comments.map((c, i) => (
-                    <li key={i} className='list-group-item'>
+                    <li key={i} className='list-group-item bg-transparent'>
                       {c}
                     </li>
                   ))
                 ) : (
-                  <li className='list-group-item'>No comments found</li>
+                  <li className='list-group-item bg-transparent'>No comments found</li>
                 )}
               </ul>
             </div>

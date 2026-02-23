@@ -169,13 +169,39 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   DO NOT WRAP YOUR RESPONSE WITH MARKDOWN CODEBLOCK NOTATION. Your response should begin with a single curly brace and end with a single curly brace — the ENTIRE response should be parseable as a single JSON object.
   """
 
-  response: GenerateContentResponse = gemini.models.generate_content(
-    model='gemini-2.0-flash', contents=query
-  )
-  if response.text:
-    return response.text
-  else:
-    return 'Error getting response'
+  import time
+  for attempt in range(3):
+    try:
+      response: GenerateContentResponse = gemini.models.generate_content(
+        model='gemini-2.5-flash', contents=query
+      )
+      if response.text:
+        import json
+        text = response.text.strip()
+        # Strip markdown code block wrapping if Gemini added it
+        if text.startswith('```'):
+          lines = text.split('\n')
+          lines = [l for l in lines if not l.strip().startswith('```')]
+          text = '\n'.join(lines).strip()
+        # Validate JSON before returning
+        try:
+          parsed = json.loads(text)
+          return json.dumps(parsed)  # clean serialized JSON
+        except json.JSONDecodeError:
+          print(f'Gemini returned invalid JSON on attempt {attempt+1}, retrying...', flush=True)
+          continue
+      else:
+        print(f'Gemini returned empty response on attempt {attempt+1}, retrying...', flush=True)
+        continue
+    except Exception as e:
+      err = str(e)
+      if '429' in err or 'RESOURCE_EXHAUSTED' in err:
+        wait = 60 * (attempt + 1)
+        print(f'Gemini rate limited, retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
+        time.sleep(wait)
+      else:
+        raise
+  return 'Error: Gemini rate limit exceeded after 3 retries. Try again later.'
 
 
 # ==================================================================================================
