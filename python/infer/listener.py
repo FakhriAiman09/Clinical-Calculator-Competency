@@ -62,12 +62,9 @@ async def main() -> None:
   download_svm_models(supabase)
   svm_models = load_svm_models()
 
-# Note: model are store locally since unable to authenticate with Kaggle API in the deployed environment. 
-# In a production environment, you would want to load the models directly from Kaggle or another storage solution.
   print("Downloading BERT model...")
-  bert_path = "models/bert"
-  bert_model = load_bert_model(bert_path)
-  print("Path to model files:", bert_path)
+  bert_path = kagglehub.model_download("cccalc/ccc-bert/keras/250401-80_7114")
+  bert_model = load_bert_model(os.path.join(bert_path, 'model'))
 
   print("Connecting to Supabase Realtime server...", end=' ')
 

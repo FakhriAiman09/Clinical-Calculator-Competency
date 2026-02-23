@@ -6,6 +6,8 @@ import { createClient } from '@/utils/supabase/client';
 import { getLatestMCQs } from '@/utils/get-epa-data';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useRequireRole } from '@/utils/useRequiredRole';
+import { useUser } from '@/context/UserContext';
+import { useAIPreferences } from '@/utils/useAIPreferences';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { sendEmail as sendRaterEmail } from './rater-email-api/send-email-rater.server';
 
@@ -65,6 +67,9 @@ function compareNumericDotStrings(a: string, b: string): number {
 
 export default function RaterFormsPage() {
   useRequireRole(['rater', 'dev']);
+
+  const { user: authUser } = useUser();
+  const { model: aiModel, incrementUsage } = useAIPreferences(authUser?.id);
 
   const [epas, setEPAs] = useState<EPA[]>([]);
   const [kfData, setKFData] = useState<KeyFunction[]>([]);
@@ -232,15 +237,21 @@ export default function RaterFormsPage() {
       const res = await fetch('/api/ai/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, model: aiModel }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const msg = await res.text();
-        throw new Error(msg || 'Failed to summarize');
+        const friendlyMsg =
+          data?.message ||
+          (res.status === 429
+            ? 'Daily AI limit reached. Resets at midnight UTC. See Settings to learn more.'
+            : 'Summary failed. Please try again.');
+        throw new Error(friendlyMsg);
       }
 
-      const data = (await res.json()) as { summary: string };
+      await incrementUsage();
       setSummaryByField((prev) => ({ ...prev, [key]: (data.summary ?? '').trim() }));
     } catch (err: any) {
       setSummaryErrorByField((prev) => ({ ...prev, [key]: err?.message || 'Summary failed. Try again.' }));
