@@ -94,7 +94,7 @@ const RaterDashboard = () => {
 
   return (
     <div className='container mt-4'>
-      <div className='card p-3 border-0 bg-light'>
+      <div className='card p-3 border-0 bg-body'>
         <h1 className='mb-3 text-center text-primary'>Rater Dashboard</h1>
 
         {/* Top Controls */}
@@ -113,22 +113,22 @@ const RaterDashboard = () => {
             {formRequests.map((request) => (
               <div
                 key={request.id}
-                className='list-group-item d-flex justify-content-between align-items-stretch p-3 mb-2 bg-white rounded shadow-sm'
+                className='list-group-item d-flex justify-content-between align-items-stretch p-3 mb-2 bg-body rounded shadow-sm'
               >
                 <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <h4 className='fw-bold text-dark' data-testid='request-item'> {request.display_name}</h4>
+                  <h4 className='fw-bold text-body' data-testid='request-item'> {request.display_name}</h4>
                   <p className='text-muted small mb-0'>{request.email}</p>
                   <p className='text-muted small mb-0'> Setting: {request.clinical_settings ?? 'N/A'}</p>
                 </div>
                 <div
-                  className='border rounded p-2 bg-light'
+                  className='border rounded p-2 bg-body-secondary'
                   style={{ flex: '2', overflowY: 'auto', fontSize: '14px', marginLeft: '10px' }}
                 >
                   <div className='text-secondary fw-bold mb-1'>Relevant Activity:</div>
                   <span>{request.notes || 'No notes provided'}</span>
                 </div>
                 <div
-                  className='border rounded p-2 bg-light'
+                  className='border rounded p-2 bg-body-secondary'
                   style={{ flex: '2', overflowY: 'auto', fontSize: '14px', marginLeft: '10px' }}
                 >
                   <div className='text-secondary fw-bold mb-1'>Stated Goals:</div>
