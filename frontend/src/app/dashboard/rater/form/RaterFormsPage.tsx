@@ -267,7 +267,7 @@ export default function RaterFormsPage() {
 
     setTextInputs((prev) => {
       const existing = prev[epaId]?.[questionId] ?? '';
-      const newValue = (existing ? existing.trimEnd() + '\n\n' : '') + `AI Summary:\n${summary}\n`;
+      const newValue = (existing ? existing.trimEnd() + '\n\n' : '') + `${summary}\n`;
       return {
         ...prev,
         [epaId]: {
@@ -289,7 +289,7 @@ export default function RaterFormsPage() {
       ...prev,
       [epaId]: {
         ...prev[epaId],
-        [questionId]: `AI Summary:\n${summary}\n`,
+        [questionId]: `${summary}\n`,
       },
     }));
 
@@ -1005,7 +1005,7 @@ export default function RaterFormsPage() {
                           {summary ? (
                             <div className='mt-2 p-2 border rounded bg-body-secondary'>
                               <div className='d-flex justify-content-between align-items-center mb-1'>
-                                <small className='text-muted'>AI Summary</small>
+                                <small className='text-muted'>Summary</small>
 
                                 {/* ✅ Insert + Replace buttons */}
                                 <div className='d-flex gap-2'>

@@ -4,7 +4,7 @@ export interface AIModelOption {
   id: string;
   name: string;
   provider: string;
-  providerIcon: string;
+  providerLogo: string;   // short initials shown in the icon box e.g. "Z" or "SF"
   tier: AIModelTier;
   contextWindow: number;
   latencyMs: number;
@@ -15,41 +15,44 @@ export interface AIModelOption {
   badge?: string;
 }
 
-// Confirmed free from live OpenRouter API Feb 2026
+// Confirmed free endpoints on OpenRouter as of Feb 2026.
+// Check https://openrouter.ai/models?q=:free for the current list.
+// IMPORTANT: Your OpenRouter account must have "Enable free endpoints that may train on inputs"
+// turned ON in Privacy Settings or free models will return "No endpoints found" errors.
 export const FREE_AI_MODELS: AIModelOption[] = [
   {
-    id: 'meta-llama/llama-3.3-70b-instruct:free',
-    name: 'Llama 3.3 70B',
-    provider: 'Meta',
-    providerIcon: 'bi-cpu',
+    id: 'z-ai/glm-4.5-air:free',
+    name: 'GLM 4.5 Air',
+    provider: 'Z-AI',
+    providerLogo: 'Z',
     tier: 'balanced',
     contextWindow: 131072,
-    latencyMs: 800,
-    tokensPerSec: 50,
+    latencyMs: 400,
+    tokensPerSec: 80,
     description:
-      "Meta's flagship open-source 70B model. Reliable, well-tested, and consistently available. Strong instruction following for clinical summarization.",
-    strengths: ['128K context', 'Reliable', 'Strong instruction following'],
-    bestFor: 'Everyday summarization & quick reports',
-    badge: 'Fast',
+      'Lightweight MoE model built for speed. Low latency and high throughput make it ideal for quick summarization tasks.',
+    strengths: ['128K context', 'Very fast', 'Low latency'],
+    bestFor: 'Quick summarization',
+    badge: 'Fastest',
   },
   {
-    id: 'qwen/qwen3-235b-a22b:free',
-    name: 'Qwen3 235B',
-    provider: 'Qwen',
-    providerIcon: 'bi-stars',
+    id: 'stepfun/step-3.5-flash:free',
+    name: 'Step 3.5 Flash',
+    provider: 'StepFun',
+    providerLogo: 'SF',
     tier: 'powerful',
     contextWindow: 262144,
-    latencyMs: 1200,
-    tokensPerSec: 35,
+    latencyMs: 1000,
+    tokensPerSec: 45,
     description:
-      'Qwen3 flagship MoE model with 235B total parameters. Exceptional reasoning and instruction following with a 262K context window.',
-    strengths: ['262K context', 'Top reasoning', 'MoE efficiency'],
+      "StepFun's most capable open-source model. 196B sparse MoE with 11B active parameters and 256K context. Strong reasoning without the slowdown of a dedicated reasoning model.",
+    strengths: ['256K context', 'Strong reasoning', 'MoE efficiency'],
     bestFor: 'High-quality clinical summaries',
     badge: 'Best Quality',
   },
 ];
 
-export const DEFAULT_MODEL_ID = 'meta-llama/llama-3.3-70b-instruct:free';
+export const DEFAULT_MODEL_ID = 'z-ai/glm-4.5-air:free';
 
 export const VALID_MODEL_IDS = new Set(FREE_AI_MODELS.map((m) => m.id));
 

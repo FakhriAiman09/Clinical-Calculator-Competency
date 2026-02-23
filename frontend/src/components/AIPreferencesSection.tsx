@@ -2,26 +2,25 @@
 
 import { useState, useCallback } from 'react';
 import { useUser } from '@/context/UserContext';
-import { useAIPreferences } from '@/utils/useAIPreferences';
+import { useAIPreferences, FREE_LIMIT } from '@/utils/useAIPreferences';
 import {
   FREE_AI_MODELS,
   getTierLabel,
   getTierColor,
   formatContext,
   formatLatency,
-  AIModel,
+  AIModelOption as AIModel,
 } from '@/utils/ai-models';
 
-const FREE_LIMIT = 50;
 
-// Tier colour → CSS hex for reliable dark-mode rendering
+// Bootstrap CSS variables - work in both light and dark mode
 const TIER_HEX: Record<string, { bg: string; text: string; border: string }> = {
-  primary:  { bg: 'rgba(13,110,253,0.15)',  text: '#6ea8fe', border: 'rgba(13,110,253,0.35)'  },
-  warning:  { bg: 'rgba(255,193,7,0.15)',   text: '#ffc107', border: 'rgba(255,193,7,0.35)'   },
-  info:     { bg: 'rgba(13,202,240,0.15)',  text: '#6edff6', border: 'rgba(13,202,240,0.35)'  },
-  success:  { bg: 'rgba(25,135,84,0.15)',   text: '#75b798', border: 'rgba(25,135,84,0.35)'   },
-  secondary:{ bg: 'rgba(108,117,125,0.15)', text: '#adb5bd', border: 'rgba(108,117,125,0.35)' },
-  danger:   { bg: 'rgba(220,53,69,0.15)',   text: '#ea868f', border: 'rgba(220,53,69,0.35)'   },
+  primary:  { bg: 'rgba(var(--bs-primary-rgb),0.12)',   text: 'var(--bs-primary)',   border: 'rgba(var(--bs-primary-rgb),0.3)'   },
+  warning:  { bg: 'rgba(255,193,7,0.15)',               text: '#b8860b',             border: 'rgba(255,193,7,0.4)'               },
+  info:     { bg: 'rgba(var(--bs-info-rgb),0.12)',      text: 'var(--bs-info)',      border: 'rgba(var(--bs-info-rgb),0.3)'      },
+  success:  { bg: 'rgba(var(--bs-success-rgb),0.12)',   text: 'var(--bs-success)',   border: 'rgba(var(--bs-success-rgb),0.3)'   },
+  secondary:{ bg: 'rgba(var(--bs-secondary-rgb),0.12)', text: 'var(--bs-secondary)', border: 'rgba(var(--bs-secondary-rgb),0.3)' },
+  danger:   { bg: 'rgba(var(--bs-danger-rgb),0.12)',    text: 'var(--bs-danger)',    border: 'rgba(var(--bs-danger-rgb),0.3)'    },
 };
 
 // ─── Usage Counter ────────────────────────────────────────────────────────────
@@ -152,8 +151,10 @@ function ModelCard({ model, selected, onSelect }: {
           <div style={{
             width: 48, height: 48, background: c.bg, borderRadius: 10,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            fontWeight: 700, fontSize: model.providerLogo.length > 1 ? '0.85rem' : '1.3rem',
+            color: c.text, letterSpacing: '-0.03em', userSelect: 'none',
           }}>
-            <i className={`bi ${model.providerIcon}`} style={{ fontSize: '1.4rem', color: c.text }} />
+            {model.providerLogo}
           </div>
           <div>
             <div className="fw-bold" style={{ fontSize: '1.05rem' }}>{model.name}</div>
@@ -190,8 +191,8 @@ function ModelCard({ model, selected, onSelect }: {
             {model.strengths.map((s) => (
               <span key={s} style={{
                 fontSize: '0.72rem', fontWeight: 400, padding: '2px 8px', borderRadius: 6,
-                background: TIER_HEX.secondary.bg, color: TIER_HEX.secondary.text,
-                border: `1px solid ${TIER_HEX.secondary.border}`,
+                background: 'rgba(var(--bs-secondary-rgb),0.12)', color: 'var(--bs-secondary)',
+                border: '1px solid rgba(var(--bs-secondary-rgb),0.3)',
               }}>
                 {s}
               </span>
@@ -273,10 +274,6 @@ export default function AIPreferencesSection() {
           <i className="bi bi-robot fs-5" />
           <span className="fw-semibold fs-6">AI Summarizer</span>
         </div>
-        <div className="d-flex align-items-center gap-2">
-          <HeaderBadge icon="bi-tag"   label="Free only"  color="success" />
-          <HeaderBadge icon="bi-cloud" label="OpenRouter" color="info"    />
-        </div>
       </div>
 
       <div className="card-body px-4 pt-4 pb-3">
@@ -301,7 +298,7 @@ export default function AIPreferencesSection() {
             { icon: 'bi-textarea-resize', label: 'Max context window',  color: 'secondary' },
           ].map((item) => (
             <div key={item.label} className="d-flex align-items-center gap-1" style={{ fontSize: '0.75rem' }}>
-              <i className={`bi ${item.icon}`} style={{ color: TIER_HEX[item.color]?.text }} />
+              <i className={`bi ${item.icon}`} style={{ color: `var(--bs-${item.color})` }} />
               <span className="text-muted">{item.label}</span>
             </div>
           ))}
