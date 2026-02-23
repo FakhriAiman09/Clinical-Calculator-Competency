@@ -1,13 +1,28 @@
-# Ignore model files
-bert-model/
+# Virtual environment
+.venv/
+
+# Model files (large files)
+models/
 svm-models/
 
-# Cache
-__pycache__/
+# Environment variables
+.env
 
-# Kaggle json
+# Kaggle credentials
 kaggle.json
 
-.venv/
-.venv_wsl/
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
+# Pytest
+.pytest_cache/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
