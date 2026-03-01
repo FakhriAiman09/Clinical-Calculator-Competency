@@ -83,6 +83,14 @@ type EPACheckSummary = {
   examples: FlaggedComment[]; // small sample for admin preview
 };
 
+type CommentPointer = {
+  responseId: string;
+  epaId: number;
+  kfId: string; // key inside EPAResponse
+  textIndex: number; // index inside kfObj.text[]
+  text: string;
+};
+
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
 
 /** -------------------- Comment-quality heuristics (local, no LLM) -------------------- */
@@ -248,6 +256,18 @@ function reasonLabel(r: FaultReason) {
   }
 }
 
+// helper for editing payload safely
+function clonePayload(payload: FullResponseStructure): FullResponseStructure {
+  return {
+    response: payload.response ? JSON.parse(JSON.stringify(payload.response)) : undefined,
+  };
+}
+
+function commentKey(p: CommentPointer) {
+  // unique key per comment position
+  return `${p.responseId}|${p.epaId}|${p.kfId}|${p.textIndex}`;
+}
+
 export default function AdminAllReportsPage() {
   useRequireRole(['admin', 'dev']);
 
@@ -263,7 +283,14 @@ export default function AdminAllReportsPage() {
   const [editingEPA, setEditingEPA] = useState<number | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [comments, setComments] = useState<string[]>([]);
+
+  // COMMENTS: store pointers, not plain strings
+  const [comments, setComments] = useState<CommentPointer[]>([]);
+  const [selectedResponsePayload, setSelectedResponsePayload] = useState<FullResponseStructure | null>(null);
+
+  // inline editing state for comments
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [savingCommentKey, setSavingCommentKey] = useState<string | null>(null);
 
   // Comment-quality checks per EPA
   const [epaChecks, setEpaChecks] = useState<Record<number, EPACheckSummary>>({});
@@ -319,8 +346,83 @@ export default function AdminAllReportsPage() {
     if (data) setFormResults(data);
   }, [selectedStudent]);
 
+  // Update a single comment in local payload + comments list
+  const applyCommentEditLocally = useCallback(
+    (pointer: CommentPointer, newText: string) => {
+      // update comments list
+      setComments((prev) =>
+        prev.map((c) => (commentKey(c) === commentKey(pointer) ? { ...c, text: newText } : c))
+      );
+
+      // update payload
+      setSelectedResponsePayload((prev) => {
+        if (!prev || !prev.response) return prev;
+
+        const next = clonePayload(prev);
+        const epaKey = String(pointer.epaId);
+
+        const block = next.response?.[epaKey];
+        if (!block) return next;
+
+        const kfObj = block[pointer.kfId];
+        if (!kfObj || typeof kfObj !== 'object') return next;
+
+        const texts = (kfObj as KeyFunctionResponse).text;
+        if (!Array.isArray(texts)) return next;
+
+        const updatedTexts = [...texts];
+        if (pointer.textIndex >= 0 && pointer.textIndex < updatedTexts.length) {
+          updatedTexts[pointer.textIndex] = newText;
+          (block[pointer.kfId] as KeyFunctionResponse).text = updatedTexts;
+        }
+
+        return next;
+      });
+    },
+    [setComments, setSelectedResponsePayload]
+  );
+
+  // Persist payload to DB (form_responses.response) so the edit is real
+  const saveEditedComment = useCallback(
+    async (pointer: CommentPointer) => {
+      const key = commentKey(pointer);
+      const draft = commentDrafts[key];
+      const newText = typeof draft === 'string' ? draft : pointer.text;
+
+      if (!selectedFormId) return;
+      if (!selectedResponsePayload) return;
+
+      setSavingCommentKey(key);
+      try {
+        // 1) apply locally (so flags can disappear immediately)
+        applyCommentEditLocally(pointer, newText);
+
+        // 2) write the entire payload back (simplest + safest)
+        const { error } = await supabase
+          .from('form_responses')
+          .update({ response: selectedResponsePayload })
+          .eq('response_id', selectedFormId);
+
+        if (error) {
+          console.error(error);
+        } else {
+          // clear draft once saved
+          setCommentDrafts((prev) => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          });
+        }
+      } finally {
+        setSavingCommentKey(null);
+      }
+    },
+    [commentDrafts, selectedFormId, selectedResponsePayload, applyCommentEditLocally]
+  );
+
   const fetchComments = useCallback(async () => {
     if (!selectedStudent || editingEPA === null || !selectedFormId) return;
+
     const { data: resultData, error } = await supabase
       .from('form_results')
       .select(
@@ -344,28 +446,56 @@ export default function AdminAllReportsPage() {
       return;
     }
 
-    const parsedComments: string[] = [];
-    for (const row of resultData ?? []) {
-      if (row.response_id !== selectedFormId) continue;
-      const formResponse = row.form_responses;
-      if (formResponse?.form_requests?.student_id !== selectedStudent.id) continue;
-
-      if (formResponse.response?.response) {
-        const epaKey = String(editingEPA);
-        const commentBlock = formResponse.response.response[epaKey];
-        if (commentBlock) {
-          Object.values(commentBlock).forEach((kfObj) => {
-            if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
-              const texts = (kfObj as KeyFunctionResponse).text;
-              if (Array.isArray(texts)) {
-                parsedComments.push(...texts.filter((t) => typeof t === 'string' && t.trim() !== ''));
-              }
-            }
-          });
-        }
-      }
+    const row = (resultData ?? []).find((r) => r.response_id === selectedFormId);
+    if (!row) {
+      setComments([]);
+      setSelectedResponsePayload(null);
+      return;
     }
-    setComments(parsedComments);
+
+    const formResponse = row.form_responses;
+    if (formResponse?.form_requests?.student_id !== selectedStudent.id) {
+      setComments([]);
+      setSelectedResponsePayload(null);
+      return;
+    }
+
+    const payload = formResponse.response ?? null;
+    setSelectedResponsePayload(payload);
+
+    const parsed: CommentPointer[] = [];
+
+    const responseRoot = payload?.response;
+    if (!responseRoot) {
+      setComments([]);
+      return;
+    }
+
+    const epaKey = String(editingEPA);
+    const commentBlock = responseRoot[epaKey];
+    if (commentBlock) {
+      Object.entries(commentBlock).forEach(([kfId, kfObj]) => {
+        if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
+          const texts = (kfObj as KeyFunctionResponse).text;
+          if (Array.isArray(texts)) {
+            texts.forEach((t, idx) => {
+              if (typeof t === 'string' && t.trim() !== '') {
+                parsed.push({
+                  responseId: selectedFormId,
+                  epaId: editingEPA,
+                  kfId,
+                  textIndex: idx,
+                  text: t,
+                });
+              }
+            });
+          }
+        }
+      });
+    }
+
+    setComments(parsed);
+    setCommentDrafts({});
   }, [selectedStudent, editingEPA, selectedFormId]);
 
   useEffect(() => {
@@ -399,6 +529,7 @@ export default function AdminAllReportsPage() {
     });
   }, []);
 
+  // Save Development Levels ONLY (unchanged behavior)
   const handleSave = async () => {
     if (!selectedFormId) return;
     const target = formResults.find((r) => r.response_id === selectedFormId);
@@ -407,6 +538,9 @@ export default function AdminAllReportsPage() {
     await supabase.from('form_results').update({ results: target.results }).eq('response_id', selectedFormId);
     setSaving(false);
     setSelectedFormId(null);
+
+    // keep edit modal open? (your existing code closes selection)
+    // comments edits are saved per-comment, so no need here
   };
 
   const formsForEPA = useMemo(() => {
@@ -435,7 +569,7 @@ export default function AdminAllReportsPage() {
     setRunningChecks(true);
 
     try {
-      // 1) fetch all response_ids for this student
+      // 1) fetch all request ids for this student
       const { data: requests } = await supabase.from('form_requests').select('id').eq('student_id', selectedStudent.id);
       const requestIds = requests?.map((r) => r.id) ?? [];
 
@@ -533,15 +667,18 @@ export default function AdminAllReportsPage() {
 
   const hasAnyFlags = useMemo(() => Object.values(epaChecks).some((s) => s.flaggedComments > 0), [epaChecks]);
 
-  // NEW: compute the most common reason per EPA (to display “flag means …”)
-  const topReasonForEPA = useCallback((epaId: number): FaultReason | null => {
-    const s = epaChecks[epaId];
-    if (!s) return null;
-    const entries = Object.entries(s.reasonCounts) as [FaultReason, number][];
-    const sorted = entries.sort((a, b) => b[1] - a[1]);
-    const top = sorted.find(([, count]) => count > 0);
-    return top ? top[0] : null;
-  }, [epaChecks]);
+  // compute the most common reason per EPA (to display “flag means …”)
+  const topReasonForEPA = useCallback(
+    (epaId: number): FaultReason | null => {
+      const s = epaChecks[epaId];
+      if (!s) return null;
+      const entries = Object.entries(s.reasonCounts) as [FaultReason, number][];
+      const sorted = entries.sort((a, b) => b[1] - a[1]);
+      const top = sorted.find(([, count]) => count > 0);
+      return top ? top[0] : null;
+    },
+    [epaChecks]
+  );
 
   return (
     <div className='container py-5 bg-white'>
@@ -626,7 +763,12 @@ export default function AdminAllReportsPage() {
                 setFormResults([]);
                 setEditingEPA(null);
                 setSelectedFormId(null);
+
                 setComments([]);
+                setSelectedResponsePayload(null);
+                setCommentDrafts({});
+                setSavingCommentKey(null);
+
                 setEpaChecks({});
                 setLastCheckAt(null);
                 if (student) fetchReports(student.id);
@@ -854,6 +996,10 @@ export default function AdminAllReportsPage() {
                       onClick={() => {
                         setEditingEPA(null);
                         setSelectedFormId(null);
+                        setComments([]);
+                        setSelectedResponsePayload(null);
+                        setCommentDrafts({});
+                        setSavingCommentKey(null);
                       }}
                     ></button>
                   </div>
@@ -915,28 +1061,65 @@ export default function AdminAllReportsPage() {
                         {/* Comments Section */}
                         <div className='mt-4'>
                           <h6>Comments</h6>
+
                           <div className='border rounded p-2 scrollable-box'>
                             <ul className='list-group'>
                               {comments.length > 0 ? (
                                 comments.map((c, i) => {
-                                  const reasons = detectFaultReasons(c);
+                                  const key = commentKey(c);
+                                  const draft = commentDrafts[key];
+                                  const currentText = typeof draft === 'string' ? draft : c.text;
+
+                                  const reasons = detectFaultReasons(currentText);
                                   const flagged = reasons.length > 0;
+
                                   return (
                                     <li
-                                      key={i}
-                                      className={`list-group-item d-flex flex-column gap-1 ${
+                                      key={key}
+                                      className={`list-group-item d-flex flex-column gap-2 ${
                                         flagged ? 'border border-danger-subtle' : ''
                                       }`}
                                     >
-                                      <div>{c}</div>
-                                      {flagged && (
-                                        <div>
-                                          {reasons.map((r) => (
-                                            <span key={r} className='reason-chip'>
-                                              {reasonLabel(r)}
-                                            </span>
-                                          ))}
-                                        </div>
+                                      {/* If flagged, show editable textarea. If not flagged, keep as normal text (but still editable if you want). */}
+                                      {flagged ? (
+                                        <>
+                                          <textarea
+                                            className='form-control'
+                                            value={currentText}
+                                            rows={2}
+                                            onChange={(e) => {
+                                              const newText = e.target.value;
+                                              setCommentDrafts((prev) => ({ ...prev, [key]: newText }));
+
+                                              // update live so the flag can disappear immediately when it becomes "fine"
+                                              applyCommentEditLocally(c, newText);
+                                            }}
+                                          />
+                                          <div className='d-flex align-items-center justify-content-between'>
+                                            <div>
+                                              {reasons.map((r) => (
+                                                <span key={r} className='reason-chip'>
+                                                  {reasonLabel(r)}
+                                                </span>
+                                              ))}
+                                            </div>
+                                            <button
+                                              className='btn btn-sm btn-outline-primary'
+                                              onClick={() => saveEditedComment(c)}
+                                              disabled={savingCommentKey === key}
+                                              title='Save this comment'
+                                            >
+                                              {savingCommentKey === key ? 'Saving...' : 'Save comment'}
+                                            </button>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div>{currentText}</div>
+                                          <div className='mini-muted'>
+                                            ✓ Looks fine (no flags).{/* stays clean automatically */}
+                                          </div>
+                                        </>
                                       )}
                                     </li>
                                   );
@@ -948,8 +1131,8 @@ export default function AdminAllReportsPage() {
                           </div>
 
                           <div className='mini-muted mt-2'>
-                            If a comment is flagged, the label explains why (example: “Comment too short”, “Generic /
-                            unhelpful”). Flags are a review signal for admins.
+                            If a comment is flagged, you can edit it here. Once the comment becomes acceptable, the flag labels
+                            disappear automatically. Click “Save comment” to persist it.
                           </div>
                         </div>
                       </div>
@@ -962,6 +1145,10 @@ export default function AdminAllReportsPage() {
                       onClick={() => {
                         setEditingEPA(null);
                         setSelectedFormId(null);
+                        setComments([]);
+                        setSelectedResponsePayload(null);
+                        setCommentDrafts({});
+                        setSavingCommentKey(null);
                       }}
                     >
                       Cancel
