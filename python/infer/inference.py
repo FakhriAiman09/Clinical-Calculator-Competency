@@ -246,11 +246,12 @@ def download_svm_models(supabase: spb.Client) -> None:
   for model in models:
     model_name = model['name']
     print(f'Downloading {model_name}...', end=' ')
-    file_path = f'svm-models/{model_name}'
+    filename = os.path.basename(model_name)
+    file_path = f'svm-models/{filename}'
     with open(file_path, 'wb') as f:
       response = bucket.download(model_name)
       f.write(response)
-    print(f'to svm-models/{model_name}')
+    print(f'to {file_path}')
   print('All SVM models downloaded successfully.')
 
 
