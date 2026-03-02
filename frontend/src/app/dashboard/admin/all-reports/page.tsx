@@ -5,7 +5,8 @@ import { createClient } from '@/utils/supabase/client';
 import { getEPAKFDescs } from '@/utils/get-epa-data';
 import { useRequireRole } from '@/utils/useRequiredRole';
 import dynamic from 'next/dynamic';
-import DownloadPDFButton from '@/components/(StudentComponents)/DownloadPDFButton';
+import PrintPDFButton from '@/components/(StudentComponents)/PrintPDFButton';
+import { sendResubmissionEmail } from './admin-email-api/send-email-admin.server';
 
 const EPABox = dynamic(() => import('@/components/(StudentComponents)/EPABox'), { ssr: false });
 
@@ -30,6 +31,16 @@ interface FormResult {
   response_id: string;
   created_at: string;
   results: Record<string, number>;
+}
+
+interface FormRequestWithRater {
+  id: string;
+  completed_by: string;
+  student_id: string;
+  profiles?: {
+    email: string | null;
+    display_name: string | null;
+  } | null;
 }
 
 interface KeyFunctionResponse {
@@ -297,6 +308,11 @@ export default function AdminAllReportsPage() {
   const [runningChecks, setRunningChecks] = useState(false);
   const [lastCheckAt, setLastCheckAt] = useState<string | null>(null);
 
+  // Email sending state
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [formRequestData, setFormRequestData] = useState<FormRequestWithRater | null>(null);
+
   useEffect(() => {
     const fetchStudents = async () => {
       const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'student');
@@ -498,11 +514,149 @@ export default function AdminAllReportsPage() {
     setCommentDrafts({});
   }, [selectedStudent, editingEPA, selectedFormId]);
 
+  // Fetch form request data with rater information
+  const fetchFormRequestData = useCallback(async () => {
+    if (!selectedFormId) return;
+
+    try {
+      // Get the form_response to find the request_id
+      const { data: formResponse, error: frError } = await supabase
+        .from('form_responses')
+        .select('request_id')
+        .eq('response_id', selectedFormId)
+        .single();
+
+      if (frError || !formResponse) {
+        console.error('Error fetching form response:', frError);
+        setFormRequestData(null);
+        return;
+      }
+
+      // Get the form_request with completed_by (rater id)
+      const { data: formRequest, error: reqError } = await supabase
+        .from('form_requests')
+        .select('id, completed_by, student_id')
+        .eq('id', formResponse.request_id)
+        .single();
+
+      if (reqError || !formRequest) {
+        console.error('Error fetching form request:', reqError);
+        setFormRequestData(null);
+        return;
+      }
+
+      // Get all users to find the rater's email (email is in auth.users, not profiles)
+      const { data: users, error: usersError } = await supabase.rpc('fetch_users');
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+        setFormRequestData(null);
+        return;
+      }
+
+      interface User {
+        user_id: string;
+        display_name?: string;
+        email?: string;
+      }
+
+      // Find the rater in the users list
+      const rater = (users as User[]).find((u) => u.user_id === formRequest.completed_by);
+
+      // Combine the data
+      setFormRequestData({
+        id: formRequest.id,
+        completed_by: formRequest.completed_by,
+        student_id: formRequest.student_id,
+        profiles: rater ? {
+          email: rater.email || null,
+          display_name: rater.display_name || null,
+        } : null,
+      });
+    } catch (error) {
+      console.error('Error in fetchFormRequestData:', error);
+      setFormRequestData(null);
+    }
+  }, [selectedFormId]);
+
+  // Handler to send resubmission email
+  const handleSendResubmissionEmail = async () => {
+    if (!formRequestData || !selectedStudent) {
+      setEmailStatus({ type: 'error', message: 'Missing required data to send email' });
+      return;
+    }
+
+    if (!formRequestData.profiles?.email) {
+      setEmailStatus({ type: 'error', message: 'Rater email not found' });
+      return;
+    }
+
+    setSendingEmail(true);
+    setEmailStatus(null);
+
+    try {
+      // Collect flagged reasons from current comments
+      let flaggedReasons: string[] = [];
+      if (comments.length > 0) {
+        const commentReasons = new Set<string>();
+        comments.forEach(c => {
+          const reasons = detectFaultReasons(c);
+          reasons.forEach(r => commentReasons.add(reasonLabel(r)));
+        });
+        flaggedReasons = Array.from(commentReasons);
+      }
+
+      const { data: formResponse } = await supabase
+        .from('form_responses')
+        .select('request_id')
+        .eq('response_id', selectedFormId || '')
+        .single();
+
+      if (!formResponse) {
+        setEmailStatus({ type: 'error', message: 'Form request not found' });
+        setSendingEmail(false);
+        return;
+      }
+
+      // Reopen the form request so the rater can access it again
+      const { error: reopenError } = await supabase
+        .from('form_requests')
+        .update({ active_status: true })
+        .eq('id', formResponse.request_id);
+
+      if (reopenError) {
+        console.error('Error reopening form request:', reopenError);
+        setEmailStatus({ type: 'error', message: 'Failed to reopen form request' });
+        setSendingEmail(false);
+        return;
+      }
+
+      await sendResubmissionEmail({
+        to: formRequestData.profiles.email,
+        raterName: formRequestData.profiles.display_name ?? undefined,
+        studentName: selectedStudent.display_name,
+        requestId: formResponse.request_id,
+        responseId: selectedFormId || undefined,
+        flaggedReasons: flaggedReasons.length > 0 ? flaggedReasons : undefined,
+      });
+
+      setEmailStatus({ type: 'success', message: 'Resubmission request email sent successfully!' });
+    } catch (error) {
+      console.error('Error sending email:', error);
+      setEmailStatus({ 
+        type: 'error', 
+        message: error instanceof Error ? error.message : 'Failed to send email' 
+      });
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   useEffect(() => {
     if (selectedStudent && selectedReport && editingEPA !== null && selectedFormId) {
       fetchComments();
+      fetchFormRequestData();
     }
-  }, [selectedStudent, selectedReport, editingEPA, selectedFormId, fetchComments]);
+  }, [selectedStudent, selectedReport, editingEPA, selectedFormId, fetchComments, fetchFormRequestData]);
 
   const handleGenerate = async () => {
     if (!selectedStudent) return;
@@ -681,24 +835,15 @@ export default function AdminAllReportsPage() {
   );
 
   return (
-    <div className='container py-5 bg-white'>
+    <div className='container py-5'>
       <style>{`
-        @media print {
-          body { background: white !important; }
-          header, .d-print-none, .modal, .btn, .form-control, .form-select, .form-label {
-            display: none !important;
-          }
-          .container { width: 100% !important; max-width: 100% !important; padding: 0 !important; }
-          .epa-report-section { border: none !important; box-shadow: none !important; padding: 1rem 0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .print-visible { display: block !important; color: black !important; page-break-before: always; }
-        }
+        /* Transitions */
         .fade-transition { opacity: 0; transition: opacity 0.3s ease-in-out; }
         .fade-transition.show { opacity: 1; }
-        .scrollable-box { max-height: 300px; overflow-y: auto; }
 
-        /* Flag styling */
+        /* Flag / badge styling — uses currentColor so it works in both light and dark mode */
         .epa-flagged {
-          border: 1px solid rgba(220, 53, 69, 0.45);
+          border: 1px solid rgba(220, 53, 69, 0.45) !important;
           box-shadow: 0 0.25rem 0.75rem rgba(220, 53, 69, 0.08);
           border-radius: 0.75rem;
         }
@@ -706,8 +851,8 @@ export default function AdminAllReportsPage() {
           font-size: 0.75rem;
           padding: 0.2rem 0.5rem;
           border-radius: 999px;
-          border: 1px solid rgba(220, 53, 69, 0.35);
-          background: rgba(220, 53, 69, 0.08);
+          border: 1px solid rgba(220, 53, 69, 0.5);
+          background: rgba(220, 53, 69, 0.12);
           color: rgb(220, 53, 69);
           font-weight: 600;
           display: inline-flex;
@@ -718,20 +863,20 @@ export default function AdminAllReportsPage() {
           font-size: 0.75rem;
           padding: 0.2rem 0.5rem;
           border-radius: 999px;
-          border: 1px solid rgba(25, 135, 84, 0.35);
-          background: rgba(25, 135, 84, 0.08);
+          border: 1px solid rgba(25, 135, 84, 0.5);
+          background: rgba(25, 135, 84, 0.12);
           color: rgb(25, 135, 84);
           font-weight: 600;
           display: inline-flex;
           align-items: center;
           gap: 0.35rem;
         }
-        .mini-muted { color: #6c757d; font-size: 0.85rem; }
+        .mini-muted { color: var(--bs-secondary-color, #6c757d); font-size: 0.85rem; }
         .example-box {
-          border: 1px solid rgba(0,0,0,0.08);
+          border: 1px solid var(--bs-border-color, rgba(0,0,0,0.08));
           border-radius: 0.75rem;
           padding: 0.75rem;
-          background: #fff;
+          background: var(--bs-body-bg, #fff);
         }
         .reason-chip {
           display: inline-block;
@@ -740,8 +885,9 @@ export default function AdminAllReportsPage() {
           font-size: 0.72rem;
           padding: 0.12rem 0.45rem;
           border-radius: 999px;
-          border: 1px solid rgba(0,0,0,0.12);
-          background: rgba(0,0,0,0.03);
+          border: 1px solid var(--bs-border-color, rgba(0,0,0,0.15));
+          background: var(--bs-tertiary-bg, rgba(0,0,0,0.04));
+          color: var(--bs-body-color);
         }
       `}</style>
 
@@ -826,11 +972,15 @@ export default function AdminAllReportsPage() {
             <div className='d-flex align-items-center gap-2'>
               {Object.keys(epaChecks).length > 0 && (
                 <span className={hasAnyFlags ? 'epa-flag-badge' : 'epa-ok-badge'}>
-                  {hasAnyFlags ? '⚑ Issues found' : '✓ No issues found'}
+                  {hasAnyFlags ? (
+                    <><i className="bi bi-flag-fill" aria-hidden="true"></i> Issues found</>
+                  ) : (
+                    <><i className="bi bi-check-circle-fill" aria-hidden="true"></i> No issues found</>
+                  )}
                 </span>
               )}
               <button
-                className='btn btn-outline-dark'
+                className='btn btn-outline-secondary'
                 onClick={runCommentQualityChecks}
                 disabled={!selectedStudent || runningChecks}
                 title='Run quality checks across all EPAs for this student'
@@ -856,7 +1006,11 @@ export default function AdminAllReportsPage() {
                         <div className='d-flex align-items-center justify-content-between'>
                           <div className='fw-semibold'>EPA {epaId}</div>
                           <span className={flagged ? 'epa-flag-badge' : 'epa-ok-badge'}>
-                            {flagged ? `⚑ ${s.flaggedComments}/${s.totalComments} flagged` : `✓ ${s.totalComments} checked`}
+                            {flagged ? (
+                              <><i className="bi bi-flag-fill" aria-hidden="true"></i> {s.flaggedComments}/{s.totalComments} flagged</>
+                            ) : (
+                              <><i className="bi bi-check-circle-fill" aria-hidden="true"></i> {s.totalComments} checked</>
+                            )}
                           </span>
                         </div>
 
@@ -927,11 +1081,43 @@ export default function AdminAllReportsPage() {
       {selectedStudent && selectedReport && !loadingReport && (
         <div className='pb-3 p-4 mb-5'>
           <div className='d-flex justify-content-between align-items-center mb-3 d-print-none'>
-            <h3 className='m-0 d-print-none'>{selectedReport.title}</h3>
-            <DownloadPDFButton />
+            <h3 className='m-0'>{selectedReport.title}</h3>
+            <PrintPDFButton studentId={selectedStudent?.id} reportId={selectedReport?.id} reportTitle={selectedReport?.title} />
           </div>
 
           <hr className='d-print-none' />
+
+          {/* ── Print-only cover block (hidden on screen) ── */}
+          <div style={{ display: 'none' }} className='print-cover'>
+            <style>{`
+              @media print {
+                .print-cover {
+                  display: block !important;
+                  border-bottom: 2pt solid #333;
+                  padding-bottom: 10pt;
+                  margin-bottom: 14pt;
+                }
+                .print-cover h1 {
+                  font-size: 14pt;
+                  font-weight: bold;
+                  margin: 0 0 4pt 0;
+                }
+                .print-cover .print-meta {
+                  font-size: 9pt;
+                  color: #444;
+                  display: flex;
+                  gap: 24pt;
+                }
+              }
+            `}</style>
+            <h1>{selectedReport.title}</h1>
+            <div className='print-meta'>
+              <span><strong>Student:</strong> {selectedStudent.display_name}</span>
+              <span><strong>Time Window:</strong> {selectedReport.time_window}</span>
+              <span><strong>Generated:</strong> {new Date(selectedReport.created_at).toLocaleDateString()}</span>
+              <span><strong>Printed:</strong> {new Date().toLocaleDateString()}</span>
+            </div>
+          </div>
 
           {REPORT_EPAS.map((epaId) => {
             const check = epaChecks[epaId];
@@ -941,12 +1127,13 @@ export default function AdminAllReportsPage() {
             return (
               <div
                 key={`container-${epaId}`}
-                className={`mb-1 p-3 epa-report-section ${flagged ? 'epa-flagged' : ''}`}
+                className='epa-report-section'
               >
-                <div className='d-flex justify-content-between align-items-center mb-2'>
+                {/* Admin controls — hidden on print */}
+                <div className='d-flex justify-content-between align-items-center mb-2 d-print-none'>
                   <div className='d-flex align-items-center gap-2'>
                     <button
-                      className='btn btn-sm btn-outline-primary d-print-none'
+                      className='btn btn-sm btn-outline-primary'
                       onClick={async () => {
                         setEditingEPA(epaId);
                         await fetchFormResults();
@@ -957,12 +1144,16 @@ export default function AdminAllReportsPage() {
 
                     {check && (
                       <span className={flagged ? 'epa-flag-badge' : 'epa-ok-badge'}>
-                        {flagged ? `⚑ ${check.flaggedComments}/${check.totalComments} flagged` : `✓ ${check.totalComments} checked`}
+                        {flagged ? (
+                          <><i className="bi bi-flag-fill" aria-hidden="true"></i> {check.flaggedComments}/{check.totalComments} flagged</>
+                        ) : (
+                          <><i className="bi bi-check-circle-fill" aria-hidden="true"></i> {check.totalComments} checked</>
+                        )}
                       </span>
                     )}
 
                     {flagged && topReason && (
-                      <span className='mini-muted d-print-none'>
+                      <span className='mini-muted'>
                         Flag means: <span className='fw-semibold'>{reasonLabel(topReason)}</span>
                       </span>
                     )}
@@ -1134,6 +1325,45 @@ export default function AdminAllReportsPage() {
                             If a comment is flagged, you can edit it here. Once the comment becomes acceptable, the flag labels
                             disappear automatically. Click “Save comment” to persist it.
                           </div>
+
+                          {/* Email notification and send button */}
+                          {comments.some(c => detectFaultReasons(c).length > 0) && (
+                            <div className='mt-3 p-3 border border-warning rounded bg-warning bg-opacity-10'>
+                              <div className='fw-semibold mb-2'>Action Required: Flagged Content Detected</div>
+                              <div className='mini-muted mb-2'>
+                                This form contains low-quality comments. You can request the rater to resubmit the form with improved feedback.
+                              </div>
+                              {emailStatus && (
+                                <div className={`alert alert-${emailStatus.type === 'success' ? 'success' : 'danger'} py-2 px-3 mb-2`} role='alert'>
+                                  {emailStatus.message}
+                                </div>
+                              )}
+                              {!formRequestData && !sendingEmail && (
+                                <div className='alert alert-info py-2 px-3 mb-2' role='alert'>
+                                  Loading rater information...
+                                </div>
+                              )}
+                              <button 
+                                className='btn btn-warning btn-sm'
+                                onClick={() => handleSendResubmissionEmail()}
+                                disabled={sendingEmail || !formRequestData}
+                              >
+                                {sendingEmail ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Sending...
+                                  </>
+                                ) : (
+                                  <>Request Resubmission from Rater</>
+                                )}
+                              </button>
+                              {formRequestData?.profiles && (
+                                <div className='mini-muted mt-2'>
+                                  Email will be sent to: {formRequestData.profiles.display_name} ({formRequestData.profiles.email})
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
