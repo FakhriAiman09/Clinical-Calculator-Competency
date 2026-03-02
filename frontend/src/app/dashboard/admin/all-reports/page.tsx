@@ -834,7 +834,7 @@ export default function AdminAllReportsPage() {
                 </span>
               )}
               <button
-                className='btn btn-outline-dark'
+                className='btn btn-outline-secondary'
                 onClick={runCommentQualityChecks}
                 disabled={!selectedStudent || runningChecks}
                 title='Run quality checks across all EPAs for this student'

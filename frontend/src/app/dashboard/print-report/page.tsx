@@ -102,6 +102,7 @@ export default function PrintReportPage() {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [forceSelector, setForceSelector] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   /* Load students */
   useEffect(() => {
@@ -304,6 +305,28 @@ export default function PrintReportPage() {
     setReady(true);
   }, [epaDescriptions]);
 
+  /* ─── PDF Download via Puppeteer API ─────────────────── */
+  const downloadPdf = useCallback(async () => {
+    if (!selectedStudent || !selectedReport) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/generate-pdf?studentId=${selectedStudent.id}&reportId=${selectedReport.id}`);
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sanitize(selectedReport.title) || 'report'}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[downloadPdf]', err);
+      alert('PDF generation failed. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  }, [selectedStudent, selectedReport]);
+
   /* ─── Selector UI ─────────────────────────────────────── */
   if (!ready) {
     if (paramStudentId && paramReportId && !forceSelector) {
@@ -414,8 +437,13 @@ export default function PrintReportPage() {
           <img src={LOGO_SRC} alt="CCC" width={24} height={24} style={{borderRadius:6}} />
           <span className="toolbar-title">{sanitize(selectedReport?.title)}</span>
         </div>
-        <button className="toolbar-print-btn" onClick={() => window.print()}>
-          🖨 Print / Save PDF
+        <button
+          className="toolbar-print-btn"
+          onClick={downloadPdf}
+          disabled={downloading}
+          style={{ opacity: downloading ? 0.7 : 1 }}
+        >
+          {downloading ? '⏳ Generating…' : '⬇ Download PDF'}
         </button>
       </div>
 
