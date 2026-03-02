@@ -797,10 +797,6 @@ export default function RaterFormsPage() {
       responseError = error;
 
       if (!error) {
-        // Also update form_results for this response_id
-        // The form_results table stores aggregated scores
-        // We need to regenerate them based on the updated response
-        // Note: This assumes form_results is auto-generated elsewhere or we update it here
         console.log('Updated existing response:', existingResponseId);
       }
     } else {
