@@ -2,16 +2,21 @@
 
 import React from 'react';
 
-const DownloadPDFButton: React.FC = () => {
+interface DownloadPDFButtonProps {
+  studentId?: string;
+  reportId?: string;
+}
+
+const DownloadPDFButton: React.FC<DownloadPDFButtonProps> = ({ studentId, reportId }) => {
   const handlePrint = () => {
-    const allCards = document.querySelectorAll('.card');
-    allCards.forEach((card) => {
-      const header = card.querySelector('.card-header');
-      if (header && header instanceof HTMLElement && !card.classList.contains('expanded')) {
-        header.click();
-      }
-    });
-    setTimeout(() => window.print(), 600); // Give it time to expand before printing
+    if (studentId && reportId) {
+      // Open the dedicated print page in a new tab with student + report pre-selected
+      const url = `/dashboard/admin/print-report?studentId=${studentId}&reportId=${reportId}`;
+      window.open(url, '_blank');
+    } else {
+      // Fallback: print current page (student-facing report page)
+      window.print();
+    }
   };
 
   return (

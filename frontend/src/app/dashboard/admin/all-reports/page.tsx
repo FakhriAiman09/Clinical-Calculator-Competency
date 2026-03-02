@@ -698,24 +698,15 @@ export default function AdminAllReportsPage() {
   }, [epaChecks]);
 
   return (
-    <div className='container py-5 bg-white'>
+    <div className='container py-5'>
       <style>{`
-        @media print {
-          body { background: white !important; }
-          header, .d-print-none, .modal, .btn, .form-control, .form-select, .form-label {
-            display: none !important;
-          }
-          .container { width: 100% !important; max-width: 100% !important; padding: 0 !important; }
-          .epa-report-section { border: none !important; box-shadow: none !important; padding: 1rem 0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .print-visible { display: block !important; color: black !important; page-break-before: always; }
-        }
+        /* Transitions */
         .fade-transition { opacity: 0; transition: opacity 0.3s ease-in-out; }
         .fade-transition.show { opacity: 1; }
-        .scrollable-box { max-height: 300px; overflow-y: auto; }
 
-        /* Flag styling */
+        /* Flag / badge styling — uses currentColor so it works in both light and dark mode */
         .epa-flagged {
-          border: 1px solid rgba(220, 53, 69, 0.45);
+          border: 1px solid rgba(220, 53, 69, 0.45) !important;
           box-shadow: 0 0.25rem 0.75rem rgba(220, 53, 69, 0.08);
           border-radius: 0.75rem;
         }
@@ -723,8 +714,8 @@ export default function AdminAllReportsPage() {
           font-size: 0.75rem;
           padding: 0.2rem 0.5rem;
           border-radius: 999px;
-          border: 1px solid rgba(220, 53, 69, 0.35);
-          background: rgba(220, 53, 69, 0.08);
+          border: 1px solid rgba(220, 53, 69, 0.5);
+          background: rgba(220, 53, 69, 0.12);
           color: rgb(220, 53, 69);
           font-weight: 600;
           display: inline-flex;
@@ -735,20 +726,20 @@ export default function AdminAllReportsPage() {
           font-size: 0.75rem;
           padding: 0.2rem 0.5rem;
           border-radius: 999px;
-          border: 1px solid rgba(25, 135, 84, 0.35);
-          background: rgba(25, 135, 84, 0.08);
+          border: 1px solid rgba(25, 135, 84, 0.5);
+          background: rgba(25, 135, 84, 0.12);
           color: rgb(25, 135, 84);
           font-weight: 600;
           display: inline-flex;
           align-items: center;
           gap: 0.35rem;
         }
-        .mini-muted { color: #6c757d; font-size: 0.85rem; }
+        .mini-muted { color: var(--bs-secondary-color, #6c757d); font-size: 0.85rem; }
         .example-box {
-          border: 1px solid rgba(0,0,0,0.08);
+          border: 1px solid var(--bs-border-color, rgba(0,0,0,0.08));
           border-radius: 0.75rem;
           padding: 0.75rem;
-          background: #fff;
+          background: var(--bs-body-bg, #fff);
         }
         .reason-chip {
           display: inline-block;
@@ -757,8 +748,9 @@ export default function AdminAllReportsPage() {
           font-size: 0.72rem;
           padding: 0.12rem 0.45rem;
           border-radius: 999px;
-          border: 1px solid rgba(0,0,0,0.12);
-          background: rgba(0,0,0,0.03);
+          border: 1px solid var(--bs-border-color, rgba(0,0,0,0.15));
+          background: var(--bs-tertiary-bg, rgba(0,0,0,0.04));
+          color: var(--bs-body-color);
         }
       `}</style>
 
@@ -939,11 +931,43 @@ export default function AdminAllReportsPage() {
       {selectedStudent && selectedReport && !loadingReport && (
         <div className='pb-3 p-4 mb-5'>
           <div className='d-flex justify-content-between align-items-center mb-3 d-print-none'>
-            <h3 className='m-0 d-print-none'>{selectedReport.title}</h3>
-            <DownloadPDFButton />
+            <h3 className='m-0'>{selectedReport.title}</h3>
+            <DownloadPDFButton studentId={selectedStudent?.id} reportId={selectedReport?.id} />
           </div>
 
           <hr className='d-print-none' />
+
+          {/* ── Print-only cover block (hidden on screen) ── */}
+          <div style={{ display: 'none' }} className='print-cover'>
+            <style>{`
+              @media print {
+                .print-cover {
+                  display: block !important;
+                  border-bottom: 2pt solid #333;
+                  padding-bottom: 10pt;
+                  margin-bottom: 14pt;
+                }
+                .print-cover h1 {
+                  font-size: 14pt;
+                  font-weight: bold;
+                  margin: 0 0 4pt 0;
+                }
+                .print-cover .print-meta {
+                  font-size: 9pt;
+                  color: #444;
+                  display: flex;
+                  gap: 24pt;
+                }
+              }
+            `}</style>
+            <h1>{selectedReport.title}</h1>
+            <div className='print-meta'>
+              <span><strong>Student:</strong> {selectedStudent.display_name}</span>
+              <span><strong>Time Window:</strong> {selectedReport.time_window}</span>
+              <span><strong>Generated:</strong> {new Date(selectedReport.created_at).toLocaleDateString()}</span>
+              <span><strong>Printed:</strong> {new Date().toLocaleDateString()}</span>
+            </div>
+          </div>
 
           {REPORT_EPAS.map((epaId) => {
             const check = epaChecks[epaId];
@@ -953,12 +977,13 @@ export default function AdminAllReportsPage() {
             return (
               <div
                 key={`container-${epaId}`}
-                className={`mb-1 p-3 epa-report-section ${flagged ? 'epa-flagged' : ''}`}
+                className='epa-report-section'
               >
-                <div className='d-flex justify-content-between align-items-center mb-2'>
+                {/* Admin controls — hidden on print */}
+                <div className='d-flex justify-content-between align-items-center mb-2 d-print-none'>
                   <div className='d-flex align-items-center gap-2'>
                     <button
-                      className='btn btn-sm btn-outline-primary d-print-none'
+                      className='btn btn-sm btn-outline-primary'
                       onClick={async () => {
                         setEditingEPA(epaId);
                         await fetchFormResults();
@@ -974,7 +999,7 @@ export default function AdminAllReportsPage() {
                     )}
 
                     {flagged && topReason && (
-                      <span className='mini-muted d-print-none'>
+                      <span className='mini-muted'>
                         Flag means: <span className='fw-semibold'>{reasonLabel(topReason)}</span>
                       </span>
                     )}

@@ -163,7 +163,7 @@ const ReportPage = () => {
             </div>
             <p className='text-muted mb-3 d-none d-print-block'>Showing data from the past {timeRange} months</p>
             <div className='d-flex justify-content-between align-items-center d-print-none'>
-              <DownloadPDFButton />
+              <DownloadPDFButton studentId={user.id} reportId={selectedReport?.id} />
             </div>
           </div>
 

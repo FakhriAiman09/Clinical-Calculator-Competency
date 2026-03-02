@@ -35,6 +35,7 @@ const NavLinks = () => {
     links.push(
       link('/dashboard/admin/userList', 'Manage Users'),
       link('/dashboard/admin/all-reports', 'All Reports'),
+      link('/dashboard/admin/print-report', 'Print Report'),
       link('/dashboard/admin/edit-questions-options', 'Edit Questions'),
       link('/dashboard/admin/form', 'Add MCQ Data'),
     );
