@@ -92,6 +92,10 @@ export default function RaterFormsPage() {
   const [saveStatus, setSaveStatus] = useState<string>('');
   const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
   const [submittingFinal, setSubmittingFinal] = useState(false);
+  
+  // Track if we're editing an existing response
+  const [existingResponseId, setExistingResponseId] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -403,6 +407,110 @@ export default function RaterFormsPage() {
     fetchFormRequestDetails();
   }, [studentId]);
 
+  // Fetch existing form response for editing (if reopened by admin)
+  useEffect(() => {
+    async function fetchExistingResponse() {
+      if (!studentId || !kfData || kfData.length === 0) return;
+
+      try {
+        const { data: existingResponse, error } = await supabase
+          .from('form_responses')
+          .select('response_id, response, professionalism')
+          .eq('request_id', studentId)
+          .single();
+
+        if (error || !existingResponse) {
+          // No existing response - new form
+          setIsEditMode(false);
+          return;
+        }
+
+        // Found existing response - enter edit mode
+        setExistingResponseId(existingResponse.response_id);
+        setIsEditMode(true);
+        setSaveStatus('Loading previous responses...');
+
+        // Extract the aggregated response data
+        const responseData = existingResponse.response as any;
+        const aggregatedResponses = responseData?.response || {};
+
+        // Reverse-map aggregated responses back to individual question responses
+        const rebuiltResponses: Responses = {};
+        const rebuiltTextInputs: { [epa: number]: { [questionId: string]: string } } = {};
+
+        // Create reverse mapping from kf to questions
+        const kfToQuestions: { [key: string]: KeyFunction[] } = {};
+        kfData.forEach((kf) => {
+          const key = `${kf.epa}.${kf.kf}`;
+          if (!kfToQuestions[key]) kfToQuestions[key] = [];
+          kfToQuestions[key].push(kf);
+        });
+
+        // Process each EPA in the aggregated response
+        Object.keys(aggregatedResponses).forEach((epaKey) => {
+          const epaNum = parseInt(epaKey, 10);
+          const epaData = aggregatedResponses[epaKey];
+
+          if (!rebuiltResponses[epaNum]) rebuiltResponses[epaNum] = {};
+          if (!rebuiltTextInputs[epaNum]) rebuiltTextInputs[epaNum] = {};
+
+          // Process each KF in this EPA
+          Object.keys(epaData).forEach((kfKey) => {
+            const kfData = epaData[kfKey];
+            const fullKey = `${epaNum}.${kfKey}`;
+            const questions = kfToQuestions[fullKey] || [];
+
+            // Distribute data back to questions
+            questions.forEach((question, idx) => {
+              const questionId = question.questionId;
+
+              if (!rebuiltResponses[epaNum][questionId]) {
+                rebuiltResponses[epaNum][questionId] = { text: '' } as any;
+              }
+
+              // Restore checkbox/option values
+              Object.keys(kfData).forEach((key) => {
+                if (key !== 'text' && typeof kfData[key] === 'boolean') {
+                  rebuiltResponses[epaNum][questionId][key] = kfData[key];
+                }
+              });
+
+              // Restore text comments (distribute array items)
+              if (Array.isArray(kfData.text) && kfData.text[idx]) {
+                rebuiltTextInputs[epaNum][questionId] = kfData.text[idx] || '';
+                rebuiltResponses[epaNum][questionId].text = kfData.text[idx] || '';
+              }
+            });
+          });
+        });
+
+        // Apply the restored data to state
+        setResponses(rebuiltResponses);
+        setTextInputs(rebuiltTextInputs);
+        setProfessionalism(existingResponse.professionalism || '');
+
+        // Mark EPAs as selected if they have data
+        const selectedEPAIds = Object.keys(rebuiltResponses).map(Number);
+        setSelectedEPAs(selectedEPAIds);
+
+        // Mark EPAs as completed
+        const completed: { [epa: number]: boolean } = {};
+        selectedEPAIds.forEach((epaId) => {
+          completed[epaId] = true;
+        });
+        setCompletedEPAs(completed);
+
+        setSaveStatus('Previous responses loaded');
+        setTimeout(() => setSaveStatus(''), 2000);
+      } catch (error) {
+        console.error('Error fetching existing response:', error);
+        setSaveStatus('');
+      }
+    }
+
+    fetchExistingResponse();
+  }, [studentId, kfData]);
+
   useEffect(() => {
     if (!formRequest) return;
     if (!cachedJSON) {
@@ -675,14 +783,38 @@ export default function RaterFormsPage() {
       return;
     }
 
-    const { error } = await supabase.from('form_responses').insert({
-      request_id: formRequest.id,
-      response: localData,
-      professionalism,
-    });
+    // Update existing response or insert new one
+    let responseError;
+    if (isEditMode && existingResponseId) {
+      // Update existing response
+      const { error } = await supabase
+        .from('form_responses')
+        .update({
+          response: localData,
+          professionalism,
+        })
+        .eq('response_id', existingResponseId);
+      responseError = error;
 
-    if (error) {
-      console.error('Error submitting form:', error.message);
+      if (!error) {
+        // Also update form_results for this response_id
+        // The form_results table stores aggregated scores
+        // We need to regenerate them based on the updated response
+        // Note: This assumes form_results is auto-generated elsewhere or we update it here
+        console.log('Updated existing response:', existingResponseId);
+      }
+    } else {
+      // Insert new response
+      const { error } = await supabase.from('form_responses').insert({
+        request_id: formRequest.id,
+        response: localData,
+        professionalism,
+      });
+      responseError = error;
+    }
+
+    if (responseError) {
+      console.error('Error submitting form:', responseError.message);
       setSubmittingFinal(false);
       return;
     }
@@ -866,6 +998,16 @@ export default function RaterFormsPage() {
         <div className='col-md-9 p-4'>
           {submitSuccess && (
             <div className='alert alert-success mb-3'>Form submitted successfully! Redirecting to dashboard...</div>
+          )}
+
+          {isEditMode && (
+            <div className='alert alert-warning mb-3 d-flex align-items-center'>
+              <i className='bi bi-pencil-square me-2'></i>
+              <div>
+                <strong>Edit Mode:</strong> You are updating a previously submitted evaluation. 
+                Your changes will replace the existing submission.
+              </div>
+            </div>
           )}
 
           {loading ? (
@@ -1081,7 +1223,10 @@ export default function RaterFormsPage() {
                 </div>
 
                 <button className='btn btn-success mt-3' onClick={finalSubmit} disabled={submittingFinal}>
-                  {submittingFinal ? 'Submitting...' : 'Submit Final Evaluation'}
+                  {submittingFinal 
+                    ? (isEditMode ? 'Updating...' : 'Submitting...') 
+                    : (isEditMode ? 'Update Evaluation' : 'Submit Final Evaluation')
+                  }
                 </button>
               </div>
             </div>

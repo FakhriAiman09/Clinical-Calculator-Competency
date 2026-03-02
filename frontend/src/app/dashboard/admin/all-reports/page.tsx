@@ -6,6 +6,7 @@ import { getEPAKFDescs } from '@/utils/get-epa-data';
 import { useRequireRole } from '@/utils/useRequiredRole';
 import dynamic from 'next/dynamic';
 import DownloadPDFButton from '@/components/(StudentComponents)/DownloadPDFButton';
+import { sendResubmissionEmail } from './admin-email-api/send-email-admin.server';
 
 const EPABox = dynamic(() => import('@/components/(StudentComponents)/EPABox'), { ssr: false });
 
@@ -30,6 +31,16 @@ interface FormResult {
   response_id: string;
   created_at: string;
   results: Record<string, number>;
+}
+
+interface FormRequestWithRater {
+  id: string;
+  completed_by: string;
+  student_id: string;
+  profiles?: {
+    email: string | null;
+    display_name: string | null;
+  } | null;
 }
 
 interface KeyFunctionResponse {
@@ -270,6 +281,11 @@ export default function AdminAllReportsPage() {
   const [runningChecks, setRunningChecks] = useState(false);
   const [lastCheckAt, setLastCheckAt] = useState<string | null>(null);
 
+  // Email sending state
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [formRequestData, setFormRequestData] = useState<FormRequestWithRater | null>(null);
+
   useEffect(() => {
     const fetchStudents = async () => {
       const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'student');
@@ -368,11 +384,149 @@ export default function AdminAllReportsPage() {
     setComments(parsedComments);
   }, [selectedStudent, editingEPA, selectedFormId]);
 
+  // Fetch form request data with rater information
+  const fetchFormRequestData = useCallback(async () => {
+    if (!selectedFormId) return;
+
+    try {
+      // Get the form_response to find the request_id
+      const { data: formResponse, error: frError } = await supabase
+        .from('form_responses')
+        .select('request_id')
+        .eq('response_id', selectedFormId)
+        .single();
+
+      if (frError || !formResponse) {
+        console.error('Error fetching form response:', frError);
+        setFormRequestData(null);
+        return;
+      }
+
+      // Get the form_request with completed_by (rater id)
+      const { data: formRequest, error: reqError } = await supabase
+        .from('form_requests')
+        .select('id, completed_by, student_id')
+        .eq('id', formResponse.request_id)
+        .single();
+
+      if (reqError || !formRequest) {
+        console.error('Error fetching form request:', reqError);
+        setFormRequestData(null);
+        return;
+      }
+
+      // Get all users to find the rater's email (email is in auth.users, not profiles)
+      const { data: users, error: usersError } = await supabase.rpc('fetch_users');
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+        setFormRequestData(null);
+        return;
+      }
+
+      interface User {
+        user_id: string;
+        display_name?: string;
+        email?: string;
+      }
+
+      // Find the rater in the users list
+      const rater = (users as User[]).find((u) => u.user_id === formRequest.completed_by);
+
+      // Combine the data
+      setFormRequestData({
+        id: formRequest.id,
+        completed_by: formRequest.completed_by,
+        student_id: formRequest.student_id,
+        profiles: rater ? {
+          email: rater.email || null,
+          display_name: rater.display_name || null,
+        } : null,
+      });
+    } catch (error) {
+      console.error('Error in fetchFormRequestData:', error);
+      setFormRequestData(null);
+    }
+  }, [selectedFormId]);
+
+  // Handler to send resubmission email
+  const handleSendResubmissionEmail = async () => {
+    if (!formRequestData || !selectedStudent) {
+      setEmailStatus({ type: 'error', message: 'Missing required data to send email' });
+      return;
+    }
+
+    if (!formRequestData.profiles?.email) {
+      setEmailStatus({ type: 'error', message: 'Rater email not found' });
+      return;
+    }
+
+    setSendingEmail(true);
+    setEmailStatus(null);
+
+    try {
+      // Collect flagged reasons from current comments
+      let flaggedReasons: string[] = [];
+      if (comments.length > 0) {
+        const commentReasons = new Set<string>();
+        comments.forEach(c => {
+          const reasons = detectFaultReasons(c);
+          reasons.forEach(r => commentReasons.add(reasonLabel(r)));
+        });
+        flaggedReasons = Array.from(commentReasons);
+      }
+
+      const { data: formResponse } = await supabase
+        .from('form_responses')
+        .select('request_id')
+        .eq('response_id', selectedFormId || '')
+        .single();
+
+      if (!formResponse) {
+        setEmailStatus({ type: 'error', message: 'Form request not found' });
+        setSendingEmail(false);
+        return;
+      }
+
+      // Reopen the form request so the rater can access it again
+      const { error: reopenError } = await supabase
+        .from('form_requests')
+        .update({ active_status: true })
+        .eq('id', formResponse.request_id);
+
+      if (reopenError) {
+        console.error('Error reopening form request:', reopenError);
+        setEmailStatus({ type: 'error', message: 'Failed to reopen form request' });
+        setSendingEmail(false);
+        return;
+      }
+
+      await sendResubmissionEmail({
+        to: formRequestData.profiles.email,
+        raterName: formRequestData.profiles.display_name ?? undefined,
+        studentName: selectedStudent.display_name,
+        requestId: formResponse.request_id,
+        responseId: selectedFormId || undefined,
+        flaggedReasons: flaggedReasons.length > 0 ? flaggedReasons : undefined,
+      });
+
+      setEmailStatus({ type: 'success', message: 'Resubmission request email sent successfully!' });
+    } catch (error) {
+      console.error('Error sending email:', error);
+      setEmailStatus({ 
+        type: 'error', 
+        message: error instanceof Error ? error.message : 'Failed to send email' 
+      });
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   useEffect(() => {
     if (selectedStudent && selectedReport && editingEPA !== null && selectedFormId) {
       fetchComments();
+      fetchFormRequestData();
     }
-  }, [selectedStudent, selectedReport, editingEPA, selectedFormId, fetchComments]);
+  }, [selectedStudent, selectedReport, editingEPA, selectedFormId, fetchComments, fetchFormRequestData]);
 
   const handleGenerate = async () => {
     if (!selectedStudent) return;
@@ -951,6 +1105,45 @@ export default function AdminAllReportsPage() {
                             If a comment is flagged, the label explains why (example: “Comment too short”, “Generic /
                             unhelpful”). Flags are a review signal for admins.
                           </div>
+
+                          {/* Email notification and send button */}
+                          {comments.some(c => detectFaultReasons(c).length > 0) && (
+                            <div className='mt-3 p-3 border border-warning rounded bg-warning bg-opacity-10'>
+                              <div className='fw-semibold mb-2'>Action Required: Flagged Content Detected</div>
+                              <div className='mini-muted mb-2'>
+                                This form contains low-quality comments. You can request the rater to resubmit the form with improved feedback.
+                              </div>
+                              {emailStatus && (
+                                <div className={`alert alert-${emailStatus.type === 'success' ? 'success' : 'danger'} py-2 px-3 mb-2`} role='alert'>
+                                  {emailStatus.message}
+                                </div>
+                              )}
+                              {!formRequestData && !sendingEmail && (
+                                <div className='alert alert-info py-2 px-3 mb-2' role='alert'>
+                                  Loading rater information...
+                                </div>
+                              )}
+                              <button 
+                                className='btn btn-warning btn-sm'
+                                onClick={() => handleSendResubmissionEmail()}
+                                disabled={sendingEmail || !formRequestData}
+                              >
+                                {sendingEmail ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Sending...
+                                  </>
+                                ) : (
+                                  <>Request Resubmission from Rater</>
+                                )}
+                              </button>
+                              {formRequestData?.profiles && (
+                                <div className='mini-muted mt-2'>
+                                  Email will be sent to: {formRequestData.profiles.display_name} ({formRequestData.profiles.email})
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
