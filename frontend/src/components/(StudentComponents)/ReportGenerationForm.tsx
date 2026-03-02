@@ -107,7 +107,12 @@ const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, 
             {loading ? 'Generating...' : 'Generate Report'}
           </button>
 
-          {success && <span className='text-success fw-semibold'>✔ Report generated!</span>}
+          {success && (
+            <span className='text-success fw-semibold d-flex align-items-center gap-1'>
+              <i className='bi bi-check-circle-fill' aria-hidden='true'></i>
+              Report generated!
+            </span>
+          )}
         </div>
 
         {error && (

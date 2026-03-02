@@ -5,7 +5,7 @@ import { createClient } from '@/utils/supabase/client';
 import { getEPAKFDescs } from '@/utils/get-epa-data';
 import { useRequireRole } from '@/utils/useRequiredRole';
 import dynamic from 'next/dynamic';
-import DownloadPDFButton from '@/components/(StudentComponents)/DownloadPDFButton';
+import PrintPDFButton from '@/components/(StudentComponents)/PrintPDFButton';
 import { sendResubmissionEmail } from './admin-email-api/send-email-admin.server';
 
 const EPABox = dynamic(() => import('@/components/(StudentComponents)/EPABox'), { ssr: false });
@@ -830,7 +830,11 @@ export default function AdminAllReportsPage() {
             <div className='d-flex align-items-center gap-2'>
               {Object.keys(epaChecks).length > 0 && (
                 <span className={hasAnyFlags ? 'epa-flag-badge' : 'epa-ok-badge'}>
-                  {hasAnyFlags ? '⚑ Issues found' : '✓ No issues found'}
+                  {hasAnyFlags ? (
+                    <><i className="bi bi-flag-fill" aria-hidden="true"></i> Issues found</>
+                  ) : (
+                    <><i className="bi bi-check-circle-fill" aria-hidden="true"></i> No issues found</>
+                  )}
                 </span>
               )}
               <button
@@ -860,7 +864,11 @@ export default function AdminAllReportsPage() {
                         <div className='d-flex align-items-center justify-content-between'>
                           <div className='fw-semibold'>EPA {epaId}</div>
                           <span className={flagged ? 'epa-flag-badge' : 'epa-ok-badge'}>
-                            {flagged ? `⚑ ${s.flaggedComments}/${s.totalComments} flagged` : `✓ ${s.totalComments} checked`}
+                            {flagged ? (
+                              <><i className="bi bi-flag-fill" aria-hidden="true"></i> {s.flaggedComments}/{s.totalComments} flagged</>
+                            ) : (
+                              <><i className="bi bi-check-circle-fill" aria-hidden="true"></i> {s.totalComments} checked</>
+                            )}
                           </span>
                         </div>
 
@@ -932,7 +940,7 @@ export default function AdminAllReportsPage() {
         <div className='pb-3 p-4 mb-5'>
           <div className='d-flex justify-content-between align-items-center mb-3 d-print-none'>
             <h3 className='m-0'>{selectedReport.title}</h3>
-            <DownloadPDFButton studentId={selectedStudent?.id} reportId={selectedReport?.id} />
+            <PrintPDFButton studentId={selectedStudent?.id} reportId={selectedReport?.id} reportTitle={selectedReport?.title} />
           </div>
 
           <hr className='d-print-none' />
@@ -994,7 +1002,11 @@ export default function AdminAllReportsPage() {
 
                     {check && (
                       <span className={flagged ? 'epa-flag-badge' : 'epa-ok-badge'}>
-                        {flagged ? `⚑ ${check.flaggedComments}/${check.totalComments} flagged` : `✓ ${check.totalComments} checked`}
+                        {flagged ? (
+                          <><i className="bi bi-flag-fill" aria-hidden="true"></i> {check.flaggedComments}/{check.totalComments} flagged</>
+                        ) : (
+                          <><i className="bi bi-check-circle-fill" aria-hidden="true"></i> {check.totalComments} checked</>
+                        )}
                       </span>
                     )}
 

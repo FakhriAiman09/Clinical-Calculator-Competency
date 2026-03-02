@@ -305,8 +305,8 @@ export default function PrintReportPage() {
     setReady(true);
   }, [epaDescriptions]);
 
-  /* ─── PDF Download via Puppeteer API ─────────────────── */
-  const downloadPdf = useCallback(async () => {
+  /* ─── View as PDF via Puppeteer API ─────────────────── */
+  const viewAsPdf = useCallback(async () => {
     if (!selectedStudent || !selectedReport) return;
     setDownloading(true);
     try {
@@ -314,13 +314,10 @@ export default function PrintReportPage() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${sanitize(selectedReport.title) || 'report'}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (err) {
-      console.error('[downloadPdf]', err);
+      console.error('[viewAsPdf]', err);
       alert('PDF generation failed. Please try again.');
     } finally {
       setDownloading(false);
@@ -432,19 +429,43 @@ export default function PrintReportPage() {
 
       {/* ── Screen toolbar ── */}
       <div className="screen-toolbar no-print">
-        <button className="toolbar-back-btn" onClick={() => { setReady(false); setForceSelector(true); }}>← Back</button>
+        <button className="toolbar-back-btn d-flex align-items-center gap-2" onClick={() => { setReady(false); setForceSelector(true); }}>
+          <i className="bi bi-arrow-left" aria-hidden="true"></i>
+          Back
+        </button>
         <div className="toolbar-center">
           <img src={LOGO_SRC} alt="CCC" width={24} height={24} style={{borderRadius:6}} />
           <span className="toolbar-title">{sanitize(selectedReport?.title)}</span>
         </div>
-        <button
-          className="toolbar-print-btn"
-          onClick={downloadPdf}
-          disabled={downloading}
-          style={{ opacity: downloading ? 0.7 : 1 }}
-        >
-          {downloading ? '⏳ Generating…' : '⬇ Download PDF'}
-        </button>
+        <div className="d-flex gap-2">
+          <button
+            className="toolbar-print-btn d-flex align-items-center gap-2"
+            onClick={() => window.print()}
+            title="Print this report"
+          >
+            <i className="bi bi-printer" aria-hidden="true"></i>
+            Print PDF
+          </button>
+          <button
+            className="toolbar-view-btn d-flex align-items-center gap-2"
+            onClick={viewAsPdf}
+            disabled={downloading}
+            style={{ opacity: downloading ? 0.7 : 1 }}
+            title="Open report as PDF in a new tab"
+          >
+            {downloading ? (
+              <>
+                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <i className="bi bi-file-earmark-pdf" aria-hidden="true"></i>
+                View as PDF
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════════════
@@ -712,18 +733,18 @@ const styles = `
   }
   .loading-spinner {
     width: 32px; height: 32px;
-    border: 3px solid var(--border);
+    border: 3px solid var(--bs-border-color, #dee2e6);
     border-top-color: var(--accent-blue);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { color: var(--text-secondary); font-size: 14px; }
+  .loading-text { color: var(--bs-secondary-color, #6c757d); font-size: 14px; }
 
   .selector-page {
     font-family: var(--font-sans);
     min-height: 100vh;
-    background: var(--bg-page);
+    background: var(--bs-body-bg, #f1f5f9);
     padding: 48px 24px;
   }
   .selector-header {
@@ -738,22 +759,22 @@ const styles = `
   .selector-title {
     font-size: 18px;
     font-weight: 700;
-    color: var(--navy);
+    color: var(--bs-body-color, #212529);
     letter-spacing: -0.01em;
   }
   .selector-card {
-    background: white;
+    background: var(--bs-body-bg, #fff);
     border-radius: 12px;
     padding: 32px;
     max-width: 520px;
     margin: 0 auto;
-    box-shadow: var(--shadow);
-    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 4px 16px rgba(0,0,0,0.07);
+    border: 1px solid var(--bs-border-color, #dee2e6);
   }
   .selector-heading {
     font-size: 20px;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--bs-body-color, #212529);
     margin: 0 0 24px;
   }
   .selector-field { margin-bottom: 20px; }
@@ -761,7 +782,7 @@ const styles = `
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-secondary);
+    color: var(--bs-secondary-color, #6c757d);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 8px;
@@ -769,20 +790,20 @@ const styles = `
   .selector-select {
     width: 100%;
     padding: 10px 14px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: var(--radius);
     font-size: 14px;
-    color: var(--text-primary);
-    background: white;
+    color: var(--bs-body-color, #212529);
+    background: var(--bs-form-select-bg, var(--bs-body-bg, #fff));
     appearance: auto;
     outline: none;
   }
-  .selector-select:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .selector-select:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
   .selector-btn {
     width: 100%;
     padding: 12px;
     background: var(--navy);
-    color: white;
+    color: #fff;
     border: none;
     border-radius: var(--radius);
     font-size: 14px;
@@ -799,22 +820,25 @@ const styles = `
     align-items: center;
     gap: 12px;
     padding: 12px 24px;
-    background: white;
-    border-bottom: 1px solid var(--border);
+    background: var(--bs-body-bg, #fff);
+    border-bottom: 1px solid var(--bs-border-color, #dee2e6);
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
     font-family: var(--font-sans);
   }
   .toolbar-back-btn {
     padding: 7px 14px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: var(--radius);
-    background: white;
+    background: transparent;
     font-size: 13px;
     cursor: pointer;
-    color: var(--text-secondary);
+    color: var(--bs-body-color, #212529);
+  }
+  .toolbar-back-btn:hover {
+    background: var(--bs-tertiary-bg, rgba(0,0,0,0.05));
   }
   .toolbar-center {
     flex: 1;
@@ -823,25 +847,40 @@ const styles = `
     gap: 10px;
     font-size: 14px;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--bs-body-color, #212529);
   }
   .toolbar-print-btn {
     padding: 8px 18px;
-    background: var(--navy);
-    color: white;
+    background: transparent;
+    color: var(--bs-body-color, #212529);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .toolbar-print-btn:hover {
+    background: var(--bs-tertiary-bg, rgba(0,0,0,0.05));
+  }
+  .toolbar-view-btn {
+    padding: 8px 18px;
+    background: #198754;
+    color: #fff;
     border: none;
     border-radius: var(--radius);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
   }
+  .toolbar-view-btn:hover { background: #157347; }
+  .toolbar-view-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 
   /* ── Print root (screen) ── */
   .print-root {
     font-family: var(--font-sans);
     font-size: 10pt;
     color: var(--text-primary);
-    background: var(--bg-page);
+    background: var(--bs-body-bg, #f1f5f9);
     line-height: 1.5;
   }
 

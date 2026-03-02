@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/context/UserContext';
 import EPABox from '@/components/(StudentComponents)/EPABox';
-import DownloadPDFButton from '@/components/(StudentComponents)/DownloadPDFButton';
+import PrintPDFButton from '@/components/(StudentComponents)/PrintPDFButton';
 import ReportGenerationForm from '@/components/(StudentComponents)/ReportGenerationForm';
 import { createClient } from '@/utils/supabase/client';
 import { getEPAKFDescs } from '@/utils/get-epa-data';
@@ -163,7 +163,7 @@ const ReportPage = () => {
             </div>
             <p className='text-muted mb-3 d-none d-print-block'>Showing data from the past {timeRange} months</p>
             <div className='d-flex justify-content-between align-items-center d-print-none'>
-              <DownloadPDFButton studentId={user.id} reportId={selectedReport?.id} />
+              <PrintPDFButton studentId={user.id} reportId={selectedReport?.id} reportTitle={selectedReport?.title} />
             </div>
           </div>
 
