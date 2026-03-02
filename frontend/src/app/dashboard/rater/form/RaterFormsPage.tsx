@@ -871,27 +871,30 @@ export default function RaterFormsPage() {
         }
 
         .vtt-btn {
-          border: none;
-          background: #f8f9fa;
+          border: 1px solid var(--bs-border-color);
+          background: var(--bs-secondary-bg);
+          color: var(--bs-body-color);
           border-radius: 6px;
           padding: 6px 8px;
           cursor: pointer;
-          transition: 0.2s ease;
+          transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
           display: flex;
           align-items: center;
           justify-content: center;
         }
 
         .vtt-btn:hover {
-          background: #e2e6ea;
+          background: var(--bs-tertiary-bg);
+          border-color: var(--bs-secondary-color);
         }
 
         .vtt-btn.recording {
-          background: #ffe5e5;
+          background: rgba(220, 53, 69, 0.15);
+          border-color: #dc3545;
           color: #dc3545;
         }
 
-        /* ✅ icon size */
+        /* icon size */
         .vtt-btn i {
           font-size: 20px;
           line-height: 1;
@@ -899,7 +902,7 @@ export default function RaterFormsPage() {
 
         .vtt-status {
           font-size: 12px;
-          color: #6c757d;
+          color: var(--bs-secondary-color);
           margin-top: 6px;
         }
       `}</style>

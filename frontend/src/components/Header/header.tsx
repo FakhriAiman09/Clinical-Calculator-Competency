@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import { useUser } from '@/context/UserContext';
 import logo from '@/components/ccc-logo-color.svg';
@@ -15,8 +15,9 @@ import DeveloperTicketModal from '@/components/DevTicketsModal';
 /**
  * Header
  *
- * ▸ Shows logo, nav links (role‑aware inside <NavLinks />), and profile dropdown.
- * ▸ Manages *two* modal windows with separate React state:
+ * ▸ Shows logo, nav links (role-aware inside <NavLinks />), and profile dropdown.
+ * ▸ Collapses into a hamburger menu at the `lg` breakpoint.
+ * ▸ Manages two modal windows:
  *     – ProfileSettingsModal  (edit display name, etc.)
  *     – DeveloperTicketModal  (submit bug / feature requests)
  */
@@ -25,12 +26,24 @@ export default function Header() {
 
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showTicketModal, setShowTicketModal] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const navRef = useRef<HTMLDivElement>(null);
+
+  // Close mobile nav when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) {
+        setNavOpen(false);
+      }
+    };
+    if (navOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [navOpen]);
 
   return (
-    <header className='bg-body border-bottom p-2'>
+    <header className='bg-body border-bottom'>
       <style>{`
-        /* Prevent the logo link from turning white or blue on hover/focus —
-           keep colour consistent with the rest of the nav */
+        /* ── Logo link ─────────────────────────────────────────── */
         .header-logo-link {
           color: inherit !important;
           text-decoration: none !important;
@@ -41,38 +54,144 @@ export default function Header() {
           opacity: 0.85;
         }
 
-        /* The SVG logo has a near-black fill (#1d1d1b) for the C shape
-           which disappears on dark backgrounds.
-           invert(1) flips it to near-white; hue-rotate(180deg) corrects
-           the blue checkmark hue back after the invert. */
+        /* Invert SVG logo in dark mode */
         [data-bs-theme="dark"] .logo-img {
           filter: invert(1) hue-rotate(180deg);
         }
+
+        /* ── Hamburger button ──────────────────────────────────── */
+        .header-toggler {
+          border: 1px solid var(--bs-border-color);
+          background: transparent;
+          border-radius: 6px;
+          padding: 5px 9px;
+          cursor: pointer;
+          color: var(--bs-body-color);
+          transition: background 0.15s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+        }
+        .header-toggler:hover {
+          background: var(--bs-secondary-bg);
+        }
+
+        /* ── Collapse panel (mobile) ───────────────────────────── */
+        .header-nav-collapse {
+          overflow: hidden;
+          max-height: 0;
+          opacity: 0;
+          pointer-events: none;
+          transition: max-height 0.3s ease, opacity 0.2s ease;
+        }
+        .header-nav-collapse.open {
+          max-height: 800px;
+          opacity: 1;
+          pointer-events: auto;
+        }
+
+        /* Mobile: vertical stack */
+        .header-nav-inner {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 10px 0 12px;
+        }
+        .header-nav-inner a.btn,
+        .header-nav-inner button.btn {
+          width: 100%;
+          text-align: left;
+        }
+
+        /* ── lg+: horizontal row, collapse always shown ────────── */
+        @media (min-width: 992px) {
+          .header-toggler {
+            display: none !important;
+          }
+          .header-nav-collapse {
+            max-height: none !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            overflow: visible !important;
+          }
+          .header-nav-inner {
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 0;
+            align-items: center;
+          }
+          .header-nav-inner a.btn,
+          .header-nav-inner button.btn {
+            width: auto;
+            text-align: center;
+          }
+        }
       `}</style>
 
-      <div className='container mx-auto d-flex justify-content-between align-items-center flex-wrap'>
-        {/* ── Logo ───────────────────────────────────────────── */}
-        <Link href='/dashboard' className='header-logo-link d-flex align-items-center'>
-          <Image src={logo} alt='Logo' width={40} height={40} priority className='logo-img' />
-          <span className='ms-2 fs-4 fw-bold text-body'>Clinical Competency Calculator</span>
-        </Link>
+      <div ref={navRef} className='container-fluid px-3'>
+        {/* ── Top bar: Logo + Hamburger + Profile ─────────────── */}
+        <div className='d-flex justify-content-between align-items-center py-2 gap-2'>
 
-        {/* ── Nav + profile (only when signed in) ───────────── */}
+          {/* Logo */}
+          <Link href='/dashboard' className='header-logo-link d-flex align-items-center flex-shrink-0'>
+            <Image src={logo} alt='Logo' width={38} height={38} priority className='logo-img' />
+            {/* Full name on sm+, abbreviation on xs */}
+            <span className='ms-2 fw-bold text-body d-none d-sm-inline' style={{ fontSize: '1.05rem' }}>
+              Clinical Competency Calculator
+            </span>
+            <span className='ms-2 fw-bold text-body d-sm-none' style={{ fontSize: '1.05rem' }}>CCC</span>
+          </Link>
+
+          {user && (
+            <div className='d-flex align-items-center gap-2 flex-shrink-0'>
+              {/* Hamburger — visible only below lg */}
+              <button
+                className='header-toggler d-lg-none'
+                aria-label='Toggle navigation'
+                aria-expanded={navOpen}
+                onClick={() => setNavOpen((prev) => !prev)}
+              >
+                {navOpen ? (
+                  /* X icon */
+                  <svg width='16' height='16' viewBox='0 0 16 16' fill='none'
+                    stroke='currentColor' strokeWidth='2.2' strokeLinecap='round'>
+                    <line x1='2' y1='2' x2='14' y2='14' />
+                    <line x1='14' y1='2' x2='2' y2='14' />
+                  </svg>
+                ) : (
+                  /* Hamburger icon */
+                  <svg width='18' height='14' viewBox='0 0 18 14' fill='currentColor'>
+                    <rect width='18' height='2' rx='1' />
+                    <rect y='6' width='18' height='2' rx='1' />
+                    <rect y='12' width='18' height='2' rx='1' />
+                  </svg>
+                )}
+              </button>
+
+              {/* Profile always visible */}
+              <ProfileDropdown
+                onOpenProfile={() => setShowProfileModal(true)}
+                onOpenTicket={() => setShowTicketModal(true)}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* ── Nav links: collapsed on mobile, inline on lg+ ────── */}
         {user && (
-          <nav className='d-flex gap-3 align-items-center flex-wrap'>
-            <NavLinks />
-
-            <ProfileDropdown
-              onOpenProfile={() => setShowProfileModal(true)}
-              onOpenTicket={() => setShowTicketModal(true)}
-            />
-          </nav>
+          <div className={`header-nav-collapse${navOpen ? ' open' : ''}`}>
+            {/* Clicking any link closes the mobile menu */}
+            <nav className='header-nav-inner' onClick={() => setNavOpen(false)}>
+              <NavLinks />
+            </nav>
+          </div>
         )}
       </div>
 
-      {/* ── Modals rendered at root for proper z‑index layering ─ */}
+      {/* ── Modals ─────────────────────────────────────────────── */}
       <ProfileSettingsModal show={showProfileModal} onClose={() => setShowProfileModal(false)} />
-
       <DeveloperTicketModal show={showTicketModal} onClose={() => setShowTicketModal(false)} />
     </header>
   );

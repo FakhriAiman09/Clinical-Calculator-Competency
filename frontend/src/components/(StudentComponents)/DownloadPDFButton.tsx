@@ -11,7 +11,7 @@ const DownloadPDFButton: React.FC<DownloadPDFButtonProps> = ({ studentId, report
   const handlePrint = () => {
     if (studentId && reportId) {
       // Open the dedicated print page in a new tab with student + report pre-selected
-      const url = `/dashboard/admin/print-report?studentId=${studentId}&reportId=${reportId}`;
+      const url = `/dashboard/print-report?studentId=${studentId}&reportId=${reportId}`;
       window.open(url, '_blank');
     } else {
       // Fallback: print current page (student-facing report page)

@@ -101,6 +101,7 @@ export default function PrintReportPage() {
   const [epaDescriptions, setEpaDescriptions] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const [forceSelector, setForceSelector] = useState(false);
 
   /* Load students */
   useEffect(() => {
@@ -305,7 +306,7 @@ export default function PrintReportPage() {
 
   /* ─── Selector UI ─────────────────────────────────────── */
   if (!ready) {
-    if (paramStudentId && paramReportId) {
+    if (paramStudentId && paramReportId && !forceSelector) {
       return (
         <div className="loading-screen">
           <style>{styles}</style>
@@ -394,9 +395,21 @@ export default function PrintReportPage() {
     <div className="print-root">
       <style>{styles}</style>
 
+      {/* ── Global print header (fixed, repeats on every printed page) ── */}
+      <div className="global-print-header">
+        <div className="page-header-left">
+          <img src={LOGO_SRC} alt="CCC Logo" width={18} height={18} className="page-header-logo" style={{borderRadius:3, flexShrink:0}} />
+          <span className="page-header-brand">Clinical Competency Calculator</span>
+          <strong>{sanitize(selectedStudent?.display_name)}</strong>
+          <span className="header-sep">&mdash;</span>
+          <span className="page-header-report">{sanitize(selectedReport?.title)}</span>
+        </div>
+        <div className="page-header-right">Printed: {printDate}</div>
+      </div>
+
       {/* ── Screen toolbar ── */}
       <div className="screen-toolbar no-print">
-        <button className="toolbar-back-btn" onClick={() => setReady(false)}>← Back</button>
+        <button className="toolbar-back-btn" onClick={() => { setReady(false); setForceSelector(true); }}>← Back</button>
         <div className="toolbar-center">
           <img src={LOGO_SRC} alt="CCC" width={24} height={24} style={{borderRadius:6}} />
           <span className="toolbar-title">{sanitize(selectedReport?.title)}</span>
@@ -418,7 +431,7 @@ export default function PrintReportPage() {
             </div>
             <div className="cover-brand-text">
               <div className="cover-brand-name">Clinical Competency Calculator</div>
-              <div className="cover-brand-abbr">CCC Assessment Platform</div>
+              <div className="cover-brand-abbr">Assessment Platform</div>
             </div>
           </div>
 
@@ -462,16 +475,7 @@ export default function PrintReportPage() {
       {/* ══════════════════════════════════════════════════
           SUMMARY PAGE
           ══════════════════════════════════════════════════ */}
-      <div className="rpt-page">
-        <div className="rpt-page-header">
-          <div className="page-header-left">
-            <span className="page-header-brand">CCC</span>
-            <strong>{sanitize(selectedStudent?.display_name)}</strong>
-            <span className="header-sep">&mdash;</span>
-            <span className="page-header-report">{sanitize(selectedReport?.title)}</span>
-          </div>
-          <div className="page-header-right">Printed: {printDate}</div>
-        </div>
+      <div className="rpt-page rpt-summary-page">
 
         <h2 className="section-title">EPA Summary</h2>
         <p className="section-note">
@@ -520,17 +524,6 @@ export default function PrintReportPage() {
 
         return (
           <div key={epa.epaId} className="rpt-page rpt-epa-page">
-
-            {/* Page header */}
-            <div className="rpt-page-header">
-              <div className="page-header-left">
-                <span className="page-header-brand">CCC</span>
-                <strong>{sanitize(selectedStudent?.display_name)}</strong>
-                <span className="header-sep">&mdash;</span>
-                <span className="page-header-report">{sanitize(selectedReport?.title)}</span>
-              </div>
-              <div className="page-header-right">Printed: {printDate}</div>
-            </div>
 
             {/* EPA Banner */}
             <div className="epa-banner">
@@ -837,7 +830,12 @@ const styles = `
     box-sizing: border-box;
   }
 
-  /* ── Page running header ── */
+  /* ── Global print header: hidden on screen ── */
+  .global-print-header {
+    display: none;
+  }
+
+  /* ── Page running header (screen only — summary page) ── */
   .rpt-page-header {
     display: flex;
     justify-content: space-between;
@@ -1258,29 +1256,54 @@ const styles = `
       display: none !important;
     }
 
-    /* Each .rpt-page = one printed A4 page */
+    /* Global header: hidden on screen, fixed at top of every printed page */
+    .global-print-header {
+      display: flex;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 8pt;
+      color: var(--text-secondary);
+      border-bottom: 1.5px solid var(--navy);
+      padding: 5pt 16mm;
+      background: white;
+      box-sizing: border-box;
+      z-index: 9999;
+    }
+
+    /* Each .rpt-page — extra top padding to clear the fixed header */
     .rpt-page {
       width: 100% !important;
-      min-height: 100vh !important;
+      min-height: 0 !important;
       margin: 0 !important;
-      padding: 14mm 16mm !important;
+      padding: 20mm 16mm 14mm !important;
       box-shadow: none !important;
       border-radius: 0 !important;
-      break-after: page !important;
-      page-break-after: always !important;
+      break-after: auto !important;
+      page-break-after: auto !important;
     }
 
-    /* Cover page: compact, no forced full-height */
+    /* Cover page: original top padding — has its own full design, no header needed */
     .rpt-cover {
+      padding-top: 14mm !important;
       min-height: auto !important;
       height: auto !important;
+    }
+
+    /* Cover and summary pages each get their own page */
+    .rpt-cover,
+    .rpt-summary-page {
       break-after: page !important;
       page-break-after: always !important;
     }
 
-    .rpt-page:last-child {
-      break-after: avoid !important;
-      page-break-after: avoid !important;
+    /* EPAs flow continuously — no forced page break */
+    .rpt-epa-page {
+      break-before: auto !important;
+      page-break-before: auto !important;
     }
 
     /* Force colors in print */
@@ -1315,13 +1338,7 @@ const styles = `
     .epa-banner { break-after: avoid !important; page-break-after: avoid !important; }
     .stats-row { break-after: avoid !important; page-break-after: avoid !important; }
 
-    /* Each EPA page section starts on a new page */
-    .rpt-epa-page {
-      break-before: always !important;
-      page-break-before: always !important;
-    }
-
-    /* Keep ai-block from starting at top of a new page orphaned */
+    /* Keep ai-block from being orphaned at top of a new page */
     .ai-block {
       break-before: avoid !important;
       page-break-before: avoid !important;
