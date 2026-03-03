@@ -131,21 +131,30 @@ export default function Header() {
       `}</style>
 
       <div ref={navRef} className='container-fluid px-3'>
-        {/* ── Top bar: Logo + Hamburger + Profile ─────────────── */}
-        <div className='d-flex justify-content-between align-items-center py-2 gap-2'>
+        {/* ── Single row: Logo | Nav (lg+) | Hamburger + Profile ── */}
+        <div className='d-flex align-items-center py-2 gap-2'>
 
           {/* Logo */}
           <Link href='/dashboard' className='header-logo-link d-flex align-items-center flex-shrink-0'>
             <Image src={logo} alt='Logo' width={38} height={38} priority className='logo-img' />
-            {/* Full name on sm+, abbreviation on xs */}
             <span className='ms-2 fw-bold text-body d-none d-sm-inline' style={{ fontSize: '1.05rem' }}>
               Clinical Competency Calculator
             </span>
             <span className='ms-2 fw-bold text-body d-sm-none' style={{ fontSize: '1.05rem' }}>CCC</span>
           </Link>
 
+          {/* Nav inline on lg+ */}
           {user && (
-            <div className='d-flex align-items-center gap-2 flex-shrink-0'>
+            <nav className='d-none d-lg-flex align-items-center flex-wrap gap-2 ms-3 flex-grow-1' onClick={() => setNavOpen(false)}>
+              <NavLinks />
+            </nav>
+          )}
+
+          {/* Spacer on mobile when no user */}
+          {!user && <div className='flex-grow-1' />}
+
+          {user && (
+            <div className='d-flex align-items-center gap-2 flex-shrink-0 ms-auto'>
               {/* Hamburger — visible only below lg */}
               <button
                 className='header-toggler d-lg-none'
@@ -154,14 +163,12 @@ export default function Header() {
                 onClick={() => setNavOpen((prev) => !prev)}
               >
                 {navOpen ? (
-                  /* X icon */
                   <svg width='16' height='16' viewBox='0 0 16 16' fill='none'
                     stroke='currentColor' strokeWidth='2.2' strokeLinecap='round'>
                     <line x1='2' y1='2' x2='14' y2='14' />
                     <line x1='14' y1='2' x2='2' y2='14' />
                   </svg>
                 ) : (
-                  /* Hamburger icon */
                   <svg width='18' height='14' viewBox='0 0 18 14' fill='currentColor'>
                     <rect width='18' height='2' rx='1' />
                     <rect y='6' width='18' height='2' rx='1' />
@@ -170,7 +177,6 @@ export default function Header() {
                 )}
               </button>
 
-              {/* Profile always visible */}
               <ProfileDropdown
                 onOpenProfile={() => setShowProfileModal(true)}
                 onOpenTicket={() => setShowTicketModal(true)}
@@ -179,10 +185,9 @@ export default function Header() {
           )}
         </div>
 
-        {/* ── Nav links: collapsed on mobile, inline on lg+ ────── */}
+        {/* ── Mobile nav: drops below the top row on small screens ── */}
         {user && (
-          <div className={`header-nav-collapse${navOpen ? ' open' : ''}`}>
-            {/* Clicking any link closes the mobile menu */}
+          <div className={`header-nav-collapse d-lg-none${navOpen ? ' open' : ''}`}>
             <nav className='header-nav-inner' onClick={() => setNavOpen(false)}>
               <NavLinks />
             </nav>
