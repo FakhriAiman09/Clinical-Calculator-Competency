@@ -6,6 +6,6 @@ h11==0.14.0
 netifaces==0.10.6
 python-engineio==4.11.2
 python-socketio==5.12.1
-setuptools==3.3
+setuptools==78.1.1
 simple-websocket==1.1.0
 wsproto==1.2.0
