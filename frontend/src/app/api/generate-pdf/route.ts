@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/utils/logger';
 
 export const maxDuration = 60; // Vercel: allow up to 60s for PDF generation
 
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error('[generate-pdf] Error:', err);
+    logger.error('[generate-pdf] Error generating PDF', { studentId, reportId, detail: String(err) });
     return NextResponse.json(
       { error: 'Failed to generate PDF', detail: String(err) },
       { status: 500 }

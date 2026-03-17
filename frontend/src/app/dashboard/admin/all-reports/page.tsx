@@ -741,6 +741,28 @@ export default function AdminAllReportsPage() {
           border-radius: 0.75rem;
           padding: 0.75rem;
           background: var(--bs-body-bg, #fff);
+          /* Fixed height so all cards are uniform regardless of flag count */
+          height: 220px;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .example-box-header {
+          flex-shrink: 0;
+        }
+        .example-box-body {
+          flex: 1 1 0;
+          overflow-y: auto;
+          min-height: 0;
+          margin-top: 0.5rem;
+          padding-right: 2px; /* breathing room for scrollbar */
+        }
+        /* Subtle scrollbar styling */
+        .example-box-body::-webkit-scrollbar { width: 4px; }
+        .example-box-body::-webkit-scrollbar-track { background: transparent; }
+        .example-box-body::-webkit-scrollbar-thumb {
+          background: var(--bs-border-color, rgba(0,0,0,0.2));
+          border-radius: 4px;
         }
         .reason-chip {
           display: inline-block;
@@ -752,6 +774,7 @@ export default function AdminAllReportsPage() {
           border: 1px solid var(--bs-border-color, rgba(0,0,0,0.15));
           background: var(--bs-tertiary-bg, rgba(0,0,0,0.04));
           color: var(--bs-body-color);
+          white-space: nowrap;
         }
       `}</style>
 
@@ -856,41 +879,49 @@ export default function AdminAllReportsPage() {
                   const topReason = topReasonForEPA(epaId);
 
                   return (
-                    <div key={`check-sum-${epaId}`} className='col-12 col-md-4'>
+                               <div key={`check-sum-${epaId}`} className='col-12 col-md-4'>
                       <div className={`example-box ${flagged ? 'epa-flagged' : ''}`}>
-                        <div className='d-flex align-items-center justify-content-between'>
-                          <div className='fw-semibold'>EPA {epaId}</div>
-                          <span className={flagged ? 'epa-flag-badge' : 'epa-ok-badge'}>
-                            {flagged ? `⚑ ${s.flaggedComments}/${s.totalComments} flagged` : `✓ ${s.totalComments} checked`}
-                          </span>
+                        {/* Fixed header — never scrolls */}
+                        <div className='example-box-header'>
+                          <div className='d-flex align-items-center justify-content-between flex-wrap gap-1'>
+                            <div className='fw-semibold'>EPA {epaId}</div>
+                            <span className={flagged ? 'epa-flag-badge' : 'epa-ok-badge'}>
+                              {flagged ? `⚑ ${s.flaggedComments}/${s.totalComments} flagged` : `✓ ${s.totalComments} checked`}
+                            </span>
+                          </div>
+                          {flagged && topReason && (
+                            <div className='mini-muted mt-1' style={{ fontSize: '0.78rem' }}>
+                              Top issue: <span className='fw-semibold'>{reasonLabel(topReason)}</span>
+                            </div>
+                          )}
                         </div>
 
-                        {/* “What does the flag mean?” */}
-                        {flagged && topReason && (
-                          <div className='mini-muted mt-2'>
-                            Flag means: <span className='fw-semibold'>{reasonLabel(topReason)}</span>
-                          </div>
-                        )}
-
-                        {flagged && s.examples.length > 0 && (
-                          <div className='mt-2'>
-                            <div className='mini-muted mb-1'>Examples</div>
-                            {s.examples.map((ex, idx) => (
-                              <div key={idx} className='mb-2'>
-                                <div style={{ fontSize: '0.9rem' }}>{ex.text}</div>
-                                <div>
-                                  {ex.reasons.map((r) => (
-                                    <span key={r} className='reason-chip'>
-                                      {reasonLabel(r)}
-                                    </span>
-                                  ))}
+                        {/* Scrollable body */}
+                        <div className='example-box-body'>
+                          {flagged && s.examples.length > 0 ? (
+                            <>
+                              <div className='mini-muted mb-1' style={{ fontSize: '0.78rem' }}>Examples</div>
+                              {s.examples.map((ex, idx) => (
+                                <div key={idx} className='mb-2' style={{ borderTop: idx > 0 ? '1px solid var(--bs-border-color, rgba(0,0,0,0.06))' : 'none', paddingTop: idx > 0 ? '0.4rem' : 0 }}>
+                                  <div style={{ fontSize: '0.82rem', lineHeight: 1.4 }} title={ex.text}>
+                                    {ex.text.length > 80 ? ex.text.slice(0, 80) + '…' : ex.text}
+                                  </div>
+                                  <div className='mt-1'>
+                                    {ex.reasons.map((r) => (
+                                      <span key={r} className='reason-chip'>
+                                        {reasonLabel(r)}
+                                      </span>
+                                    ))}
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {!flagged && <div className='mini-muted mt-2'>No issues detected.</div>}
+                              ))}
+                            </>
+                          ) : (
+                            <div className='mini-muted' style={{ fontSize: '0.82rem' }}>
+                              {flagged ? 'No examples available.' : 'No issues detected.'}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
