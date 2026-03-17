@@ -9,7 +9,8 @@ interface PrintPDFButtonProps {
 }
 
 const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, reportTitle }) => {
-  const [generating, setGenerating] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generatingCsv, setGeneratingCsv] = useState(false);
 
   const handlePrint = () => {
     if (!studentId || !reportId) {
@@ -31,7 +32,7 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
       window.open('/dashboard/print-report', '_blank');
       return;
     }
-    setGenerating(true);
+    setGeneratingPdf(true);
     try {
       const res = await fetch(`/api/generate-pdf?studentId=${studentId}&reportId=${reportId}`);
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -43,28 +44,51 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
       console.error('[PrintPDFButton]', err);
       alert('PDF generation failed. Please try again.');
     } finally {
-      setGenerating(false);
+      setGeneratingPdf(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    if (!studentId || !reportId) {
+      alert('Cannot export CSV: missing student or report information.');
+      return;
+    }
+    setGeneratingCsv(true);
+    try {
+      const res = await fetch(`/api/generate-csv?studentId=${studentId}&reportId=${reportId}`);
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      const disposition = res.headers.get('Content-Disposition');
+      const filenameMatch = disposition?.match(/filename="(.+)"/);
+      const filename = filenameMatch ? filenameMatch[1] : `report-${reportId}.csv`;
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      console.error('[PrintPDFButton CSV]', err);
+      alert('CSV export failed. Please try again.');
+    } finally {
+      setGeneratingCsv(false);
     }
   };
 
   return (
-    <div className="d-flex gap-2 d-print-none">
-      <button
-        className="btn btn-outline-secondary d-flex align-items-center gap-2"
-        onClick={handlePrint}
-        title={`Print report${reportTitle ? ': ' + reportTitle : ''}`}
-      >
-        <i className="bi bi-printer" aria-hidden="true"></i>
-        Print PDF
-      </button>
+    <div className="d-flex gap-2 d-print-none flex-wrap">
       <button
         className="btn btn-success d-flex align-items-center gap-2"
         onClick={handleViewAsPDF}
-        disabled={generating}
-        style={{ minWidth: 140, opacity: generating ? 0.7 : 1 }}
+        disabled={generatingPdf}
+        style={{ minWidth: 140, opacity: generatingPdf ? 0.7 : 1 }}
         title={`View as PDF${reportTitle ? ': ' + reportTitle : ''}`}
       >
-        {generating ? (
+        {generatingPdf ? (
           <>
             <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
             Generating...
@@ -73,6 +97,26 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
           <>
             <i className="bi bi-file-earmark-pdf" aria-hidden="true"></i>
             View as PDF
+          </>
+        )}
+      </button>
+
+      <button
+        className="btn btn-outline-primary d-flex align-items-center gap-2"
+        onClick={handleExportCSV}
+        disabled={generatingCsv}
+        style={{ minWidth: 140, opacity: generatingCsv ? 0.7 : 1 }}
+        title={`Export as CSV${reportTitle ? ': ' + reportTitle : ''}`}
+      >
+        {generatingCsv ? (
+          <>
+            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+            Exporting...
+          </>
+        ) : (
+          <>
+            <i className="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i>
+            Export CSV
           </>
         )}
       </button>
