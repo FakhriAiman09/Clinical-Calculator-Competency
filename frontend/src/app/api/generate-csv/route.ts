@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { logger } from '@/utils/logger';
+import { logger } from '../../../utils/logger';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

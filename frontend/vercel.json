@@ -1,7 +1,3 @@
 {
-  "functions": {
-    "app/api/generate-pdf/route.ts": {
-      "maxDuration": 60
-    }
-  }
+
 }

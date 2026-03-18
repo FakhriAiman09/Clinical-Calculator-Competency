@@ -9,43 +9,26 @@ interface PrintPDFButtonProps {
 }
 
 const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, reportTitle }) => {
-  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [generatingCsv, setGeneratingCsv] = useState(false);
 
   const handlePrint = () => {
-    if (!studentId || !reportId) {
-      window.open('/dashboard/print-report', '_blank');
-      return;
-    }
-    const url = `/dashboard/print-report?studentId=${studentId}&reportId=${reportId}`;
-    const win = window.open(url, '_blank');
-    if (win) {
-      win.addEventListener('load', () => {
-        win.focus();
-        win.print();
-      });
-    }
-  };
+    setPrinting(true);
 
-  const handleViewAsPDF = async () => {
-    if (!studentId || !reportId) {
-      window.open('/dashboard/print-report', '_blank');
-      return;
-    }
-    setGeneratingPdf(true);
-    try {
-      const res = await fetch(`/api/generate-pdf?studentId=${studentId}&reportId=${reportId}`);
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (err) {
-      console.error('[PrintPDFButton]', err);
-      alert('PDF generation failed. Please try again.');
-    } finally {
-      setGeneratingPdf(false);
-    }
+    // Expand all collapsed cards before printing (from DownloadPDFButton logic)
+    const allCards = document.querySelectorAll('.card');
+    allCards.forEach((card) => {
+      const header = card.querySelector('.card-header');
+      if (header && header instanceof HTMLElement && !card.classList.contains('expanded')) {
+        header.click();
+      }
+    });
+
+    // Give cards time to expand, then trigger print dialog
+    setTimeout(() => {
+      window.print();
+      setPrinting(false);
+    }, 600);
   };
 
   const handleExportCSV = async () => {
@@ -83,20 +66,20 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
     <div className="d-flex gap-2 d-print-none flex-wrap">
       <button
         className="btn btn-success d-flex align-items-center gap-2"
-        onClick={handleViewAsPDF}
-        disabled={generatingPdf}
-        style={{ minWidth: 140, opacity: generatingPdf ? 0.7 : 1 }}
-        title={`View as PDF${reportTitle ? ': ' + reportTitle : ''}`}
+        onClick={handlePrint}
+        disabled={printing}
+        style={{ minWidth: 140, opacity: printing ? 0.7 : 1 }}
+        title={`Print report${reportTitle ? ': ' + reportTitle : ''}`}
       >
-        {generatingPdf ? (
+        {printing ? (
           <>
             <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
-            Generating...
+            Preparing...
           </>
         ) : (
           <>
-            <i className="bi bi-file-earmark-pdf" aria-hidden="true"></i>
-            View as PDF
+            <i className="bi bi-printer" aria-hidden="true"></i>
+            Print PDF
           </>
         )}
       </button>

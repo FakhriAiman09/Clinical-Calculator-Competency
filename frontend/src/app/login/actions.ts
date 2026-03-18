@@ -68,10 +68,20 @@ export async function forgotPassword(formData: FormData): Promise<{ alertColor: 
   }
 
   try {
-    const redirectTo =
-      (process.env.NEXT_PUBLIC_APP_URL ?? '') + '/login?reset=true';
+    // Use NEXT_PUBLIC_APP_URL, fallback to NEXT_PUBLIC_SITE_URL, then NEXT_PUBLIC_BASE_URL
+    // Make sure this URL is whitelisted in Supabase → Authentication → URL Configuration → Redirect URLs
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      '';
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    const redirectTo = baseUrl ? `${baseUrl}/login?reset=true` : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      ...(redirectTo ? { redirectTo } : {}),
+    });
+
     if (error) throw error;
 
     return {
