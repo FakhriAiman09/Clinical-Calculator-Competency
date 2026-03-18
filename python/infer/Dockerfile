@@ -37,9 +37,11 @@ RUN python -m pip install --upgrade pip
 # Leverage a cache mount to /root/.cache/pip to speed up subsequent builds.
 # Leverage a bind mount to requirements.txt to avoid having to copy them into
 # into this layer.
-RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=requirements.txt,target=requirements.txt \
-    python -m pip install -r requirements.txt
+
+#fix it once usingn AWS. now using railway, so no need to use cache mount and bind mount
+COPY requirements.txt .
+RUN python -m pip install -r requirements.txt
+
 
 # Copy all application files with correct ownership.
 COPY --chown=appuser:appuser . .
