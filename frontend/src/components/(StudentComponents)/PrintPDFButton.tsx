@@ -6,29 +6,33 @@ interface PrintPDFButtonProps {
   studentId?: string;
   reportId?: string;
   reportTitle?: string;
+  returnUrl?: string; // where Back button should go
 }
 
-const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, reportTitle }) => {
+const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, reportTitle, returnUrl }) => {
   const [printing, setPrinting] = useState(false);
   const [generatingCsv, setGeneratingCsv] = useState(false);
 
   const handlePrint = () => {
+    if (!studentId || !reportId) {
+      window.open('/dashboard/print-report', '_blank');
+      return;
+    }
+
     setPrinting(true);
 
-    // Expand all collapsed cards before printing (from DownloadPDFButton logic)
-    const allCards = document.querySelectorAll('.card');
-    allCards.forEach((card) => {
-      const header = card.querySelector('.card-header');
-      if (header && header instanceof HTMLElement && !card.classList.contains('expanded')) {
-        header.click();
-      }
-    });
+    // Pass 'from' so the Back button in print-report knows where to return
+    const from = returnUrl || window.location.pathname;
+    const url = `/dashboard/print-report?studentId=${studentId}&reportId=${reportId}&from=${encodeURIComponent(from)}`;
+    const win = window.open(url, '_blank');
 
-    // Give cards time to expand, then trigger print dialog
-    setTimeout(() => {
-      window.print();
+    if (win) {
+      setTimeout(() => setPrinting(false), 4000);
+    } else {
+      // Popup blocked — navigate in same tab
       setPrinting(false);
-    }, 600);
+      window.location.href = url;
+    }
   };
 
   const handleExportCSV = async () => {
@@ -74,12 +78,12 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
         {printing ? (
           <>
             <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
-            Preparing...
+            Opening...
           </>
         ) : (
           <>
             <i className="bi bi-printer" aria-hidden="true"></i>
-            Print PDF
+            View as PDF
           </>
         )}
       </button>

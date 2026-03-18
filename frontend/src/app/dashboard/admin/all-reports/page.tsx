@@ -868,14 +868,21 @@ export default function AdminAllReportsPage() {
             </div>
           </div>
 
-          {/* Summary cards per EPA */}
+          {/* Summary cards per EPA — only shows EPAs with flagged comments */}
           {Object.keys(epaChecks).length > 0 && (
             <div className='mt-3'>
+              {!hasAnyFlags && (
+                <div className='epa-ok-badge' style={{ display: 'inline-flex', marginBottom: '0.5rem' }}>
+                  ✓ All EPAs checked — no issues found
+                </div>
+              )}
               <div className='row g-2'>
                 {REPORT_EPAS.map((epaId) => {
                   const s = epaChecks[epaId];
                   if (!s) return null;
                   const flagged = s.flaggedComments > 0;
+                  // Only show cards that have actual flagged comments
+                  if (!flagged) return null;
                   const topReason = topReasonForEPA(epaId);
 
                   return (
@@ -964,7 +971,7 @@ export default function AdminAllReportsPage() {
         <div className='pb-3 p-4 mb-5'>
           <div className='d-flex justify-content-between align-items-center mb-3 d-print-none'>
             <h3 className='m-0'>{selectedReport.title}</h3>
-            <DownloadPDFButton studentId={selectedStudent?.id} reportId={selectedReport?.id} />
+            <DownloadPDFButton studentId={selectedStudent?.id} reportId={selectedReport?.id} returnUrl="/dashboard/admin/all-reports" />
           </div>
 
           <hr className='d-print-none' />

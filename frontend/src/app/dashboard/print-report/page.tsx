@@ -91,6 +91,7 @@ export default function PrintReportPage() {
   const searchParams = useSearchParams();
   const paramStudentId = searchParams.get('studentId');
   const paramReportId = searchParams.get('reportId');
+  const paramFrom = searchParams.get('from') || '/dashboard';
 
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -102,7 +103,6 @@ export default function PrintReportPage() {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [forceSelector, setForceSelector] = useState(false);
-  const [downloading, setDownloading] = useState(false);
 
   /* Load students */
   useEffect(() => {
@@ -178,7 +178,7 @@ export default function PrintReportPage() {
 
       await buildReport(student, report);
 
-      setTimeout(() => window.print(), 800);
+      // Report is ready — user clicks Print PDF in the toolbar when ready
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paramStudentId, paramReportId, epaDescriptions]);
@@ -305,25 +305,6 @@ export default function PrintReportPage() {
     setReady(true);
   }, [epaDescriptions]);
 
-  /* ─── View as PDF via Puppeteer API ─────────────────── */
-  const viewAsPdf = useCallback(async () => {
-    if (!selectedStudent || !selectedReport) return;
-    setDownloading(true);
-    try {
-      const res = await fetch(`/api/generate-pdf?studentId=${selectedStudent.id}&reportId=${selectedReport.id}`);
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (err) {
-      console.error('[viewAsPdf]', err);
-      alert('PDF generation failed. Please try again.');
-    } finally {
-      setDownloading(false);
-    }
-  }, [selectedStudent, selectedReport]);
-
   /* ─── Selector UI ─────────────────────────────────────── */
   if (!ready) {
     if (paramStudentId && paramReportId && !forceSelector) {
@@ -429,7 +410,7 @@ export default function PrintReportPage() {
 
       {/* ── Screen toolbar ── */}
       <div className="screen-toolbar no-print">
-        <button className="toolbar-back-btn d-flex align-items-center gap-2" onClick={() => { setReady(false); setForceSelector(true); }}>
+        <button className="toolbar-back-btn d-flex align-items-center gap-2" onClick={() => window.location.href = paramFrom}>
           <i className="bi bi-arrow-left" aria-hidden="true"></i>
           Back
         </button>
@@ -446,25 +427,7 @@ export default function PrintReportPage() {
             <i className="bi bi-printer" aria-hidden="true"></i>
             Print PDF
           </button>
-          <button
-            className="toolbar-view-btn d-flex align-items-center gap-2"
-            onClick={viewAsPdf}
-            disabled={downloading}
-            style={{ opacity: downloading ? 0.7 : 1 }}
-            title="Open report as PDF in a new tab"
-          >
-            {downloading ? (
-              <>
-                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <i className="bi bi-file-earmark-pdf" aria-hidden="true"></i>
-                View as PDF
-              </>
-            )}
-          </button>
+
         </div>
       </div>
 
@@ -862,19 +825,6 @@ const styles = `
   .toolbar-print-btn:hover {
     background: var(--bs-tertiary-bg, rgba(0,0,0,0.05));
   }
-  .toolbar-view-btn {
-    padding: 8px 18px;
-    background: #198754;
-    color: #fff;
-    border: none;
-    border-radius: var(--radius);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .toolbar-view-btn:hover { background: #157347; }
-  .toolbar-view-btn:disabled { opacity: 0.7; cursor: not-allowed; }
-
   /* ── Print root (screen) ── */
   .print-root {
     font-family: var(--font-sans);
