@@ -140,7 +140,7 @@ export default function Header() {
             <span className='ms-2 fw-bold text-body d-none d-sm-inline' style={{ fontSize: '1.05rem' }}>
               Clinical Competency Calculator
             </span>
-            <span className='ms-2 fw-bold text-body d-sm-none' style={{ fontSize: '1.05rem' }}>CCC</span>
+            <span className='ms-2 fw-bold text-body d-sm-none' style={{ fontSize: '1.05rem' }}></span>
           </Link>
 
           {/* Nav inline on lg+ */}
