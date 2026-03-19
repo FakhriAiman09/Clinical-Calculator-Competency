@@ -18,17 +18,6 @@ from sklearn import svm
 def bert_infer(model: tf.keras.Model, data: dict[str, list[str]]) -> dict[str, int]:
   """
   Loads a pre-trained BERT model and predicts the class for each sentence.
-
-  :param model: The pre-trained BERT model to use for inference.
-  :type model: tf.keras.Model
-
-  :param input: A dictionary where keys are key functions and values are the sentences to
-  be classified.
-  :type input: dict[str, list[str]]
-
-  :return: A dictionary where keys are sentence identifiers and values are the predicted class
-  indices.
-  :rtype: dict[str, int]
   """
   print('Running inference on BERT model...')
 
@@ -46,17 +35,6 @@ def bert_infer(model: tf.keras.Model, data: dict[str, list[str]]) -> dict[str, i
 def svm_infer(models: dict[str, svm.SVC], data: dict[str, list[bool]]) -> dict[str, int]:
   """
   Loads pre-trained SVM models and predicts the class for each response.
-
-  :param models: A dictionary where keys are model names and values are the loaded SVM models.
-  :type models: dict[str, any]
-
-  :param data: A dictionary where keys are key functions and values are the responses to be
-  classified.
-  :type data: dict[str, list[str]]
-
-  :return: A dictionary where keys are response identifiers and values are the predicted class
-  indices.
-  :rtype: dict[str, int]
   """
   print('Running inference on SVM models...')
 
@@ -73,15 +51,6 @@ def svm_infer(models: dict[str, svm.SVC], data: dict[str, list[bool]]) -> dict[s
 def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str:
   """
   Generates a summary report based on the average scores of key functions.
-
-  :param kf_avg_data: A dictionary where keys are key functions and values are their average scores.
-  :type kf_avg_data: dict[str, float]
-
-  :param gemini: The Google GenAI client used for generating summaries.
-  :type gemini: genai.Client
-
-  :return: A summary report as a string.
-  :rtype: str
   """
 
   datastr = '\n'.join(f'{k}: {v}' for k, v in data.items())
@@ -178,15 +147,13 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
       if response.text:
         import json
         text = response.text.strip()
-        # Strip markdown code block wrapping if Gemini added it
         if text.startswith('```'):
           lines = text.split('\n')
           lines = [l for l in lines if not l.strip().startswith('```')]
           text = '\n'.join(lines).strip()
-        # Validate JSON before returning
         try:
           parsed = json.loads(text)
-          return json.dumps(parsed)  # clean serialized JSON
+          return json.dumps(parsed)
         except json.JSONDecodeError:
           print(f'Gemini returned invalid JSON on attempt {attempt+1}, retrying...', flush=True)
           continue
@@ -210,18 +177,11 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
 def load_bert_model(model_path: str):
   """
   Loads a pre-trained BERT model from the specified path.
-
-  :param model_path: The path to the pre-trained BERT model.
-  :type model_path: str
-
-  :return: The loaded BERT model.
-  :rtype: tf.keras.Model
   """
   if not os.path.exists(model_path):
     raise FileNotFoundError(f"The model path '{model_path}' does not exist.")
 
   print(f'Loading BERT model from {model_path}...', end=' ')
-  # pylint: disable=no-member
   model = tf.keras.models.load_model(model_path, compile=False)
   print('BERT model loaded successfully.')
   return model
@@ -230,12 +190,62 @@ def load_bert_model(model_path: str):
 # ==================================================================================================
 
 
-def download_svm_models(supabase: spb.Client) -> None:
+def download_bert_model(supabase: spb.Client, local_path: str = 'models/bert') -> None:
   """
-  Downloads the pre-trained SVM models from the remote server.
+  Downloads the pre-trained BERT model files from Supabase Storage bucket 'bert-model'.
+  The bucket should contain the SavedModel files uploaded from your local models/bert/ folder.
+
+  Expected bucket structure:
+    bert-model/
+      saved_model.pb
+      variables/
+        variables.index
+        variables.data-00000-of-00001
+
+  :param supabase: Authenticated Supabase client.
+  :param local_path: Local directory to download the model into.
   """
 
-  # Ensure the "svm-models" directory exists
+  bucket_name = 'bert-model'
+  bucket = supabase.storage.from_(bucket_name)
+
+  print(f"Downloading BERT model from Supabase bucket '{bucket_name}'...")
+
+  def download_folder(prefix: str, local_dir: str) -> None:
+    """Recursively list and download all files under a prefix."""
+    os.makedirs(local_dir, exist_ok=True)
+    items = bucket.list(prefix) if prefix else bucket.list()
+
+    for item in items:
+      name = item['name']
+      # Supabase Storage returns folders as items with metadata id == None
+      if item.get('id') is None:
+        # It's a folder — recurse
+        sub_prefix = f"{prefix}/{name}" if prefix else name
+        sub_local = os.path.join(local_dir, name)
+        download_folder(sub_prefix, sub_local)
+      else:
+        # It's a file — download it
+        remote_path = f"{prefix}/{name}" if prefix else name
+        local_file = os.path.join(local_dir, name)
+        print(f'  Downloading {remote_path}...', end=' ')
+        data = bucket.download(remote_path)
+        with open(local_file, 'wb') as f:
+          f.write(data)
+        print('done.')
+
+  download_folder('', local_path)
+  print('BERT model downloaded successfully.')
+
+
+# ==================================================================================================
+
+
+def download_svm_models(supabase: spb.Client) -> None:
+  """
+  Downloads the pre-trained SVM models from Supabase Storage bucket 'svm-models'.
+  """
+
   if not os.path.exists('svm-models'):
     os.makedirs('svm-models')
 
@@ -245,12 +255,12 @@ def download_svm_models(supabase: spb.Client) -> None:
   models = bucket.list()
   for model in models:
     model_name = model['name']
-    print(f'Downloading {model_name}...', end=' ')
+    print(f'  Downloading {model_name}...', end=' ')
     file_path = f'svm-models/{model_name}'
     with open(file_path, 'wb') as f:
       response = bucket.download(model_name)
       f.write(response)
-    print(f'to svm-models/{model_name}')
+    print('done.')
   print('All SVM models downloaded successfully.')
 
 
@@ -259,10 +269,7 @@ def download_svm_models(supabase: spb.Client) -> None:
 
 def load_svm_models() -> dict[str, svm.SVC]:
   """
-  Loads the pre-trained SVM models from the local "svm-models" directory.
-
-  :return: A dictionary where keys are model names and values are the loaded SVM models.
-  :rtype: dict[str, any]
+  Loads the pre-trained SVM models from the local 'svm-models' directory.
   """
   svm_models = {}
   print("Loading SVM models from 'svm-models' directory...")
@@ -270,10 +277,10 @@ def load_svm_models() -> dict[str, svm.SVC]:
   for filename in os.listdir('svm-models'):
     if filename.endswith('.pkl'):
       model_path = os.path.join('svm-models', filename)
-      print(f'Loading {filename}...', end=' ')
+      print(f'  Loading {filename}...', end=' ')
       with open(model_path, 'rb') as f:
         svm_models[filename.removesuffix('.pkl')] = pickle.load(f)
-      print('loaded successfully.')
+      print('loaded.')
 
   print('All SVM models loaded successfully.')
   return svm_models

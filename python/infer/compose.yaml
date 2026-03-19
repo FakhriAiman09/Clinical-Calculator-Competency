@@ -7,7 +7,6 @@
 # You can add other services your application may depend on here, such as a
 # database or a cache. For examples, see the Awesome Compose repository:
 # https://github.com/docker/awesome-compose
-version: '3.8'
 
 services:
   server:
@@ -17,8 +16,14 @@ services:
         - 'linux/amd64'
     ports:
       - "8000:8000"
-    env_file:           
-      - .env               
+    env_file:
+      - .env
+    volumes:
+      # Mount your locally downloaded model files into the container at runtime.
+      # The paths on the LEFT are relative to this compose.yaml file (your machine).
+      # The paths on the RIGHT are where the container expects to find them.
+      - ./models/bert:/app/models/bert:ro
+      - ./svm-models:/app/svm-models:ro
 
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to
@@ -52,4 +57,3 @@ services:
 # secrets:
 #   db-password:
 #     file: db/password.txt
-
