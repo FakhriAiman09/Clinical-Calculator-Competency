@@ -61,5 +61,9 @@ USER appuser
 # Expose the port that the application listens on.
 EXPOSE 8000
 
+# Download BERT model from Kaggle
+RUN mkdir -p /app/models/bert
+RUN kaggle kernels output cccalc/bert-training -p /app/models/bert
+
 # Add the environment file when running the container
 CMD ["python3.11", "listener.py"]
