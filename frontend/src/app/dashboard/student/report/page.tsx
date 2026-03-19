@@ -7,6 +7,7 @@ import { useRequireRole } from '@/utils/useRequiredRole';
 import { useUser } from '@/context/UserContext';
 import dynamic from 'next/dynamic';
 import DownloadPDFButton from '@/components/(StudentComponents)/PrintPDFButton';
+import ReportGenerationForm from '@/components/(StudentComponents)/ReportGenerationForm';
 
 const EPABox = dynamic(() => import('@/components/(StudentComponents)/EPABox'), { ssr: false });
 
@@ -76,9 +77,18 @@ export default function StudentReportPage() {
 
   return (
     <div className="container py-5">
-      <div className="card shadow-sm p-4 mt-5 mb-3">
-        <h2 className="mb-1">My Comprehensive Report</h2>
-        {displayName && <p className="text-muted mb-4">{displayName}</p>}
+
+      {/* Generate New Report form — matches the design in the screenshot */}
+      {user?.id && (
+        <ReportGenerationForm
+          studentId={user.id}
+          onGenerated={() => fetchReports(user.id)}
+        />
+      )}
+
+      {/* Past Reports list */}
+      <div className="mt-4 mb-3">
+        <h4 className="fw-semibold mb-3">Past Reports</h4>
 
         {loadingReports ? (
           <div className="text-center py-4">
@@ -87,36 +97,33 @@ export default function StudentReportPage() {
             </div>
           </div>
         ) : reports.length === 0 ? (
-          <div className="alert alert-info mb-0">
-            No reports have been generated for your account yet. Please contact your administrator.
+          <div className="alert alert-info">
+            No reports have been generated yet. Use the form above to generate your first report.
           </div>
         ) : (
-          <>
-            <h5 className="mb-3">Select a Report</h5>
-            <ul className="list-group">
-              {reports.map((r) => (
-                <li
-                  key={r.id}
-                  className={`list-group-item list-group-item-action d-flex justify-content-between align-items-center ${
-                    selectedReport?.id === r.id ? 'active' : ''
-                  }`}
-                  onClick={() => handleReportSelect(r)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <span>
-                    <strong>{r.title}</strong>
-                    <span className="ms-2 badge bg-secondary">{r.time_window}</span>
-                  </span>
-                  <small className={selectedReport?.id === r.id ? 'text-white-50' : 'text-muted'}>
-                    {new Date(r.created_at).toLocaleDateString()}
-                  </small>
-                </li>
-              ))}
-            </ul>
-          </>
+          <ul className="list-group shadow-sm">
+            {reports.map((r) => (
+              <li
+                key={r.id}
+                className={`list-group-item list-group-item-action d-flex justify-content-between align-items-center ${
+                  selectedReport?.id === r.id ? 'active' : ''
+                }`}
+                onClick={() => handleReportSelect(r)}
+                style={{ cursor: 'pointer' }}
+              >
+                <span>
+                  {r.title} ({r.time_window})
+                </span>
+                <small className={selectedReport?.id === r.id ? 'text-white-50' : 'text-muted'}>
+                  {new Date(r.created_at).toLocaleDateString()}
+                </small>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 
+      {/* Loading spinner when switching reports */}
       {loadingReport && (
         <div className="text-center my-5">
           <div className="spinner-border text-primary" role="status">
@@ -125,6 +132,7 @@ export default function StudentReportPage() {
         </div>
       )}
 
+      {/* Report viewer */}
       {user && selectedReport && !loadingReport && (
         <div className="pb-3 p-4 mb-5">
           <div className="d-flex justify-content-between align-items-center mb-3 d-print-none">
@@ -145,6 +153,7 @@ export default function StudentReportPage() {
 
           <hr className="d-print-none" />
 
+          {/* Print-only cover block */}
           <div style={{ display: 'none' }} className="print-cover">
             <style>{`
               @media print {
