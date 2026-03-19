@@ -67,3 +67,4 @@ RUN kaggle kernels output cccalc/bert-training -p /app/models/bert
 
 # Add the environment file when running the container
 CMD ["python3.11", "listener.py"]
+

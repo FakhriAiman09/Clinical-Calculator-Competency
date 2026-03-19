@@ -6,7 +6,7 @@ import { getEPAKFDescs } from '@/utils/get-epa-data';
 import { useRequireRole } from '@/utils/useRequiredRole';
 import dynamic from 'next/dynamic';
 import DownloadPDFButton from '@/components/(StudentComponents)/PrintPDFButton';
-import { sendResubmissionEmail } from './admin-email-api/send-email-admin.server';
+import { sendResubmissionEmail } from '@/app/dashboard/admin/all-reports/admin-email-api/send-email-admin.server';
 
 const EPABox = dynamic(() => import('@/components/(StudentComponents)/EPABox'), { ssr: false });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { getEPAKFDescs } from '@/utils/get-epa-data';
@@ -85,7 +85,7 @@ function DevBadge({ value }: { value: number | null | undefined }) {
 }
 
 /* ─── Main component ────────────────────────────────────── */
-export default function PrintReportPage() {
+function PrintReportContent() {
   useRequireRole(['admin', 'dev', 'student']);
 
   const searchParams = useSearchParams();
@@ -637,6 +637,14 @@ export default function PrintReportPage() {
       })}
 
     </div>
+  );
+}
+
+export default function PrintReportPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <PrintReportContent />
+    </Suspense>
   );
 }
 
