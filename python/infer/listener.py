@@ -8,6 +8,7 @@ Required environment variables:
 '''
 
 import asyncio
+import logging
 import os
 import time
 
@@ -23,6 +24,32 @@ from inference import (bert_infer, download_bert_model, download_svm_models,
 BERT_MODEL_PATH = '/app/models/bert'
 SVM_MODELS_PATH = 'svm-models'
 
+# ── Logging setup ──────────────────────────────────────────────────────────────
+os.makedirs('/app/logs', exist_ok=True)
+
+def make_logger(name: str, filename: str) -> logging.Logger:
+  logger = logging.getLogger(name)
+  logger.setLevel(logging.DEBUG)
+  formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+
+  # File handler
+  fh = logging.FileHandler(f'/app/logs/{filename}')
+  fh.setFormatter(formatter)
+  logger.addHandler(fh)
+
+  # Console handler (shows in docker logs)
+  ch = logging.StreamHandler()
+  ch.setFormatter(formatter)
+  logger.addHandler(ch)
+
+  return logger
+
+app_log = make_logger('app', 'app.log')           # general startup & connection events
+infer_log = make_logger('inference', 'inference.log')  # every inference run & scores
+error_log = make_logger('error', 'error.log')     # errors and crashes only
+error_log.setLevel(logging.ERROR)
+
+# ── Model wait ─────────────────────────────────────────────────────────────────
 
 def wait_for_models(timeout_minutes: int = 60) -> None:
   """
@@ -34,7 +61,7 @@ def wait_for_models(timeout_minutes: int = 60) -> None:
   bert_ready = False
   svm_ready = False
 
-  print(f"Waiting for model files (timeout: {timeout_minutes} min)...", flush=True)
+  app_log.info(f'Waiting for model files (timeout: {timeout_minutes} min)...')
 
   while time.time() < deadline:
     bert_ready = (
@@ -47,158 +74,174 @@ def wait_for_models(timeout_minutes: int = 60) -> None:
     ) if os.path.exists(SVM_MODELS_PATH) else False
 
     if bert_ready and svm_ready:
-      print("Model files found!", flush=True)
+      app_log.info('Model files found!')
       return
 
     status = []
     if not bert_ready:
-      status.append("BERT model missing")
+      status.append('BERT model missing')
     if not svm_ready:
-      status.append("SVM models missing")
-    print(f"  Still waiting: {', '.join(status)} — retrying in 30s...", flush=True)
+      status.append('SVM models missing')
+    app_log.warning(f'Still waiting: {", ".join(status)} — retrying in 30s...')
     time.sleep(30)
 
-  raise TimeoutError(
-    f"Model files not found after {timeout_minutes} minutes. "
-    f"Please copy models into the volume at {BERT_MODEL_PATH} and {SVM_MODELS_PATH}."
+  msg = (
+    f'Model files not found after {timeout_minutes} minutes. '
+    f'Please copy models into the volume at {BERT_MODEL_PATH} and {SVM_MODELS_PATH}.'
   )
+  error_log.error(msg)
+  raise TimeoutError(msg)
 
+
+# ── Main ───────────────────────────────────────────────────────────────────────
 
 async def main() -> None:
-  print("Loading environment variables...")
+  app_log.info('Loading environment variables...')
   load_dotenv()
 
-  supabase_url: str = os.environ.get("SUPABASE_URL", "")
+  supabase_url: str = os.environ.get('SUPABASE_URL', '')
   if not supabase_url:
-    raise ValueError("SUPABASE_URL environment variable is not set")
+    error_log.error('SUPABASE_URL environment variable is not set')
+    raise ValueError('SUPABASE_URL environment variable is not set')
 
-  supabase_key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+  supabase_key: str = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
   if not supabase_key:
-    raise ValueError("SUPABASE_SERVICE_ROLE_KEY environment variable is not set")
+    error_log.error('SUPABASE_SERVICE_ROLE_KEY environment variable is not set')
+    raise ValueError('SUPABASE_SERVICE_ROLE_KEY environment variable is not set')
 
-  gemini_key: str = os.environ.get("GOOGLE_GENAI_API_KEY", "")
+  gemini_key: str = os.environ.get('GOOGLE_GENAI_API_KEY', '')
   if not gemini_key:
-    raise ValueError("GOOGLE_GENAI_API_KEY environment variable is not set")
+    error_log.error('GOOGLE_GENAI_API_KEY environment variable is not set')
+    raise ValueError('GOOGLE_GENAI_API_KEY environment variable is not set')
 
-  print("Environment variables loaded.")
+  app_log.info('Environment variables loaded.')
 
   gemini = genai.Client(api_key=gemini_key)
   supabase: spb.Client = spb.create_client(supabase_url, supabase_key)
   asupabase: spb.AClient = await spb.acreate_client(supabase_url, supabase_key)
 
-  # ── Wait for models to be available ───────────────────────────────────────
-  # On Railway with a volume: models are copied in via SSH after first deploy.
-  # On local dev: models are mounted via Docker volume — already present.
-  # Either way, wait up to 60 minutes before giving up.
   wait_for_models(timeout_minutes=60)
 
-  # ── Load models into memory ────────────────────────────────────────────────
-  print("Loading SVM models...")
+  app_log.info('Loading SVM models...')
   svm_models = load_svm_models()
+  app_log.info('All SVM models loaded successfully.')
 
-  print("Loading BERT model...")
+  app_log.info('Loading BERT model...')
   bert_model = load_bert_model(BERT_MODEL_PATH)
+  app_log.info('BERT model loaded successfully.')
 
-  # ── Connect to Supabase Realtime ───────────────────────────────────────────
-  print("Connecting to Supabase Realtime server...", end=' ')
+  app_log.info('Connecting to Supabase Realtime server...')
   await asupabase.realtime.connect()
-  print("Connected.")
+  app_log.info('Connected to Supabase Realtime.')
 
-  print('Subscribing to the "form_responses_insert" channel...', end=' ')
+  app_log.info('Subscribing to "form_responses_insert" channel...')
   await (asupabase.realtime
-         .channel("form_responses_insert")
-         .on_postgres_changes("INSERT",
-                              schema="public", table="form_responses",
+         .channel('form_responses_insert')
+         .on_postgres_changes('INSERT',
+                              schema='public', table='form_responses',
                               callback=lambda payload:
                               handle_new_response(payload, bert_model, svm_models, supabase))
          .subscribe())
-  print('Subscribed.')
+  app_log.info('Subscribed to form_responses_insert.')
 
-  print('Subscribing to the "student_reports_insert" channel...', end=' ')
+  app_log.info('Subscribing to "student_reports_insert" channel...')
   await (asupabase.realtime
-         .channel("student_reports_insert")
-         .on_postgres_changes("INSERT",
-                              schema="public", table="student_reports",
+         .channel('student_reports_insert')
+         .on_postgres_changes('INSERT',
+                              schema='public', table='student_reports',
                               callback=lambda payload:
                               handle_new_report(payload, gemini, supabase))
          .subscribe())
-  print('Subscribed.')
+  app_log.info('Subscribed to student_reports_insert.')
 
-  print('Listening for events...', flush=True)
+  app_log.info('Listening for events...')
   while True:
     await asyncio.sleep(1)
 
 
+# ── Event handlers ─────────────────────────────────────────────────────────────
+
 def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
-  record = payload['data']['record']
-  print('New response received:', record['response_id'])
+  try:
+    record = payload['data']['record']
+    response_id = record['response_id']
+    infer_log.info(f'New form response received: {response_id}')
 
-  response = record['response']['response']
-  print("Processing response", response)
+    response = record['response']['response']
 
-  ds = [kf for kf in response.values()]
-  bert_inputs = {k: v['text'] for d in ds for k, v in d.items()}
-  svm_inputs = {k: [vv for kk, vv in v.items() if kk != 'text'] for d in ds for k, v in d.items()}
-  bert_res = bert_infer(bert_model, bert_inputs)
-  svms_res = svm_infer(svm_models, svm_inputs)
+    ds = [kf for kf in response.values()]
+    bert_inputs = {k: v['text'] for d in ds for k, v in d.items()}
+    svm_inputs = {k: [vv for kk, vv in v.items() if kk != 'text'] for d in ds for k, v in d.items()}
 
-  def weighted_average(bert: float, svm: float) -> float:
-    return bert * 0.25 + svm * 0.75
+    infer_log.info(f'[{response_id}] Running BERT inference...')
+    bert_res = bert_infer(bert_model, bert_inputs)
+    infer_log.info(f'[{response_id}] BERT results: {bert_res}')
 
-  res = {k: weighted_average(bert=v, svm=svms_res[k]) for k, v in bert_res.items()}
+    infer_log.info(f'[{response_id}] Running SVM inference...')
+    svms_res = svm_infer(svm_models, svm_inputs)
+    infer_log.info(f'[{response_id}] SVM results: {svms_res}')
 
-  (supabase.table("form_results")
-   .insert({"response_id": record['response_id'], "results": res})
-   .execute())
-  print('Results written to form_results successfully.', flush=True)
+    def weighted_average(bert: float, svm: float) -> float:
+      return bert * 0.25 + svm * 0.75
+
+    res = {k: weighted_average(bert=v, svm=svms_res[k]) for k, v in bert_res.items()}
+    infer_log.info(f'[{response_id}] Final weighted results: {res}')
+
+    (supabase.table('form_results')
+     .insert({'response_id': response_id, 'results': res})
+     .execute())
+    infer_log.info(f'[{response_id}] Results written to form_results successfully.')
+
+  except Exception as e:
+    error_log.exception(f'Error in handle_new_response: {e}')
 
 
 def handle_new_report(payload, gemini, supabase) -> None:
   record = payload['data']['record']
   report_id = record['id']
-  print('New report received:', report_id, flush=True)
+  app_log.info(f'New report received: {report_id}')
 
   try:
-    (supabase.table("student_reports")
-     .update({"llm_feedback": "Generating..."})
-     .eq("id", report_id)
+    (supabase.table('student_reports')
+     .update({'llm_feedback': 'Generating...'})
+     .eq('id', report_id)
      .execute())
 
     time.sleep(2)
-    full_row = (supabase.table("student_reports")
-     .select("kf_avg_data")
-     .eq("id", report_id)
+    full_row = (supabase.table('student_reports')
+     .select('kf_avg_data')
+     .eq('id', report_id)
      .single()
      .execute())
 
     data = full_row.data.get('kf_avg_data') if full_row.data else None
-    print('kf_avg_data:', data, flush=True)
+    app_log.info(f'[{report_id}] kf_avg_data: {data}')
 
     if not data:
-      print('ERROR: kf_avg_data is empty', flush=True)
-      (supabase.table("student_reports")
-       .update({"llm_feedback": "No assessment data found for this time range."})
-       .eq("id", report_id)
+      error_log.error(f'[{report_id}] kf_avg_data is empty — no assessment data found.')
+      (supabase.table('student_reports')
+       .update({'llm_feedback': 'No assessment data found for this time range.'})
+       .eq('id', report_id)
        .execute())
       return
 
-    print('Calling Gemini...', flush=True)
+    app_log.info(f'[{report_id}] Calling Gemini...')
     summary = generate_report_summary(data, gemini)
-    print('Gemini response received.', flush=True)
+    app_log.info(f'[{report_id}] Gemini response received.')
 
-    (supabase.table("student_reports")
-     .update({"llm_feedback": summary})
-     .eq("id", report_id)
+    (supabase.table('student_reports')
+     .update({'llm_feedback': summary})
+     .eq('id', report_id)
      .execute())
-    print('AI feedback written successfully.', flush=True)
+    app_log.info(f'[{report_id}] AI feedback written successfully.')
 
   except Exception as e:
-    print(f'ERROR in handle_new_report: {e}', flush=True)
-    (supabase.table("student_reports")
-     .update({"llm_feedback": f"Error generating feedback: {str(e)}"})
-     .eq("id", report_id)
+    error_log.exception(f'[{report_id}] Error in handle_new_report: {e}')
+    (supabase.table('student_reports')
+     .update({'llm_feedback': f'Error generating feedback: {str(e)}'})
+     .eq('id', report_id)
      .execute())
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
   asyncio.run(main())
