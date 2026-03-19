@@ -11,4 +11,5 @@
       handle_new_report
       handle_new_response
       main
+      wait_for_models
    

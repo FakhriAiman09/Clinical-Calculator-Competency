@@ -246,25 +246,26 @@
         <article role="main" id="furo-main-content">
           <section id="module-infer.listener">
 <span id="infer-listener"></span><h1>infer.listener<a class="headerlink" href="#module-infer.listener" title="Link to this heading">¶</a></h1>
-<p>This script connects to the Supabase Realtime server and listens for new form responses.
-When a new response is inserted into the “form_responses” table, it processes the response using
-BERT and SVM models, and then stores the results in the “form_results” table.</p>
+<p>This script connects to the Supabase Realtime server and listens for new form responses.</p>
 <p>Required environment variables:
-- SUPABASE_URL: The URL of the Supabase project.
-- SUPABASE_SERVICE_ROLE_KEY: The service role key for the Supabase project.
-- GOOGLE_GENAI_API_KEY: The Google GenAI API key for Gemini.</p>
+- SUPABASE_URL
+- SUPABASE_SERVICE_ROLE_KEY
+- GOOGLE_GENAI_API_KEY</p>
 <p class="rubric">Functions</p>
 <div class="table-wrapper autosummary longtable docutils container">
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.listener.handle_new_report" title="infer.listener.handle_new_report"><code class="xref py py-obj docutils literal notranslate"><span class="pre">handle_new_report</span></code></a>(payload, gemini, supabase)</p></td>
-<td><p>Handles a new student_report insert from Supabase Realtime.</p></td>
+<td><p></p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="../infer.html#infer.listener.handle_new_response" title="infer.listener.handle_new_response"><code class="xref py py-obj docutils literal notranslate"><span class="pre">handle_new_response</span></code></a>(payload, bert_model, ...)</p></td>
-<td><p>Handles a new form_response insert from Supabase Realtime.</p></td>
+<td><p></p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.listener.main" title="infer.listener.main"><code class="xref py py-obj docutils literal notranslate"><span class="pre">main</span></code></a>()</p></td>
-<td><p>Connects to the Supabase Realtime server and subscribes to a channel.</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">wait_for_models</span></code>([timeout_minutes])</p></td>
+<td><p>Waits until model files are present on disk.</p></td>
 </tr>
 </tbody>
 </table>
