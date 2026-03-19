@@ -232,6 +232,14 @@ function PrintReportContent() {
         const fr = row.form_responses;
         if (fr?.form_requests?.student_id !== student.id) continue;
 
+        // FIX 1: guard flag — extract comments at most once per form-response
+        // row. Previously the commentBlock push happened after the KF loop,
+        // which meant it fired for every row regardless of whether that row
+        // contained any KF results for this EPA. A rater who scored N key
+        // functions in one submission would cause every comment to appear N
+        // times in the report.
+        let commentExtractedForThisRow = false;
+
         for (const [kfKey, level] of Object.entries(row.results)) {
           const [epaKey, kfNum] = kfKey.split('.');
           if (parseInt(epaKey) === epaId) {
@@ -241,16 +249,20 @@ function PrintReportContent() {
               date: row.created_at,
               setting: fr.form_requests?.clinical_settings ?? null,
             });
-          }
-        }
 
-        const commentBlock = fr.response?.response?.[epaStr];
-        if (commentBlock) {
-          Object.values(commentBlock).forEach((kfObj) => {
-            if (kfObj?.text && Array.isArray(kfObj.text)) {
-              comments.push(...kfObj.text.filter((t) => typeof t === 'string' && t.trim() !== ''));
+            // Extract comments exactly once per row, on the first KF match
+            if (!commentExtractedForThisRow) {
+              commentExtractedForThisRow = true;
+              const commentBlock = fr.response?.response?.[epaStr];
+              if (commentBlock) {
+                Object.values(commentBlock).forEach((kfObj) => {
+                  if (kfObj?.text && Array.isArray(kfObj.text)) {
+                    comments.push(...kfObj.text.filter((t) => typeof t === 'string' && t.trim() !== ''));
+                  }
+                });
+              }
             }
-          });
+          }
         }
       }
 

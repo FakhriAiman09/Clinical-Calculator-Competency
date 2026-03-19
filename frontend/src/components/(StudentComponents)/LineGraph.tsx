@@ -6,12 +6,27 @@ interface LineGraphProps {
   data: { date: string; value: number }[];
 }
 
+// ── FIX 2 (part 2): Replace every `currentColor` with explicit hex values.
+//
+// `currentColor` inherits the CSS text colour of the nearest ancestor.  In a
+// normal browser session that works fine, but when the browser invokes the
+// print engine (window.print / "Save as PDF") the colour-inheritance chain
+// can resolve to a very light or transparent value — making axis labels,
+// grid lines, and the polyline invisible in the resulting PDF.
+//
+// Using hardcoded values guarantees the graph looks identical on screen and
+// in print regardless of the surrounding Bootstrap theme.
+const LABEL_COLOR  = '#555555';   // axis labels
+const GRID_COLOR   = '#cccccc';   // dashed grid lines
+const LINE_COLOR   = '#007bff';   // trend line + filled dots
+const LATEST_RING  = '#28a745';   // green ring on last data point
+
 const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
-  const width = 600;
-  const height = 200;
-  const labelPadding = 105;
-  const rightPadding = 10;
-  const topPadding = 20;
+  const width         = 600;
+  const height        = 200;
+  const labelPadding  = 105;
+  const rightPadding  = 10;
+  const topPadding    = 20;
   const bottomPadding = 30;
 
   if (!data.length) return <div className='text-muted'>No data to display</div>;
@@ -48,7 +63,6 @@ const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
 
   const pointsWithData = bucketData.filter((d) => d.value !== null);
 
-  // Not enough data to draw a meaningful trend line
   if (pointsWithData.length < 2) {
     return (
       <div
@@ -60,43 +74,60 @@ const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
     );
   }
 
-  const scaleX = (i: number) => labelPadding + (i / Math.max(bucketData.length - 1, 1)) * (width - labelPadding - rightPadding);
-  const scaleY = (val: number) => topPadding + (1 - val / 3) * (height - topPadding - bottomPadding);
+  const scaleX = (i: number) =>
+    labelPadding + (i / Math.max(bucketData.length - 1, 1)) * (width - labelPadding - rightPadding);
+  const scaleY = (val: number) =>
+    topPadding + (1 - val / 3) * (height - topPadding - bottomPadding);
 
   return (
     <svg width='100%' height={height} viewBox={`0 0 ${width} ${height}`}>
-      {/* transparent background - inherits from card */}
       <rect width='100%' height='100%' fill='transparent' />
 
+      {/* Horizontal grid lines + Y-axis labels */}
       {[0, 1, 2, 3].map((level) => {
         const y = scaleY(level);
         return (
           <g key={level}>
             <text
-              x={labelPadding - 10} y={y} fontSize={11}
-              fill='currentColor' opacity={0.6}
-              alignmentBaseline='middle' textAnchor='end'
+              x={labelPadding - 10}
+              y={y}
+              fontSize={11}
+              fill={LABEL_COLOR}
+              alignmentBaseline='middle'
+              textAnchor='end'
             >
               {['Remedial', 'Early-Developing', 'Developing', 'Entrustable'][level]}
             </text>
-            <line x1={labelPadding} x2={width - rightPadding} y1={y} y2={y} stroke='currentColor' opacity={0.15} strokeDasharray='4' />
+            <line
+              x1={labelPadding}
+              x2={width - rightPadding}
+              y1={y}
+              y2={y}
+              stroke={GRID_COLOR}
+              strokeDasharray='4'
+            />
           </g>
         );
       })}
 
+      {/* X-axis labels */}
       {bucketData.map(({ label }, i) => (
         <text
-          key={i} x={scaleX(i)} y={height - 5} fontSize={10}
-          fill='currentColor' opacity={0.6}
+          key={i}
+          x={scaleX(i)}
+          y={height - 5}
+          fontSize={10}
+          fill={LABEL_COLOR}
           textAnchor={i === 0 ? 'start' : i === bucketData.length - 1 ? 'end' : 'middle'}
         >
           {label}
         </text>
       ))}
 
+      {/* Trend line */}
       <polyline
         fill='none'
-        stroke='#007bff'
+        stroke={LINE_COLOR}
         strokeWidth='2'
         points={bucketData
           .map((pt, i) => (pt.value !== null ? `${scaleX(i)},${scaleY(pt.value)}` : ''))
@@ -104,12 +135,20 @@ const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
           .join(' ')}
       />
 
+      {/* Data-point dots */}
       {bucketData.map((pt, i) =>
         pt.value !== null ? (
           <g key={i}>
-            <circle cx={scaleX(i)} cy={scaleY(pt.value)} r={4} fill='#007bff' />
+            <circle cx={scaleX(i)} cy={scaleY(pt.value)} r={4} fill={LINE_COLOR} />
             {i === bucketData.length - 1 && (
-              <circle cx={scaleX(i)} cy={scaleY(pt.value)} r={7} fill='none' stroke='#28a745' strokeWidth={2} />
+              <circle
+                cx={scaleX(i)}
+                cy={scaleY(pt.value)}
+                r={7}
+                fill='none'
+                stroke={LATEST_RING}
+                strokeWidth={2}
+              />
             )}
           </g>
         ) : null

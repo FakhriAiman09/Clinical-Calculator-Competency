@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useLayoutEffect, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import 'highlight.js/styles/github.css'; // you can change this theme if desired
+import 'highlight.js/styles/github.css';
 
 import LineGraph from '@/components/(StudentComponents)/LineGraph';
 import HalfCircleGauge from '@/components/(StudentComponents)/HalfCircleGauge';
@@ -66,9 +66,14 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
     return false;
   });
 
+  // ── FIX 3: track whether we auto-expanded for print so we can collapse after ──
   const wasAutoExpandedRef = useRef(false);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
+    // FIX 3: Use CSS display toggling so card-body is always in the DOM.
+    // beforeprint / afterprint only need to flip the `expanded` flag; because
+    // the DOM node already exists the browser captures it immediately without
+    // waiting for a React re-render cycle.
     const handleBeforePrint = () => {
       if (!expanded) {
         setExpanded(true);
@@ -147,6 +152,12 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
       const date = row.created_at;
       const setting = formResponse.form_requests?.clinical_settings || null;
 
+      // ── FIX 1: track whether this row has already contributed comments for
+      //    this EPA. Without this flag, comments were pushed once per matching
+      //    KF key — so a rater who rated 3 KFs would produce 3 copies of every
+      //    comment they left on that EPA. ──────────────────────────────────────
+      let commentExtractedForThisRow = false;
+
       for (const [kfKey, level] of Object.entries(row.results)) {
         const [epaKey, kfNum] = kfKey.split('.');
         if (Number.parseInt(epaKey) === epaId) {
@@ -157,24 +168,29 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
             date,
             setting,
           });
-        }
-      }
 
-      const commentBlock = formResponse.response?.response?.[epaStr];
-      if (commentBlock) {
-        Object.values(commentBlock).forEach((kfObj) => {
-          if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
-            const texts = (kfObj as KeyFunctionResponse).text;
-            if (Array.isArray(texts)) {
-              parsedComments.push(...texts.filter((t) => typeof t === 'string' && t.trim() !== ''));
+          // Extract comments exactly once per form-response row, not once per KF
+          if (!commentExtractedForThisRow) {
+            commentExtractedForThisRow = true;
+            const commentBlock = formResponse.response?.response?.[epaStr];
+            if (commentBlock) {
+              Object.values(commentBlock).forEach((kfObj) => {
+                if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
+                  const texts = (kfObj as KeyFunctionResponse).text;
+                  if (Array.isArray(texts)) {
+                    parsedComments.push(...texts.filter((t) => typeof t === 'string' && t.trim() !== ''));
+                  }
+                }
+              });
             }
           }
-        });
+        }
       }
     }
 
     setAssessments(parsedAssessments);
-    setComments(parsedComments);
+    // Deduplicate in case the same comment text appears across different raters
+    setComments(Array.from(new Set(parsedComments)));
 
     const targetWindow = `${timeRange}m`;
     const targetReport = (reportData ?? []).find((r) => r.time_window === targetWindow);
@@ -200,8 +216,6 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
         epaKfScores.length > 0 ? Math.floor(epaKfScores.reduce((a, b) => a + b, 0) / epaKfScores.length) : null
       );
 
-      // Extract EPA-specific Markdown feedback
-      // llm_feedback may be a JSON object or a JSON string depending on how Supabase stored it
       if (targetReport.llm_feedback) {
         let feedbackObj: Record<string, string> | null = null;
 
@@ -229,18 +243,29 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
       }
     }
 
-    // Build graph from raw assessments grouped by month
+    // ── FIX 2: Build graph only from assessments within the selected time
+    //    window (using `cutoff`). Previously it used all-time `parsedAssessments`
+    //    which could include months far outside the report window, making the
+    //    quarter-bucket logic in LineGraph show "More assessments needed" even
+    //    when recent data existed. ────────────────────────────────────────────
+    const windowCutoff = new Date();
+    windowCutoff.setMonth(windowCutoff.getMonth() - timeRange);
+
     const monthlyMap: Record<string, number[]> = {};
     const lifetimeScores: number[] = [];
 
     for (const a of parsedAssessments) {
       const val = a.devLevel;
       if (typeof val === 'number') {
-        const date = new Date(a.date);
-        const key = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10);
-        if (!monthlyMap[key]) monthlyMap[key] = [];
-        monthlyMap[key].push(val);
         lifetimeScores.push(val);
+
+        // Only include data points inside the selected time window for the graph
+        if (new Date(a.date) >= windowCutoff) {
+          const d = new Date(a.date);
+          const key = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+          if (!monthlyMap[key]) monthlyMap[key] = [];
+          monthlyMap[key].push(val);
+        }
       }
     }
 
@@ -283,7 +308,6 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
       if (!data?.llm_feedback) return;
       if (data.llm_feedback === 'Generating...') return;
 
-      // Handle both object and string formats
       let feedbackObj: Record<string, string> | null = null;
       if (typeof data.llm_feedback === 'object') {
         feedbackObj = data.llm_feedback as Record<string, string>;
@@ -304,7 +328,7 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
 
   const filtered = assessments.filter((a) => new Date(a.date) >= cutoff);
   const settings = Array.from(new Set(filtered.map((a) => a.setting).filter(Boolean)));
-  const lastDate = filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.date;
+  const lastDate = [...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.date;
   const daysSinceLast = lastDate
     ? Math.floor((now.getTime() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24))
     : 'N/A';
@@ -329,92 +353,103 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
         <HalfCircleGauge average={epaAvgFromKFs} allGreen={allGreen} />
       </div>
 
-      {expanded && (
-        <div className='card-body'>
-          <div className='row mb-4'>
-            <div className='col-md-6'>
-              <h6 className='fw-bold border-bottom pb-1'>Performance Over Time</h6>
-              <LineGraph data={lineGraphData} />
-            </div>
-            <div className='col-md-6'>
-              <h6 className='fw-bold border-bottom pb-1'>EPA Stats</h6>
-              <ul className='list-group list-group-flush mb-3'>
-                <li className='list-group-item bg-transparent'>Assessments: {assessmentCount}</li>
-                <li className='list-group-item bg-transparent'>Days Since Last: {daysSinceLast}</li>
-                <li className='list-group-item bg-transparent'>Settings: {settings.join(', ')}</li>
-                <li className='list-group-item bg-transparent'>
-                  Lifetime Average:{' '}
-                  {lifetimeAverage !== null
-                    ? `${['Remedial', 'Early-Developing', 'Developing', 'Entrustable'][Math.floor(lifetimeAverage)]}`
-                    : '—'}
-                </li>
-              </ul>
-            </div>
-          </div>
+      {/*
+        FIX 3: card-body is ALWAYS rendered in the DOM — visibility is controlled
+        by `display` style, not by a conditional `{expanded && ...}`.
 
-          <div className='mb-4'>
-            <h6 className='fw-bold border-bottom pb-1'>Key Functions</h6>
-            <table className='table table-sm table-bordered'>
-              <thead className='table-active'>
-                <tr>
-                  <th>Key Function</th>
-                  <th>Avg Level</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(kfDescriptions?.[epaStr] || []).map((label, index) => {
-                  const kfId = `kf${index + 1}`;
-                  const avg = kfAverages[kfId];
-                  return (
-                    <tr key={kfId}>
-                      <td className='text-wrap' style={{ maxWidth: '300px' }}>
-                        {label}
-                      </td>
-                      <td>
-                        {avg === undefined
-                          ? '—'
-                          : `${['Remedial', 'Early-Developing', 'Developing', 'Entrustable'][Math.floor(avg)]}`}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        The old pattern (`{expanded && <div>...</div>}`) meant that when the
+        browser fired `beforeprint`, React's setState hadn't finished re-rendering
+        before the browser captured the print layout, so the AI block (and the
+        rest of the card body) was missing from the PDF.
 
-          <div className='mb-4'>
-            <h6 className='fw-bold border-bottom pb-1'>Comments</h6>
-            <div className='border rounded p-2 scrollable-box'>
-              <ul className='list-group list-group-flush'>
-                {comments.length > 0 ? (
-                  comments.map((c, i) => (
-                    <li key={i} className='list-group-item bg-transparent'>
-                      {c}
-                    </li>
-                  ))
-                ) : (
-                  <li className='list-group-item bg-transparent'>No comments found</li>
-                )}
-              </ul>
-            </div>
+        With `display: expanded ? 'block' : 'none'` the node already exists in
+        the DOM; toggling `expanded` in the beforeprint handler is enough for the
+        browser to see the full content at print time.
+      */}
+      <div className='card-body' style={{ display: expanded ? 'block' : 'none' }}>
+        <div className='row mb-4'>
+          <div className='col-md-6'>
+            <h6 className='fw-bold border-bottom pb-1'>Performance Over Time</h6>
+            <LineGraph data={lineGraphData} />
           </div>
-
-          <div className='mb-4'>
-            <h6 className='fw-bold border-bottom pb-1'>AI Summary & Recommendations</h6>
-            <div className='border rounded p-3 bg-body-secondary scrollable-box markdown-preview'>
-              {llmFeedback ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                  {llmFeedback}
-                </ReactMarkdown>
-              ) : (
-                <p className='text-muted mb-0'>
-                  <em>Generating Feedback...</em>
-                </p>
-              )}
-            </div>
+          <div className='col-md-6'>
+            <h6 className='fw-bold border-bottom pb-1'>EPA Stats</h6>
+            <ul className='list-group list-group-flush mb-3'>
+              <li className='list-group-item bg-transparent'>Assessments: {assessmentCount}</li>
+              <li className='list-group-item bg-transparent'>Days Since Last: {daysSinceLast}</li>
+              <li className='list-group-item bg-transparent'>Settings: {settings.join(', ')}</li>
+              <li className='list-group-item bg-transparent'>
+                Lifetime Average:{' '}
+                {lifetimeAverage !== null
+                  ? `${['Remedial', 'Early-Developing', 'Developing', 'Entrustable'][Math.floor(lifetimeAverage)]}`
+                  : '—'}
+              </li>
+            </ul>
           </div>
         </div>
-      )}
+
+        <div className='mb-4'>
+          <h6 className='fw-bold border-bottom pb-1'>Key Functions</h6>
+          <table className='table table-sm table-bordered'>
+            <thead className='table-active'>
+              <tr>
+                <th>Key Function</th>
+                <th>Avg Level</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(kfDescriptions?.[epaStr] || []).map((label, index) => {
+                const kfId = `kf${index + 1}`;
+                const avg = kfAverages[kfId];
+                return (
+                  <tr key={kfId}>
+                    <td className='text-wrap' style={{ maxWidth: '300px' }}>
+                      {label}
+                    </td>
+                    <td>
+                      {avg === undefined
+                        ? '—'
+                        : `${['Remedial', 'Early-Developing', 'Developing', 'Entrustable'][Math.floor(avg)]}`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className='mb-4'>
+          <h6 className='fw-bold border-bottom pb-1'>Comments</h6>
+          <div className='border rounded p-2 scrollable-box'>
+            <ul className='list-group list-group-flush'>
+              {comments.length > 0 ? (
+                comments.map((c, i) => (
+                  <li key={i} className='list-group-item bg-transparent'>
+                    {c}
+                  </li>
+                ))
+              ) : (
+                <li className='list-group-item bg-transparent'>No comments found</li>
+              )}
+            </ul>
+          </div>
+        </div>
+
+        <div className='mb-4'>
+          <h6 className='fw-bold border-bottom pb-1'>AI Summary &amp; Recommendations</h6>
+          <div className='border rounded p-3 bg-body-secondary scrollable-box markdown-preview'>
+            {llmFeedback ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                {llmFeedback}
+              </ReactMarkdown>
+            ) : (
+              <p className='text-muted mb-0'>
+                <em>Generating Feedback...</em>
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
