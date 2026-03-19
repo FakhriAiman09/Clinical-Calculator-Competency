@@ -20,7 +20,7 @@ from inference import (bert_infer, download_bert_model, download_svm_models,
                        generate_report_summary, load_bert_model,
                        load_svm_models, svm_infer)
 
-BERT_MODEL_PATH = 'models/bert'
+BERT_MODEL_PATH = '/app/models/bert'
 SVM_MODELS_PATH = 'svm-models'
 
 
