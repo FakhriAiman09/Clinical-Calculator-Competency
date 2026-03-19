@@ -252,103 +252,36 @@
 <dt class="sig sig-object py" id="infer.inference.bert_infer">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">bert_infer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#infer.inference.bert_infer" title="Link to this definition">¶</a></dt>
 <dd><p>Loads a pre-trained BERT model and predicts the class for each sentence.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>model</strong> (<em>tf.keras.Model</em>) – The pre-trained BERT model to use for inference.</p></li>
-<li><p><strong>input</strong> – A dictionary where keys are key functions and values are the sentences to</p></li>
-</ul>
-</dd>
-</dl>
-<p>be classified.
-:type input: dict[str, list[str]]</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>A dictionary where keys are sentence identifiers and values are the predicted class</p>
-</dd>
-</dl>
-<p>indices.
-:rtype: dict[str, int]</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.svm_infer">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">svm_infer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">models</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">SVC</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">bool</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#infer.inference.svm_infer" title="Link to this definition">¶</a></dt>
 <dd><p>Loads pre-trained SVM models and predicts the class for each response.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>models</strong> (<em>dict</em><em>[</em><em>str</em><em>, </em><em>any</em><em>]</em>) – A dictionary where keys are model names and values are the loaded SVM models.</p></li>
-<li><p><strong>data</strong> – A dictionary where keys are key functions and values are the responses to be</p></li>
-</ul>
-</dd>
-</dl>
-<p>classified.
-:type data: dict[str, list[str]]</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>A dictionary where keys are response identifiers and values are the predicted class</p>
-</dd>
-</dl>
-<p>indices.
-:rtype: dict[str, int]</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.generate_report_summary">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">generate_report_summary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gemini</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Client</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#infer.inference.generate_report_summary" title="Link to this definition">¶</a></dt>
 <dd><p>Generates a summary report based on the average scores of key functions.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>kf_avg_data</strong> (<em>dict</em><em>[</em><em>str</em><em>, </em><em>float</em><em>]</em>) – A dictionary where keys are key functions and values are their average scores.</p></li>
-<li><p><strong>gemini</strong> (<em>genai.Client</em>) – The Google GenAI client used for generating summaries.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A summary report as a string.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.load_bert_model">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">load_bert_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#infer.inference.load_bert_model" title="Link to this definition">¶</a></dt>
 <dd><p>Loads a pre-trained BERT model from the specified path.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>model_path</strong> (<em>str</em>) – The path to the pre-trained BERT model.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The loaded BERT model.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>tf.keras.Model</p>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.download_svm_models">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">download_svm_models</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">supabase</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">SyncClient</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#infer.inference.download_svm_models" title="Link to this definition">¶</a></dt>
-<dd><p>Downloads the pre-trained SVM models from the remote server.</p>
+<dd><p>Downloads the pre-trained SVM models from Supabase Storage bucket ‘svm-models’.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.load_svm_models">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">load_svm_models</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">SVC</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#infer.inference.load_svm_models" title="Link to this definition">¶</a></dt>
-<dd><p>Loads the pre-trained SVM models from the local “svm-models” directory.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>A dictionary where keys are model names and values are the loaded SVM models.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>dict[str, any]</p>
-</dd>
-</dl>
+<dd><p>Loads the pre-trained SVM models from the local ‘svm-models’ directory.</p>
 </dd></dl>
 
 </section>
@@ -358,39 +291,18 @@
 <dt class="sig sig-object py" id="infer.listener.main">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">infer.listener.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#infer.listener.main" title="Link to this definition">¶</a></dt>
 <dd><p>Connects to the Supabase Realtime server and subscribes to a channel.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
-</dd>
-</dl>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.listener.handle_new_response">
 <span class="sig-prename descclassname"><span class="pre">infer.listener.</span></span><span class="sig-name descname"><span class="pre">handle_new_response</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">payload</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bert_model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">svm_models</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">supabase</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#infer.listener.handle_new_response" title="Link to this definition">¶</a></dt>
-<dd><p>Handles the insert event from the Supabase Realtime server.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>payload</strong> (<em>dict</em>) – The payload received from the Supabase Realtime server.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>None</p>
-</dd>
-</dl>
+<dd><p>Handles a new form_response insert from Supabase Realtime.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.listener.handle_new_report">
 <span class="sig-prename descclassname"><span class="pre">infer.listener.</span></span><span class="sig-name descname"><span class="pre">handle_new_report</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">payload</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gemini</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">supabase</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#infer.listener.handle_new_report" title="Link to this definition">¶</a></dt>
-<dd><p>Handles the insert event from the Supabase Realtime server for student reports.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>payload</strong> (<em>dict</em>) – The payload received from the Supabase Realtime server.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>None</p>
-</dd>
-</dl>
+<dd><p>Handles a new student_report insert from Supabase Realtime.</p>
 </dd></dl>
 
 </section>

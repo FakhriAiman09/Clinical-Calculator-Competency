@@ -9,6 +9,7 @@
    .. autosummary::
    
       bert_infer
+      download_bert_model
       download_svm_models
       generate_report_summary
       load_bert_model

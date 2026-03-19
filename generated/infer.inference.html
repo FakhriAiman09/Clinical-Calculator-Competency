@@ -255,19 +255,22 @@ This module loads a pre-trained BERT model and predicts the class for each sente
 <tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.inference.bert_infer" title="infer.inference.bert_infer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bert_infer</span></code></a>(model, data)</p></td>
 <td><p>Loads a pre-trained BERT model and predicts the class for each sentence.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="../infer.html#infer.inference.download_svm_models" title="infer.inference.download_svm_models"><code class="xref py py-obj docutils literal notranslate"><span class="pre">download_svm_models</span></code></a>(supabase)</p></td>
-<td><p>Downloads the pre-trained SVM models from the remote server.</p></td>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">download_bert_model</span></code>(supabase[, local_path])</p></td>
+<td><p>Downloads the pre-trained BERT model files from Supabase Storage bucket 'bert-model'.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.inference.generate_report_summary" title="infer.inference.generate_report_summary"><code class="xref py py-obj docutils literal notranslate"><span class="pre">generate_report_summary</span></code></a>(data, gemini)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.inference.download_svm_models" title="infer.inference.download_svm_models"><code class="xref py py-obj docutils literal notranslate"><span class="pre">download_svm_models</span></code></a>(supabase)</p></td>
+<td><p>Downloads the pre-trained SVM models from Supabase Storage bucket 'svm-models'.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../infer.html#infer.inference.generate_report_summary" title="infer.inference.generate_report_summary"><code class="xref py py-obj docutils literal notranslate"><span class="pre">generate_report_summary</span></code></a>(data, gemini)</p></td>
 <td><p>Generates a summary report based on the average scores of key functions.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="../infer.html#infer.inference.load_bert_model" title="infer.inference.load_bert_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_bert_model</span></code></a>(model_path)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.inference.load_bert_model" title="infer.inference.load_bert_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_bert_model</span></code></a>(model_path)</p></td>
 <td><p>Loads a pre-trained BERT model from the specified path.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.inference.load_svm_models" title="infer.inference.load_svm_models"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_svm_models</span></code></a>()</p></td>
-<td><p>Loads the pre-trained SVM models from the local &quot;svm-models&quot; directory.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="../infer.html#infer.inference.load_svm_models" title="infer.inference.load_svm_models"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_svm_models</span></code></a>()</p></td>
+<td><p>Loads the pre-trained SVM models from the local 'svm-models' directory.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="../infer.html#infer.inference.svm_infer" title="infer.inference.svm_infer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">svm_infer</span></code></a>(models, data)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.inference.svm_infer" title="infer.inference.svm_infer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">svm_infer</span></code></a>(models, data)</p></td>
 <td><p>Loads pre-trained SVM models and predicts the class for each response.</p></td>
 </tr>
 </tbody>
