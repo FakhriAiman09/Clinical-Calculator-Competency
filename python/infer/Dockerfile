@@ -24,14 +24,15 @@ RUN python -m pip install --upgrade pip
 COPY requirements.txt .
 RUN python -m pip install -r requirements.txt
 
-# Copy source files (models excluded via .dockerignore)
 COPY --chown=appuser:appuser . .
 
 RUN chown -R appuser:appuser /home/appuser && chmod -R 755 /home/appuser
 RUN chown -R appuser:appuser /app && chmod -R 755 /app
 
+# Install openssh-client for Railway SSH file transfers
+USER root
+RUN apt-get update && apt-get install -y openssh-client && rm -rf /var/lib/apt/lists/*
+
 USER appuser
 
-# On Railway: models are downloaded from Supabase Storage on first startup.
-# On local dev: models are mounted via Docker volume (compose.yaml).
 CMD ["python3.11", "listener.py"]

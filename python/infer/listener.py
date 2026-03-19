@@ -1,16 +1,15 @@
 '''
 This script connects to the Supabase Realtime server and listens for new form responses.
-When a new response is inserted into the "form_responses" table, it processes the response using
-BERT and SVM models, and then stores the results in the "form_results" table.
 
 Required environment variables:
-- SUPABASE_URL: The URL of the Supabase project.
-- SUPABASE_SERVICE_ROLE_KEY: The service role key for the Supabase project.
-- GOOGLE_GENAI_API_KEY: The Google GenAI API key for Gemini.
+- SUPABASE_URL
+- SUPABASE_SERVICE_ROLE_KEY
+- GOOGLE_GENAI_API_KEY
 '''
 
 import asyncio
 import os
+import time
 
 import tensorflow_text as text
 from dotenv import load_dotenv
@@ -25,11 +24,47 @@ BERT_MODEL_PATH = 'models/bert'
 SVM_MODELS_PATH = 'svm-models'
 
 
-async def main() -> None:
+def wait_for_models(timeout_minutes: int = 60) -> None:
   """
-  Connects to the Supabase Realtime server and subscribes to a channel.
+  Waits until model files are present on disk.
+  This allows time to manually copy models into a Railway volume after deploy.
+  Checks every 30 seconds, times out after timeout_minutes.
   """
+  deadline = time.time() + timeout_minutes * 60
+  bert_ready = False
+  svm_ready = False
 
+  print(f"Waiting for model files (timeout: {timeout_minutes} min)...", flush=True)
+
+  while time.time() < deadline:
+    bert_ready = (
+      os.path.exists(BERT_MODEL_PATH) and
+      os.path.exists(os.path.join(BERT_MODEL_PATH, 'saved_model.pb'))
+    )
+    svm_ready = (
+      os.path.exists(SVM_MODELS_PATH) and
+      any(f.endswith('.pkl') for f in os.listdir(SVM_MODELS_PATH))
+    ) if os.path.exists(SVM_MODELS_PATH) else False
+
+    if bert_ready and svm_ready:
+      print("Model files found!", flush=True)
+      return
+
+    status = []
+    if not bert_ready:
+      status.append("BERT model missing")
+    if not svm_ready:
+      status.append("SVM models missing")
+    print(f"  Still waiting: {', '.join(status)} — retrying in 30s...", flush=True)
+    time.sleep(30)
+
+  raise TimeoutError(
+    f"Model files not found after {timeout_minutes} minutes. "
+    f"Please copy models into the volume at {BERT_MODEL_PATH} and {SVM_MODELS_PATH}."
+  )
+
+
+async def main() -> None:
   print("Loading environment variables...")
   load_dotenv()
 
@@ -51,24 +86,13 @@ async def main() -> None:
   supabase: spb.Client = spb.create_client(supabase_url, supabase_key)
   asupabase: spb.AClient = await spb.acreate_client(supabase_url, supabase_key)
 
-  # ── Download models from Supabase Storage if not already present locally ──
-  # On Railway (or any fresh container), the models/ folder won't exist.
-  # On local dev with volume mounts, the folders are already populated — skip download.
-
-  if not os.path.exists(BERT_MODEL_PATH) or not os.listdir(BERT_MODEL_PATH):
-    print("BERT model not found locally — downloading from Supabase Storage...")
-    download_bert_model(supabase, local_path=BERT_MODEL_PATH)
-  else:
-    print("BERT model found locally — skipping download.")
-
-  if not os.path.exists(SVM_MODELS_PATH) or not os.listdir(SVM_MODELS_PATH):
-    print("SVM models not found locally — downloading from Supabase Storage...")
-    download_svm_models(supabase)
-  else:
-    print("SVM models found locally — skipping download.")
+  # ── Wait for models to be available ───────────────────────────────────────
+  # On Railway with a volume: models are copied in via SSH after first deploy.
+  # On local dev: models are mounted via Docker volume — already present.
+  # Either way, wait up to 60 minutes before giving up.
+  wait_for_models(timeout_minutes=60)
 
   # ── Load models into memory ────────────────────────────────────────────────
-
   print("Loading SVM models...")
   svm_models = load_svm_models()
 
@@ -76,7 +100,6 @@ async def main() -> None:
   bert_model = load_bert_model(BERT_MODEL_PATH)
 
   # ── Connect to Supabase Realtime ───────────────────────────────────────────
-
   print("Connecting to Supabase Realtime server...", end=' ')
   await asupabase.realtime.connect()
   print("Connected.")
@@ -107,8 +130,6 @@ async def main() -> None:
 
 
 def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
-  '''Handles a new form_response insert from Supabase Realtime.'''
-
   record = payload['data']['record']
   print('New response received:', record['response_id'])
 
@@ -133,8 +154,6 @@ def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
 
 
 def handle_new_report(payload, gemini, supabase) -> None:
-  '''Handles a new student_report insert from Supabase Realtime.'''
-
   record = payload['data']['record']
   report_id = record['id']
   print('New report received:', report_id, flush=True)
@@ -145,8 +164,7 @@ def handle_new_report(payload, gemini, supabase) -> None:
      .eq("id", report_id)
      .execute())
 
-    import time
-    time.sleep(2)  # brief wait for RPC to finish writing kf_avg_data
+    time.sleep(2)
     full_row = (supabase.table("student_reports")
      .select("kf_avg_data")
      .eq("id", report_id)
@@ -157,7 +175,7 @@ def handle_new_report(payload, gemini, supabase) -> None:
     print('kf_avg_data:', data, flush=True)
 
     if not data:
-      print('ERROR: kf_avg_data is empty - cannot generate summary', flush=True)
+      print('ERROR: kf_avg_data is empty', flush=True)
       (supabase.table("student_reports")
        .update({"llm_feedback": "No assessment data found for this time range."})
        .eq("id", report_id)
