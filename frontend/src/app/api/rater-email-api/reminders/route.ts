@@ -111,23 +111,26 @@ async function processReminders(req: NextRequest, body?: { thresholdHours?: numb
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
+    if (!supabaseUrl || (!supabaseServiceRoleKey && !supabaseAnonKey)) {
       return NextResponse.json(
         { error: 'Missing Supabase configuration for reminder notifications' },
         { status: 500 }
       );
     }
 
-    const supabase = createSupabaseClient(supabaseUrl, supabaseServiceRoleKey);
+    const supabase = createSupabaseClient(supabaseUrl, supabaseServiceRoleKey ?? supabaseAnonKey!);
 
     const cutoffUpper = new Date(now.getTime() - thresholdHours * 60 * 60 * 1000).toISOString();
 
-    const { data: overdueRequests, error: requestError } = await supabase
-      .from('form_requests')
-      .select('id, student_id, completed_by, created_at')
-      .eq('active_status', true)
-      .lte('created_at', cutoffUpper);
+    const { data: overdueRequests, error: requestError } = supabaseServiceRoleKey
+      ? await supabase
+          .from('form_requests')
+          .select('id, student_id, completed_by, created_at')
+          .eq('active_status', true)
+          .lte('created_at', cutoffUpper)
+      : await supabase.rpc('fetch_overdue_requests', { cutoff_timestamp: cutoffUpper });
 
     if (requestError) {
       return NextResponse.json({ error: requestError.message }, { status: 500 });
@@ -228,6 +231,7 @@ async function processReminders(req: NextRequest, body?: { thresholdHours?: numb
 
     return NextResponse.json({
       message: 'Reminder processing complete',
+      mode: supabaseServiceRoleKey ? 'service_role' : 'anon_rpc',
       thresholdHours,
       cycleDays,
       cycleStartDate: configuredStartDate,
