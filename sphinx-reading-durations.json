@@ -1,16 +1,16 @@
 {
-    "api": 0.025,
-    "bert": 0.05,
+    "api": 0.027,
+    "bert": 0.051,
     "changelog": 0.001,
     "generated/bert.utils": 0.017,
     "generated/infer.inference": 0.017,
-    "generated/svm.fetch_data": 0.008,
+    "generated/svm.fetch_data": 0.007,
     "generated/svm.train": 0.009,
     "generated/svm.util": 0.008,
     "index": 0.003,
     "infer": 0.027,
     "intro": 0.002,
-    "model_doc": 0.006,
+    "model_doc": 0.007,
     "svm": 0.025,
     "testing": 0.001
 }
