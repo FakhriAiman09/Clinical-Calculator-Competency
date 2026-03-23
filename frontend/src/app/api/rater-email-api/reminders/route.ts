@@ -22,13 +22,8 @@ interface ProfileRecord {
 
 interface ReminderLogRow {
   request_id: string;
-  rater_id: string;
   rater_email: string;
-  student_id: string;
-  student_name: string;
-  faculty_name: string | null;
-  threshold_hours: number;
-  cycle_days: number;
+  cycle_marker: string;
   sent_at: string;
 }
 
@@ -49,6 +44,18 @@ function shouldRunCycle(now: Date, startDate: Date, cycleDays: number): boolean 
   const msPerDay = 24 * 60 * 60 * 1000;
   const daysSinceStart = Math.floor((now.getTime() - startDate.getTime()) / msPerDay);
   return daysSinceStart % cycleDays === 0;
+}
+
+function getCycleMarker(now: Date, startDate: Date, cycleDays: number): string {
+  if (now.getTime() < startDate.getTime()) {
+    return now.toISOString().slice(0, 10);
+  }
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysSinceStart = Math.floor((now.getTime() - startDate.getTime()) / msPerDay);
+  const cycleOffsetDays = Math.floor(daysSinceStart / cycleDays) * cycleDays;
+  const cycleStart = new Date(startDate.getTime() + cycleOffsetDays * msPerDay);
+  return cycleStart.toISOString().slice(0, 10);
 }
 
 function isAuthorized(req: NextRequest): boolean {
@@ -161,8 +168,32 @@ async function processReminders(req: NextRequest, body?: { thresholdHours?: numb
     const profileMap = new Map((profiles as ProfileRecord[]).map((profile) => [profile.id, profile.display_name]));
     const raterMap = new Map(userRows.map((user) => [user.id, user.email]));
 
+    const reminderLogTable = 'reminder_notification';
+    const cycleMarker = getCycleMarker(now, cycleStartDate, cycleDays);
+
+    const requestIds = requestRows.map((request) => request.id);
+    const alreadySentRequestIds = new Set<string>();
+
+    if (requestIds.length > 0) {
+      const { data: existingLogs, error: existingLogsError } = await supabase
+        .from(reminderLogTable)
+        .select('request_id')
+        .eq('cycle_marker', cycleMarker)
+        .in('request_id', requestIds);
+
+      if (existingLogsError) {
+        console.error('Error checking existing reminder logs:', existingLogsError.message);
+      } else {
+        (existingLogs ?? []).forEach((row: { request_id: string }) => alreadySentRequestIds.add(row.request_id));
+      }
+    }
+
     let sent = 0;
     let skipped = 0;
+    let trackingWriteOk = true;
+    let trackingError: string | null = null;
+    let trackedCount = 0;
+    let trackingSkippedCount = 0;
     const sentDetails: Array<{
       requestId: string;
       raterId: string;
@@ -174,6 +205,11 @@ async function processReminders(req: NextRequest, body?: { thresholdHours?: numb
     }> = [];
 
     for (const request of requestRows) {
+      if (alreadySentRequestIds.has(request.id)) {
+        skipped += 1;
+        continue;
+      }
+
       const facultyEmail = raterMap.get(request.completed_by);
       if (!facultyEmail) {
         skipped += 1;
@@ -205,28 +241,43 @@ async function processReminders(req: NextRequest, body?: { thresholdHours?: numb
       sent += 1;
     }
 
-    const reminderLogTable = process.env.REMINDER_LOG_TABLE;
-    let logSaved = false;
-    let logWarning: string | null = null;
-    if (reminderLogTable && sentDetails.length > 0) {
+    if (sentDetails.length > 0) {
       const logRows: ReminderLogRow[] = sentDetails.map((detail) => ({
         request_id: detail.requestId,
-        rater_id: detail.raterId,
         rater_email: detail.raterEmail,
-        student_id: detail.studentId,
-        student_name: detail.studentName,
-        faculty_name: detail.facultyName,
-        threshold_hours: thresholdHours,
-        cycle_days: cycleDays,
+        cycle_marker: cycleMarker,
         sent_at: detail.sentAt,
       }));
 
-      const { error: logError } = await supabase.from(reminderLogTable).insert(logRows);
+      const { error: logError } = await supabase
+        .from(reminderLogTable)
+        .upsert(logRows, { onConflict: 'request_id,cycle_marker', ignoreDuplicates: true });
+
       if (logError) {
-        logWarning = logError.message;
+        trackingWriteOk = false;
+        trackingError = logError.message;
+        console.error('Error saving reminder logs:', logError.message);
       } else {
-        logSaved = true;
+        trackedCount = logRows.length;
       }
+    }
+
+    trackingSkippedCount = Math.max(sent - trackedCount, 0);
+
+    const todayStartUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const tomorrowStartUtc = new Date(todayStartUtc.getTime() + 24 * 60 * 60 * 1000);
+    let sentTodayCount = sent;
+
+    const { count: sentTodayDbCount, error: sentTodayError } = await supabase
+      .from(reminderLogTable)
+      .select('id', { count: 'exact', head: true })
+      .gte('sent_at', todayStartUtc.toISOString())
+      .lt('sent_at', tomorrowStartUtc.toISOString());
+
+    if (sentTodayError) {
+      console.error('Error counting today reminder logs:', sentTodayError.message);
+    } else {
+      sentTodayCount = sentTodayDbCount ?? 0;
     }
 
     return NextResponse.json({
@@ -235,11 +286,16 @@ async function processReminders(req: NextRequest, body?: { thresholdHours?: numb
       thresholdHours,
       cycleDays,
       cycleStartDate: configuredStartDate,
+      cycleMarker,
       overdueCount: requestRows.length,
       sent,
+      sentThisRun: sent > 0,
+      sentTodayCount,
+      trackingWriteOk,
+      trackingError,
+      trackedCount,
+      trackingSkippedCount,
       skipped,
-      logSaved,
-      logWarning,
       sentDetails,
     });
   } catch (error: unknown) {
