@@ -245,7 +245,16 @@ async function processReminders(req: NextRequest, body?: { thresholdHours?: numb
 }
 
 export async function GET(req: NextRequest) {
-  return processReminders(req);
+  const url = new URL(req.url);
+  const forceRun = url.searchParams.get('forceRun') === 'true';
+
+  const thresholdParam = url.searchParams.get('thresholdHours');
+  const thresholdHours = thresholdParam ? Number(thresholdParam) : undefined;
+
+  const cycleParam = url.searchParams.get('cycleDays');
+  const cycleDays = cycleParam ? Number(cycleParam) : undefined;
+
+  return processReminders(req, { forceRun, thresholdHours, cycleDays });
 }
 
 export async function POST(req: NextRequest) {
