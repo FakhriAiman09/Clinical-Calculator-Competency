@@ -4,6 +4,16 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 import { POST } from '../src/app/api/ai/summary/route';
 
+type MockFetchResponse = {
+  ok: boolean;
+  status: number;
+  text: () => Promise<string>;
+};
+
+type FetchMockSignature = (input: RequestInfo | URL, init?: RequestInit) => Promise<MockFetchResponse>;
+
+const fetchMock = jest.fn<FetchMockSignature>();
+
 // Tests for the AI summary API.
 describe('Functional AI summary route tests', () => {
   // Reset mocks and test env values before each test.
@@ -13,7 +23,7 @@ describe('Functional AI summary route tests', () => {
     process.env.OPENROUTER_SITE_NAME = 'CCC-Rater';
     process.env.OPENROUTER_API_KEY = 'openrouter-key';
     Object.defineProperty(global, 'fetch', {
-      value: jest.fn(),
+      value: fetchMock,
       writable: true,
     });
   });
@@ -50,7 +60,7 @@ describe('Functional AI summary route tests', () => {
 
   // Should return summary text when request is valid.
   test('returns a summary for valid clinical evaluation text', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
       text: async () => JSON.stringify({
@@ -74,7 +84,7 @@ describe('Functional AI summary route tests', () => {
 
   // Should use default model when given model is invalid.
   test('uses the default model when the requested model is invalid', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue({
+    fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
       text: async () => JSON.stringify({
@@ -93,7 +103,11 @@ describe('Functional AI summary route tests', () => {
       })
     );
 
-    const fetchOptions = (global.fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    const fetchOptions = fetchMock.mock.calls[0]?.[1];
+    expect(fetchOptions).toBeDefined();
+    if (!fetchOptions) {
+      throw new Error('Expected fetch options to be provided');
+    }
     const requestBody = JSON.parse(fetchOptions.body as string);
     expect(requestBody.model).toBe('z-ai/glm-4.5-air:free');
   });

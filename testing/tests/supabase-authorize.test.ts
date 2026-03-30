@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 // Mocked Supabase RPC pathway used by the authorization helper.
-const rpcMock = jest.fn();
+const rpcMock = jest.fn<() => Promise<{ data: boolean | null; error: { message: string } | null }>>();
 const schemaMock = jest.fn(() => ({ rpc: rpcMock }));
 const createClientMock = jest.fn(async () => ({ schema: schemaMock }));
 

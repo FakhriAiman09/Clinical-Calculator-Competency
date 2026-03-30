@@ -17,7 +17,8 @@
       "isolatedModules": true,
       "jsx": "react-jsx",
       "types": [
-        "jest"
+        "jest",
+        "@testing-library/jest-dom"
       ],
       "incremental": true,
       "plugins": [

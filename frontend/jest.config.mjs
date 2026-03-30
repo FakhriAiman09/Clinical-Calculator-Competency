@@ -1,5 +1,16 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from 'dotenv';
-config({ path: '.env.local' });
+
+const frontendDir = path.dirname(fileURLToPath(import.meta.url));
+
+// Load env files in priority order without overriding existing values.
+config({ path: path.join(frontendDir, '.env.test.local') });
+config({ path: path.join(frontendDir, '.env.local') });
+config({ path: path.join(frontendDir, '.env') });
+config({ path: path.join(frontendDir, '..', '.env.test.local') });
+config({ path: path.join(frontendDir, '..', '.env.local') });
+config({ path: path.join(frontendDir, '..', '.env') });
 
 /** @type {import('jest').Config} */
 const jestConfig = {

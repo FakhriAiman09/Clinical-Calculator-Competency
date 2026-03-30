@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
+type SentMail = {
+  to: string;
+  subject: string;
+  html: string;
+};
+
 // Shared nodemailer mocks so tests can verify email payloads without sending real emails.
-const sendMailMock = jest.fn();
+const sendMailMock = jest.fn<(mail: SentMail) => Promise<{ messageId: string }>>();
 const createTransportMock = jest.fn(() => ({ sendMail: sendMailMock }));
 
 jest.mock('nodemailer', () => ({

@@ -14,10 +14,10 @@ jest.mock('../../frontend/src/utils/supabase/client', () => ({
     from: jest.fn(() => ({
       select: jest.fn(() => ({
         eq: jest.fn(() => ({
-          single: jest.fn().mockResolvedValue({ data: null, error: null }),
+          single: jest.fn<() => Promise<{ data: null; error: null }>>().mockResolvedValue({ data: null, error: null }),
         })),
       })),
-      upsert: jest.fn().mockResolvedValue({ error: null }),
+      upsert: jest.fn<() => Promise<{ error: null }>>().mockResolvedValue({ error: null }),
     })),
   }),
 }));
