@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { render, screen, waitFor } from '@testing-library/react';
 
+// This file verifies auto theme mode resolves correctly when system prefers dark.
+
 const mockUseUser = jest.fn();
 
 jest.mock('../../frontend/src/context/UserContext', () => ({
@@ -38,7 +40,6 @@ describe('ThemeContext auto mode dark resolution', () => {
     jest.clearAllMocks();
     localStorage.clear();
     mockUseUser.mockReturnValue({ user: null });
-    // Simulate a user preference saved as auto mode.
     localStorage.setItem('theme', 'auto');
 
     Object.defineProperty(window, 'matchMedia', {
@@ -51,6 +52,7 @@ describe('ThemeContext auto mode dark resolution', () => {
     });
   });
 
+  // Auto mode should remain auto, but effective theme should resolve to dark.
   test('keeps theme as auto while resolving effective theme to dark', async () => {
     render(
       <ThemeProvider>

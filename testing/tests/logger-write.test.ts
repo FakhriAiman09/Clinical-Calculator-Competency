@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
+// Mock fs methods so logger output can be inspected without real file writes.
 const appendFileSyncMock = jest.fn();
 const existsSyncMock = jest.fn(() => true);
 const mkdirSyncMock = jest.fn();
@@ -15,11 +16,13 @@ jest.mock('fs', () => ({
 
 import { logger } from '../../frontend/src/utils/logger';
 
+// This file tests log write behavior and log content format.
 describe('logger', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
+  // INFO logs should include level, message, and serialized context.
   test('writes a timestamped INFO log entry with context data', () => {
     logger.info('Unit test info message', { source: 'jest' });
 

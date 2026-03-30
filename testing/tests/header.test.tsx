@@ -5,6 +5,8 @@ import { useUser } from '../../frontend/src/context/UserContext';
 import { usePathname } from 'next/navigation';
 import Header from '../../frontend/src/components/Header/header';
 
+// This file checks basic Header rendering behavior with mocked auth and routing.
+
 jest.mock('../../frontend/src/utils/supabase/client', () => ({
   createClient: jest.fn(() => ({
   })),
@@ -48,6 +50,7 @@ describe('Header Component', () => {
     (usePathname as jest.Mock).mockReturnValue('/dashboard');
   });
 
+  // Ensures the main application title appears.
   test('Renders the header component', async () => {
     await act(async () => {
       render(<Header />);
@@ -55,6 +58,7 @@ describe('Header Component', () => {
     expect(screen.getByText('Clinical Competency Calculator')).toBeInTheDocument();
   });
 
+  // Ensures navigation/profile controls are available to the user.
   test('Renders profile menu button', async () => {
     await act( async () => {
       render(<Header />)

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { render, screen, waitFor } from '@testing-library/react';
 
+// This file checks fallback behavior when saved theme value is invalid.
+
 const mockUseUser = jest.fn();
 
 jest.mock('../../frontend/src/context/UserContext', () => ({
@@ -49,6 +51,7 @@ describe('ThemeContext invalid localStorage fallback', () => {
     });
   });
 
+  // Invalid stored values should fall back safely to auto/light behavior.
   test('falls back to auto and resolves to light when storage value is invalid', async () => {
     render(
       <ThemeProvider>

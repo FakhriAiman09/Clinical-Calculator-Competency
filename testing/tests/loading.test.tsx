@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import Loading from '../../frontend/src/components/loading';
 import React from 'react';
 
+// This file checks basic rendering and accessibility of the Loading component.
 test('renders the loading spinner', () => {
   render(<Loading />);
   

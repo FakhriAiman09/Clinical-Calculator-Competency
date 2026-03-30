@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+// This file tests core theme state behavior (load, update, and apply).
+
 const mockUseUser = jest.fn();
 
 jest.mock('../../frontend/src/context/UserContext', () => ({
@@ -56,6 +58,7 @@ describe('ThemeContext', () => {
     delete document.documentElement.dataset.bsTheme;
   });
 
+  // Ensures the hook cannot be used outside the provider.
   test('throws when useTheme is used outside ThemeProvider', () => {
     const BrokenConsumer = () => {
       useTheme();
@@ -65,6 +68,7 @@ describe('ThemeContext', () => {
     expect(() => render(<BrokenConsumer />)).toThrow('useTheme must be used within ThemeProvider');
   });
 
+  // Ensures persisted theme is restored and applied for logged-out users.
   test('loads theme from localStorage when logged out and applies it to html dataset', async () => {
     localStorage.setItem('theme', 'dark');
 
@@ -81,6 +85,7 @@ describe('ThemeContext', () => {
     });
   });
 
+  // Ensures setTheme('dark') updates state, storage, and html theme attribute.
   test('setTheme updates state, localStorage, and html dataset', async () => {
     render(
       <ThemeProvider>
@@ -97,6 +102,7 @@ describe('ThemeContext', () => {
     });
   });
 
+  // Ensures setTheme('auto') keeps mode auto and clears forced html theme attribute.
   test('setTheme auto removes html dataset theme', async () => {
     render(
       <ThemeProvider>

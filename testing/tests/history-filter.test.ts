@@ -1,8 +1,10 @@
 import { describe, expect, test } from '@jest/globals';
 
+// This file tests the main duplicate-removal behavior in edit history.
 import { filterHistory } from '../../frontend/src/app/dashboard/admin/edit-questions-options/utils';
 
 describe('filterHistory', () => {
+  // Consecutive duplicate text entries are removed while actual changes are kept.
   test('removes consecutive duplicate text while preserving sequence changes', () => {
     const history = [
       { updated_at: new Date('2026-01-01T00:00:00Z'), updated_by: 'u1', text: 'Initial' },
