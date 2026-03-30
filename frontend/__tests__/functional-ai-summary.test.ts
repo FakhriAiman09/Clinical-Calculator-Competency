@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 import { POST } from '../src/app/api/ai/summary/route';
 
+// Tests for the AI summary API.
 describe('Functional AI summary route tests', () => {
+  // Reset mocks and test env values before each test.
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.OPENROUTER_SITE_URL = 'http://localhost:3000';
@@ -16,6 +18,7 @@ describe('Functional AI summary route tests', () => {
     });
   });
 
+  // Should return 400 if text is missing.
   test('returns 400 when text is missing', async () => {
     const response = await POST(
       new Request('http://localhost/api/ai/summary', {
@@ -29,6 +32,7 @@ describe('Functional AI summary route tests', () => {
     await expect(response.json()).resolves.toMatchObject({ error: 'missing_text' });
   });
 
+  // Should return 500 if API key is missing.
   test('returns 500 when API key is not configured', async () => {
     delete process.env.OPENROUTER_API_KEY;
 
@@ -44,6 +48,7 @@ describe('Functional AI summary route tests', () => {
     await expect(response.json()).resolves.toMatchObject({ error: 'missing_key' });
   });
 
+  // Should return summary text when request is valid.
   test('returns a summary for valid clinical evaluation text', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
@@ -67,6 +72,7 @@ describe('Functional AI summary route tests', () => {
     });
   });
 
+  // Should use default model when given model is invalid.
   test('uses the default model when the requested model is invalid', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,

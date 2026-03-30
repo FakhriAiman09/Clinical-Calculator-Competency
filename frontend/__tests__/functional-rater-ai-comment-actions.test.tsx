@@ -1,28 +1,34 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+// Mock role guard so page can render in test environment.
 jest.mock('@/utils/useRequiredRole', () => ({
   useRequireRole: jest.fn(),
 }));
 
+// Mock logged-in user context for rater workflow.
 jest.mock('@/context/UserContext', () => ({
   useUser: () => ({ user: { id: 'rater-1' } }),
 }));
 
+// Mock AI preference hook and usage counter.
 const incrementUsageMock = jest.fn(async () => {});
 jest.mock('@/utils/useAIPreferences', () => ({
   useAIPreferences: () => ({ model: 'z-ai/glm-4.5-air:free', incrementUsage: incrementUsageMock }),
 }));
 
+// Mock route query and router methods used by the page.
 jest.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: (k: string) => (k === 'id' ? 'req-1' : null) }),
   useRouter: () => ({ push: jest.fn(), prefetch: jest.fn() }),
 }));
 
+// Mock debounce to run immediately in tests.
 jest.mock('lodash', () => ({
   debounce: (fn: (...args: unknown[]) => void) => fn,
 }));
 
+// Mock MCQ source data to keep EPA rendering deterministic.
 jest.mock('@/utils/get-epa-data', () => ({
   getLatestMCQs: jest.fn(async () => [
     {
@@ -37,10 +43,12 @@ jest.mock('@/utils/get-epa-data', () => ({
   ]),
 }));
 
+// Mock outbound email side effect after rater actions.
 jest.mock('@/app/dashboard/rater/form/rater-email-api/send-email-rater.server', () => ({
   sendEmail: jest.fn(),
 }));
 
+// Mock Supabase table reads used by the form page.
 const fromMock = jest.fn((table: string) => {
   if (table === 'form_requests') {
     return {
@@ -87,6 +95,7 @@ const fromMock = jest.fn((table: string) => {
   };
 });
 
+// Mock RPC call for profile lookup.
 const rpcMock = jest.fn(async () => ({
   data: [
     { user_id: 'student-1', display_name: 'Student One', email: 'student1@test.com' },
@@ -103,7 +112,9 @@ jest.mock('@/utils/supabase/client', () => ({
 
 import RaterFormsPage from '@/app/dashboard/rater/form/RaterFormsPage';
 
+// Test suite for AI comment actions in the rater form.
 describe('Functional requirement: rater AI comment actions', () => {
+  // Reset mocks and browser globals before each test.
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
@@ -131,6 +142,7 @@ describe('Functional requirement: rater AI comment actions', () => {
     });
   });
 
+  // Shared helper: open one EPA, enter a comment, generate AI summary, return textarea.
   async function openOneEPAAndGenerateSummary() {
     render(<RaterFormsPage />);
 
@@ -164,6 +176,7 @@ describe('Functional requirement: rater AI comment actions', () => {
     return textarea as HTMLTextAreaElement;
   }
 
+  // Verifies Insert appends AI summary while keeping original text.
   test('supports Insert action to append AI summary', async () => {
     const textarea = await openOneEPAAndGenerateSummary();
 
@@ -175,6 +188,7 @@ describe('Functional requirement: rater AI comment actions', () => {
     });
   });
 
+  // Verifies Replace swaps original comment with AI summary text.
   test('supports Replace action to replace comment with AI summary', async () => {
     const textarea = await openOneEPAAndGenerateSummary();
 
@@ -185,6 +199,7 @@ describe('Functional requirement: rater AI comment actions', () => {
     });
   });
 
+  // Verifies original text remains unchanged if user does not pick Insert/Replace.
   test('supports reject behavior by keeping original text when no action is chosen', async () => {
     const textarea = await openOneEPAAndGenerateSummary();
 

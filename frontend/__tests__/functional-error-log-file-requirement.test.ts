@@ -1,7 +1,9 @@
+// Mock fs write and directory helpers used by logger.
 const appendFileSyncMock = jest.fn();
 const existsSyncMock = jest.fn(() => false);
 const mkdirSyncMock = jest.fn();
 
+// Replace Node fs module so no real file system writes happen in tests.
 jest.mock('fs', () => ({
   __esModule: true,
   default: {
@@ -13,11 +15,14 @@ jest.mock('fs', () => ({
 
 import { logger } from '@/utils/logger';
 
+// Tests for writing structured error logs.
 describe('Functional requirement: error log file', () => {
+  // Clear mock history before each test.
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
+  // Should create log folder (if needed) and append one ERROR log line with context.
   test('writes ERROR entry to error.log with context', () => {
     logger.error('Critical failure during evaluation submit', {
       requestId: 'req-88',
