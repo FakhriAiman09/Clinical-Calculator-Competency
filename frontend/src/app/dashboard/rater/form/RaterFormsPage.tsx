@@ -9,7 +9,7 @@ import { useRequireRole } from '@/utils/useRequiredRole';
 import { useUser } from '@/context/UserContext';
 import { useAIPreferences } from '@/utils/useAIPreferences';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap-icons/font/bootstrap-icons.css'; // ✅ Bootstrap Icons
+import 'bootstrap-icons/font/bootstrap-icons.css';
 import { sendEmail as sendRaterEmail } from './rater-email-api/send-email-rater.server';
 
 const supabase = createClient();
@@ -56,6 +56,11 @@ type AggregatedResponses = {
   };
 };
 
+type ActiveTarget =
+  | { type: 'epa'; epaId: number; questionId: string }
+  | { type: 'professionalism' }
+  | null;
+
 function compareNumericDotStrings(a: string, b: string): number {
   const partsA = a.split('.').map(Number);
   const partsB = b.split('.').map(Number);
@@ -92,8 +97,7 @@ export default function RaterFormsPage() {
   const [saveStatus, setSaveStatus] = useState<string>('');
   const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
   const [submittingFinal, setSubmittingFinal] = useState(false);
-  
-  // Track if we're editing an existing response
+
   const [existingResponseId, setExistingResponseId] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
 
@@ -102,15 +106,16 @@ export default function RaterFormsPage() {
   const studentId = searchParams?.get('id') ?? '';
 
   // =========================================================
-  // VOICE TO TEXT (interimResults + continuous)
+  // VOICE TO TEXT
   // =========================================================
   const recognitionRef = useRef<any>(null);
-  const activeTargetRef = useRef<{ epaId: number; questionId: string } | null>(null);
+  const activeTargetRef = useRef<ActiveTarget>(null);
 
   const [listeningByField, setListeningByField] = useState<Record<string, boolean>>({});
   const [statusByField, setStatusByField] = useState<Record<string, string>>({});
 
   const makeFieldKey = (epaId: number, questionId: string) => `${epaId}::${questionId}`;
+  const professionalismFieldKey = 'professionalism';
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -121,14 +126,19 @@ export default function RaterFormsPage() {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US'; // change to 'ms-MY' if needed
+    recognition.lang = 'en-US';
     recognition.interimResults = true;
     recognition.continuous = true;
 
     recognition.onstart = () => {
       const target = activeTargetRef.current;
       if (!target) return;
-      const key = makeFieldKey(target.epaId, target.questionId);
+
+      const key =
+        target.type === 'professionalism'
+          ? professionalismFieldKey
+          : makeFieldKey(target.epaId, target.questionId);
+
       setListeningByField((prev) => ({ ...prev, [key]: true }));
       setStatusByField((prev) => ({ ...prev, [key]: 'Listening…' }));
     };
@@ -136,7 +146,12 @@ export default function RaterFormsPage() {
     recognition.onend = () => {
       const target = activeTargetRef.current;
       if (!target) return;
-      const key = makeFieldKey(target.epaId, target.questionId);
+
+      const key =
+        target.type === 'professionalism'
+          ? professionalismFieldKey
+          : makeFieldKey(target.epaId, target.questionId);
+
       setListeningByField((prev) => ({ ...prev, [key]: false }));
       setStatusByField((prev) => ({ ...prev, [key]: '' }));
     };
@@ -144,7 +159,12 @@ export default function RaterFormsPage() {
     recognition.onerror = (e: any) => {
       const target = activeTargetRef.current;
       if (!target) return;
-      const key = makeFieldKey(target.epaId, target.questionId);
+
+      const key =
+        target.type === 'professionalism'
+          ? professionalismFieldKey
+          : makeFieldKey(target.epaId, target.questionId);
+
       setListeningByField((prev) => ({ ...prev, [key]: false }));
       setStatusByField((prev) => ({ ...prev, [key]: `Error: ${e?.error || 'unknown'}` }));
     };
@@ -153,7 +173,10 @@ export default function RaterFormsPage() {
       const target = activeTargetRef.current;
       if (!target) return;
 
-      const key = makeFieldKey(target.epaId, target.questionId);
+      const key =
+        target.type === 'professionalism'
+          ? professionalismFieldKey
+          : makeFieldKey(target.epaId, target.questionId);
 
       let finalText = '';
       let interimText = '';
@@ -165,17 +188,21 @@ export default function RaterFormsPage() {
       }
 
       if (finalText.trim()) {
-        setTextInputs((prev) => {
-          const existing = prev[target.epaId]?.[target.questionId] ?? '';
-          const newValue = (existing ? existing.trimEnd() + ' ' : '') + finalText.trim();
-          return {
-            ...prev,
-            [target.epaId]: {
-              ...prev[target.epaId],
-              [target.questionId]: newValue,
-            },
-          };
-        });
+        if (target.type === 'professionalism') {
+          setProfessionalism((prev) => (prev ? prev.trimEnd() + ' ' : '') + finalText.trim());
+        } else {
+          setTextInputs((prev) => {
+            const existing = prev[target.epaId]?.[target.questionId] ?? '';
+            const newValue = (existing ? existing.trimEnd() + ' ' : '') + finalText.trim();
+            return {
+              ...prev,
+              [target.epaId]: {
+                ...prev[target.epaId],
+                [target.questionId]: newValue,
+              },
+            };
+          });
+        }
         setSaveStatus('Saving...');
       }
 
@@ -212,14 +239,36 @@ export default function RaterFormsPage() {
         try {
           recognitionRef.current.stop();
         } catch {}
-        activeTargetRef.current = { epaId, questionId };
+        activeTargetRef.current = { type: 'epa', epaId, questionId };
+        recognitionRef.current.start();
+      }
+    } catch {}
+  };
+
+  const toggleProfessionalismDictation = () => {
+    if (!recognitionRef.current) {
+      setSaveStatus('Speech-to-text not supported. Use Chrome/Edge.');
+      setTimeout(() => setSaveStatus(''), 5000);
+      return;
+    }
+
+    const isListening = !!listeningByField[professionalismFieldKey];
+
+    try {
+      if (isListening) {
+        recognitionRef.current.stop();
+      } else {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+        activeTargetRef.current = { type: 'professionalism' };
         recognitionRef.current.start();
       }
     } catch {}
   };
 
   // =========================
-  // AI SUMMARY (per field)
+  // AI SUMMARY
   // =========================
   const [summaryByField, setSummaryByField] = useState<Record<string, string>>({});
   const [summarizingByField, setSummarizingByField] = useState<Record<string, boolean>>({});
@@ -231,7 +280,9 @@ export default function RaterFormsPage() {
 
     if (!text) {
       setSummaryErrorByField((prev) => ({ ...prev, [key]: 'Nothing to summarize yet.' }));
-      setTimeout(() => setSummaryErrorByField((prev) => ({ ...prev, [key]: '' })), 3000);
+      setTimeout(() => {
+        setSummaryErrorByField((prev) => ({ ...prev, [key]: '' }));
+      }, 3000);
       return;
     }
 
@@ -259,7 +310,55 @@ export default function RaterFormsPage() {
       await incrementUsage();
       setSummaryByField((prev) => ({ ...prev, [key]: (data.summary ?? '').trim() }));
     } catch (err: any) {
-      setSummaryErrorByField((prev) => ({ ...prev, [key]: err?.message || 'Summary failed. Try again.' }));
+      setSummaryErrorByField((prev) => ({
+        ...prev,
+        [key]: err?.message || 'Summary failed. Try again.',
+      }));
+    } finally {
+      setSummarizingByField((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const requestProfessionalismSummary = async () => {
+    const key = professionalismFieldKey;
+    const text = professionalism.trim();
+
+    if (!text) {
+      setSummaryErrorByField((prev) => ({ ...prev, [key]: 'Nothing to summarize yet.' }));
+      setTimeout(() => {
+        setSummaryErrorByField((prev) => ({ ...prev, [key]: '' }));
+      }, 3000);
+      return;
+    }
+
+    setSummarizingByField((prev) => ({ ...prev, [key]: true }));
+    setSummaryErrorByField((prev) => ({ ...prev, [key]: '' }));
+
+    try {
+      const res = await fetch('/api/ai/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, model: aiModel }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const friendlyMsg =
+          data?.message ||
+          (res.status === 429
+            ? 'Daily AI limit reached. Resets at midnight UTC. See Settings to learn more.'
+            : 'Summary failed. Please try again.');
+        throw new Error(friendlyMsg);
+      }
+
+      await incrementUsage();
+      setSummaryByField((prev) => ({ ...prev, [key]: (data.summary ?? '').trim() }));
+    } catch (err: any) {
+      setSummaryErrorByField((prev) => ({
+        ...prev,
+        [key]: err?.message || 'Summary failed. Try again.',
+      }));
     } finally {
       setSummarizingByField((prev) => ({ ...prev, [key]: false }));
     }
@@ -298,6 +397,25 @@ export default function RaterFormsPage() {
       },
     }));
 
+    setSaveStatus('Saving...');
+    setSummaryByField((prev) => ({ ...prev, [key]: '' }));
+  };
+
+  const insertProfessionalismSummary = () => {
+    const key = professionalismFieldKey;
+    const summary = (summaryByField[key] ?? '').trim();
+    if (!summary) return;
+
+    setProfessionalism((prev) => (prev ? prev.trimEnd() + '\n\n' : '') + `${summary}\n`);
+    setSaveStatus('Saving...');
+  };
+
+  const replaceProfessionalismWithSummary = () => {
+    const key = professionalismFieldKey;
+    const summary = (summaryByField[key] ?? '').trim();
+    if (!summary) return;
+
+    setProfessionalism(`${summary}\n`);
     setSaveStatus('Saving...');
     setSummaryByField((prev) => ({ ...prev, [key]: '' }));
   };
@@ -394,6 +512,7 @@ export default function RaterFormsPage() {
         display_name?: string;
         email?: string;
       }
+
       const student = (users as User[]).find((u) => u.user_id === formData.student_id);
 
       const fr: FormRequest = {
@@ -407,7 +526,6 @@ export default function RaterFormsPage() {
     fetchFormRequestDetails();
   }, [studentId]);
 
-  // Fetch existing form response for editing (if reopened by admin)
   useEffect(() => {
     async function fetchExistingResponse() {
       if (!studentId || !kfData || kfData.length === 0) return;
@@ -420,25 +538,20 @@ export default function RaterFormsPage() {
           .single();
 
         if (error || !existingResponse) {
-          // No existing response - new form
           setIsEditMode(false);
           return;
         }
 
-        // Found existing response - enter edit mode
         setExistingResponseId(existingResponse.response_id);
         setIsEditMode(true);
         setSaveStatus('Loading previous responses...');
 
-        // Extract the aggregated response data
         const responseData = existingResponse.response as any;
         const aggregatedResponses = responseData?.response || {};
 
-        // Reverse-map aggregated responses back to individual question responses
         const rebuiltResponses: Responses = {};
         const rebuiltTextInputs: { [epa: number]: { [questionId: string]: string } } = {};
 
-        // Create reverse mapping from kf to questions
         const kfToQuestions: { [key: string]: KeyFunction[] } = {};
         kfData.forEach((kf) => {
           const key = `${kf.epa}.${kf.kf}`;
@@ -446,7 +559,6 @@ export default function RaterFormsPage() {
           kfToQuestions[key].push(kf);
         });
 
-        // Process each EPA in the aggregated response
         Object.keys(aggregatedResponses).forEach((epaKey) => {
           const epaNum = parseInt(epaKey, 10);
           const epaData = aggregatedResponses[epaKey];
@@ -454,13 +566,11 @@ export default function RaterFormsPage() {
           if (!rebuiltResponses[epaNum]) rebuiltResponses[epaNum] = {};
           if (!rebuiltTextInputs[epaNum]) rebuiltTextInputs[epaNum] = {};
 
-          // Process each KF in this EPA
           Object.keys(epaData).forEach((kfKey) => {
-            const kfData = epaData[kfKey];
+            const oneKfData = epaData[kfKey];
             const fullKey = `${epaNum}.${kfKey}`;
             const questions = kfToQuestions[fullKey] || [];
 
-            // Distribute data back to questions
             questions.forEach((question, idx) => {
               const questionId = question.questionId;
 
@@ -468,32 +578,27 @@ export default function RaterFormsPage() {
                 rebuiltResponses[epaNum][questionId] = { text: '' } as any;
               }
 
-              // Restore checkbox/option values
-              Object.keys(kfData).forEach((key) => {
-                if (key !== 'text' && typeof kfData[key] === 'boolean') {
-                  rebuiltResponses[epaNum][questionId][key] = kfData[key];
+              Object.keys(oneKfData).forEach((key) => {
+                if (key !== 'text' && typeof oneKfData[key] === 'boolean') {
+                  rebuiltResponses[epaNum][questionId][key] = oneKfData[key];
                 }
               });
 
-              // Restore text comments (distribute array items)
-              if (Array.isArray(kfData.text) && kfData.text[idx]) {
-                rebuiltTextInputs[epaNum][questionId] = kfData.text[idx] || '';
-                rebuiltResponses[epaNum][questionId].text = kfData.text[idx] || '';
+              if (Array.isArray(oneKfData.text) && oneKfData.text[idx]) {
+                rebuiltTextInputs[epaNum][questionId] = oneKfData.text[idx] || '';
+                rebuiltResponses[epaNum][questionId].text = oneKfData.text[idx] || '';
               }
             });
           });
         });
 
-        // Apply the restored data to state
         setResponses(rebuiltResponses);
         setTextInputs(rebuiltTextInputs);
         setProfessionalism(existingResponse.professionalism || '');
 
-        // Mark EPAs as selected if they have data
         const selectedEPAIds = Object.keys(rebuiltResponses).map(Number);
         setSelectedEPAs(selectedEPAIds);
 
-        // Mark EPAs as completed
         const completed: { [epa: number]: boolean } = {};
         selectedEPAIds.forEach((epaId) => {
           completed[epaId] = true;
@@ -783,10 +888,8 @@ export default function RaterFormsPage() {
       return;
     }
 
-    // Update existing response or insert new one
     let responseError;
     if (isEditMode && existingResponseId) {
-      // Update existing response
       const { error } = await supabase
         .from('form_responses')
         .update({
@@ -800,7 +903,6 @@ export default function RaterFormsPage() {
         console.log('Updated existing response:', existingResponseId);
       }
     } else {
-      // Insert new response
       const { error } = await supabase.from('form_responses').insert({
         request_id: formRequest.id,
         response: localData,
@@ -815,7 +917,6 @@ export default function RaterFormsPage() {
       return;
     }
 
-    // notify student via email that their evaluation is completed
     try {
       if (formRequest?.email) {
         await sendRaterEmail({
@@ -894,7 +995,6 @@ export default function RaterFormsPage() {
           color: #dc3545;
         }
 
-        /* icon size */
         .vtt-btn i {
           font-size: 20px;
           line-height: 1;
@@ -908,7 +1008,6 @@ export default function RaterFormsPage() {
       `}</style>
 
       <div className='container-fluid d-flex'>
-        {/* Sidebar */}
         <div className='col-md-3 bg-body-secondary p-4 border-end'>
           <h3 className='mb-3'>Selected EPAs</h3>
 
@@ -969,7 +1068,6 @@ export default function RaterFormsPage() {
             )}
           </ul>
 
-          {/* Save status indicator */}
           <div className='col-md-3 bg-body-secondary p-4 border-end position-relative'>
             <div className='save-status-container'>
               <div
@@ -993,7 +1091,6 @@ export default function RaterFormsPage() {
           </div>
         </div>
 
-        {/* Main Content */}
         <div className='col-md-9 p-4'>
           {submitSuccess && (
             <div className='alert alert-success mb-3'>Form submitted successfully! Redirecting to dashboard...</div>
@@ -1003,7 +1100,7 @@ export default function RaterFormsPage() {
             <div className='alert alert-warning mb-3 d-flex align-items-center'>
               <i className='bi bi-pencil-square me-2'></i>
               <div>
-                <strong>Edit Mode:</strong> You are updating a previously submitted evaluation. 
+                <strong>Edit Mode:</strong> You are updating a previously submitted evaluation.
                 Your changes will replace the existing submission.
               </div>
             </div>
@@ -1066,7 +1163,6 @@ export default function RaterFormsPage() {
             </>
           )}
 
-          {/* Key Function Form Display */}
           {currentEPA !== null && (
             <div key={currentEPA} className='card mt-4'>
               <div className='card-header bg-primary text-white'>
@@ -1115,7 +1211,6 @@ export default function RaterFormsPage() {
                           ))}
                         </div>
 
-                        {/* Additional comments with AI + mic INSIDE textarea */}
                         <div>
                           <h6 className='mb-2'>Additional comments:</h6>
 
@@ -1128,7 +1223,6 @@ export default function RaterFormsPage() {
                             />
 
                             <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 8, zIndex: 2 }}>
-                              {/* ✅ AI Summary button using Bootstrap icon */}
                               <button
                                 type='button'
                                 className='vtt-btn'
@@ -1139,7 +1233,6 @@ export default function RaterFormsPage() {
                                 <i className={`bi ${isSummarizing ? 'bi-hourglass-split' : 'bi-stars'}`} />
                               </button>
 
-                              {/* ✅ Mic button using Bootstrap icon */}
                               <button
                                 type='button'
                                 className={`vtt-btn ${isListening ? 'recording' : ''}`}
@@ -1205,27 +1298,102 @@ export default function RaterFormsPage() {
             </div>
           )}
 
-          {/* Professionalism Form */}
           {showProfessionalismForm && (
             <div className='card mt-4'>
               <div className='card-header bg-primary text-white'>Professionalism Assessment</div>
               <div className='card-body'>
                 <div className='mb-4'>
                   <p className='fw-bold'>Please describe the student&apos;s professionalism:</p>
-                  <textarea
-                    className='form-control'
-                    placeholder="Describe the student's professionalism..."
-                    rows={5}
-                    value={professionalism}
-                    onChange={(e) => handleProfessionalismChange(e.target.value)}
-                  />
+
+                  <div className='comment-wrapper'>
+                    <textarea
+                      className='form-control comment-textarea'
+                      placeholder="Describe the student's professionalism..."
+                      rows={5}
+                      value={professionalism}
+                      onChange={(e) => handleProfessionalismChange(e.target.value)}
+                    />
+
+                    <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 8, zIndex: 2 }}>
+                      <button
+                        type='button'
+                        className='vtt-btn'
+                        onClick={requestProfessionalismSummary}
+                        title='Generate AI summary from professionalism comments'
+                        disabled={!!summarizingByField[professionalismFieldKey]}
+                      >
+                        <i
+                          className={`bi ${
+                            summarizingByField[professionalismFieldKey] ? 'bi-hourglass-split' : 'bi-stars'
+                          }`}
+                        />
+                      </button>
+
+                      <button
+                        type='button'
+                        className={`vtt-btn ${listeningByField[professionalismFieldKey] ? 'recording' : ''}`}
+                        onClick={toggleProfessionalismDictation}
+                        title={listeningByField[professionalismFieldKey] ? 'Stop voice input' : 'Start voice input'}
+                      >
+                        <i
+                          className={`bi ${
+                            listeningByField[professionalismFieldKey] ? 'bi-stop-circle-fill' : 'bi-mic-fill'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {statusByField[professionalismFieldKey] ? (
+                    <div className='vtt-status'>{statusByField[professionalismFieldKey]}</div>
+                  ) : null}
+
+                  {summaryErrorByField[professionalismFieldKey] ? (
+                    <div className='vtt-status' style={{ color: '#dc3545' }}>
+                      {summaryErrorByField[professionalismFieldKey]}
+                    </div>
+                  ) : null}
+
+                  {summaryByField[professionalismFieldKey] ? (
+                    <div className='mt-2 p-2 border rounded bg-body-secondary'>
+                      <div className='d-flex justify-content-between align-items-center mb-1'>
+                        <small className='text-muted'>Summary</small>
+
+                        <div className='d-flex gap-2'>
+                          <button
+                            type='button'
+                            className='btn btn-sm btn-outline-secondary'
+                            onClick={insertProfessionalismSummary}
+                          >
+                            Insert
+                          </button>
+
+                          <button
+                            type='button'
+                            className='btn btn-sm btn-outline-danger'
+                            onClick={replaceProfessionalismWithSummary}
+                            title='Replace comments with AI summary (deletes original)'
+                          >
+                            Replace
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
+                        {summaryByField[professionalismFieldKey]}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <button className='btn btn-success mt-3' onClick={finalSubmit} disabled={submittingFinal}>
-                  {submittingFinal 
-                    ? (isEditMode ? 'Updating...' : 'Submitting...') 
-                    : (isEditMode ? 'Update Evaluation' : 'Submit Final Evaluation')
-                  }
+                  {submittingFinal
+                    ? isEditMode
+                      ? 'Updating...'
+                      : 'Submitting...'
+                    : isEditMode
+                    ? 'Update Evaluation'
+                    : 'Submit Final Evaluation'}
                 </button>
               </div>
             </div>
