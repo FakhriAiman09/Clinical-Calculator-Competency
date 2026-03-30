@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/USER/Documents/GitHub/Clinical-Calculator-Competency/frontend/src -iname *ai* -o -iname *comment* -o -iname *rater*)",
+      "Bash(grep -r \"mic\\\\|microphone\\\\|speech\\\\|voice\\\\|SpeechRecognition\\\\|MediaRecorder\\\\|audio\" /c/Users/USER/Documents/GitHub/Clinical-Calculator-Competency/frontend/src --include=*.tsx --include=*.ts --include=*.jsx --include=*.js)",
+      "Bash(xargs grep:*)",
+      "Bash(wc -l c:/Users/USER/Documents/GitHub/Clinical-Calculator-Competency/frontend/__tests__/*.tsx c:/Users/USER/Documents/GitHub/Clinical-Calculator-Competency/frontend/__tests__/*.ts)"
+    ]
+  }
+}
