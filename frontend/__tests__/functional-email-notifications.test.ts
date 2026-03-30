@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
+// Shared nodemailer mocks so tests can verify email payloads without sending real emails.
 const sendMailMock = jest.fn();
 const createTransportMock = jest.fn(() => ({ sendMail: sendMailMock }));
 
@@ -16,6 +17,7 @@ import { sendEmail as sendStudentCompletionEmail } from '../src/app/dashboard/ra
 import { sendResubmissionEmail } from '../src/app/dashboard/admin/all-reports/admin-email-api/send-email-admin.server';
 
 describe('Functional email notification tests', () => {
+  // Reset mocks and provide required env vars before every test.
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.SMTP_USER = 'smtp-user@test.com';
@@ -24,6 +26,7 @@ describe('Functional email notification tests', () => {
     sendMailMock.mockResolvedValue({ messageId: 'msg-123' });
   });
 
+  // Verifies request email is sent when a student creates a form request.
   test('sends request email to rater after student creates a request', async () => {
     const result = await sendRequestEmail({
       to: 'rater@test.com',
@@ -36,6 +39,7 @@ describe('Functional email notification tests', () => {
     expect(sendMailMock).toHaveBeenCalledTimes(1);
   });
 
+  // Verifies request email content includes student info and correct links.
   test('request email contains the student name and rater form link', async () => {
     await sendRequestEmail({
       to: 'rater@test.com',
@@ -51,6 +55,7 @@ describe('Functional email notification tests', () => {
     expect(mail.html).toContain('/login?redirectTo=/dashboard/rater/form?id=req-456');
   });
 
+  // Verifies reminder email is sent for incomplete assessments.
   test('sends reminder email for incomplete assessment', async () => {
     const result = await sendReminderEmail({
       to: 'faculty@test.com',
@@ -64,6 +69,7 @@ describe('Functional email notification tests', () => {
     expect(sendMailMock).toHaveBeenCalledTimes(1);
   });
 
+  // Verifies default greeting and threshold-hour details are included in reminder email.
   test('reminder email uses default Faculty greeting and includes threshold hours', async () => {
     await sendReminderEmail({
       to: 'faculty@test.com',
@@ -79,6 +85,7 @@ describe('Functional email notification tests', () => {
     expect(mail.html).toContain('/dashboard/rater/form?id=req-789');
   });
 
+  // Verifies completion email is sent to student with report page link.
   test('sends completion email to student with report link', async () => {
     const result = await sendStudentCompletionEmail({
       to: 'student@test.com',
@@ -92,6 +99,7 @@ describe('Functional email notification tests', () => {
     expect(mail.html).toContain('/dashboard/student/report');
   });
 
+  // Verifies admin resubmission email includes flagged reasons and response-specific form link.
   test('sends admin resubmission email with flagged reasons and response-specific link', async () => {
     const result = await sendResubmissionEmail({
       to: 'rater@test.com',

@@ -10,7 +10,11 @@ jest.mock('@/utils/useRequiredRole', () => ({
 
 import { analyzeCommentsQuality, reasonLabel } from '@/app/dashboard/admin/all-reports/page';
 
+// Test suite for admin comment quality analysis and flag labeling
+// analyzeCommentsQuality: detects repeated, generic, or low-quality comments
+// reasonLabel: converts flag reason codes to human-readable text for admin UI badges
 describe('Functional requirement: admin flagged comments', () => {
+ 
   test('flags low-quality and repeated comments with reasons', () => {
     const comments = [
       'good',

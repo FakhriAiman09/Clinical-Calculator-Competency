@@ -10,11 +10,16 @@ jest.mock('@/utils/supabase/server', () => ({
 
 import { submitSample } from '@/app/dashboard/admin/form/actions';
 
+// Test suite for concurrent form submission handling
 describe('Functional requirement: concurrent evaluation submissions', () => {
+  // Clear all mocks before each test to ensure clean state
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
+  // Test that submitSample handles 20 concurrent submissions
+  // Generates 20 varied payloads with different user IDs and scores (1-4 range)
+  // Verifies all 20 submissions succeed and database insert is called 20 times
   test('handles multiple submissions simultaneously', async () => {
     const payloads = Array.from({ length: 20 }, (_, index) => ({
       user_id: `u${index + 1}`,
