@@ -191,7 +191,7 @@ function detectFaultReasons(textRaw: string): FaultReason[] {
   return Array.from(new Set(reasons));
 }
 
-function analyzeCommentsQuality(
+export function analyzeCommentsQuality(
   comments: string[]
 ): { flagged: FlaggedComment[]; total: number; reasonCounts: Record<FaultReason, number> } {
   const flagged: FlaggedComment[] = [];
@@ -239,7 +239,7 @@ function analyzeCommentsQuality(
 }
 
 /** Labels that show exactly what the flag means (your request) */
-function reasonLabel(r: FaultReason) {
+export function reasonLabel(r: FaultReason) {
   switch (r) {
     case 'NO_CONTENT':
       return 'No content / empty';

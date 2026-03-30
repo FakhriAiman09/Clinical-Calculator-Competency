@@ -3,7 +3,7 @@ import { render, screen, fireEvent , act} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { useUser } from '../../frontend/src/context/UserContext';
 import { usePathname } from 'next/navigation';
-import Header from '../../frontend/src/components/Header';
+import Header from '../../frontend/src/components/Header/header';
 
 jest.mock('../../frontend/src/utils/supabase/client', () => ({
   createClient: jest.fn(() => ({
@@ -55,14 +55,12 @@ describe('Header Component', () => {
     expect(screen.getByText('Clinical Competency Calculator')).toBeInTheDocument();
   });
 
-  test('Updates display name field on change', async () => {
+  test('Renders profile menu button', async () => {
     await act( async () => {
       render(<Header />)
     });
-    const displayNameInput = screen.getByLabelText(/Display Name/i) as HTMLInputElement;
-
-    fireEvent.change(displayNameInput, { target: { value: 'New Name' } });
-    expect(displayNameInput.value).toBe('New Name');
+    expect(screen.getByRole('button', { name: /toggle navigation/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button').length).toBeGreaterThan(1);
   });
 
 // test('toggles profile menu on button click', async () => {

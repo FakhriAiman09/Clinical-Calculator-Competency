@@ -18,7 +18,7 @@ const devLabel = (val: number | null | undefined) =>
   val == null ? '—' : DEV_LABELS[Math.floor(val)] ?? '—';
 
 /* Annotate raw numbers in AI text with their level labels */
-function annotateScores(text: string): string {
+export function annotateScores(text: string): string {
   // Replace patterns like "2.0625" or "Score: 1.375" with "2.0625 (Developing)"
   return text.replace(/\b(\d+\.\d+)\b/g, (match) => {
     const num = parseFloat(match);
@@ -31,7 +31,7 @@ function annotateScores(text: string): string {
 }
 
 /* Strip CSV artifacts: surrounding quotes and trailing commas */
-function sanitize(value: string | null | undefined): string {
+export function sanitize(value: string | null | undefined): string {
   if (!value) return '';
   return value
     .replace(/^["']|["']$/g, '')   // remove surrounding quotes
