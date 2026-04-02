@@ -48,7 +48,7 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
     }
     setGeneratingCsv(true);
     try {
-      const res = await fetch(buildCsvUrl(studentId, reportId));
+      const res = await fetch(buildCsvUrl(studentId!, reportId!));
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
