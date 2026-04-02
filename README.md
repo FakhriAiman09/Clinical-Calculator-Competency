@@ -75,6 +75,7 @@ Clinical-Calculator-Competency/
 - Python 3.12+
 - A Supabase project with the required tables and storage buckets
 - Google Gemini API key
+- OpenRouter API key
 
 ### Frontend
 
