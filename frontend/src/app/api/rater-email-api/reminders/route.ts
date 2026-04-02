@@ -27,6 +27,11 @@ interface ReminderLogRow {
   sent_at: string;
 }
 
+/**
+ * Parses a YYYY-MM-DD date string as midnight UTC.
+ * @param {string} dateText - Date string in YYYY-MM-DD format.
+ * @returns A Date object at 00:00:00 UTC, or null if the format is invalid.
+ */
 function parseDateOnlyUtc(dateText: string): Date | null {
   const trimmed = dateText.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
@@ -36,6 +41,13 @@ function parseDateOnlyUtc(dateText: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+/**
+ * Determines whether today falls on a reminder cycle day.
+ * @param {Date} now - Current date/time.
+ * @param {Date} startDate - The cycle anchor date.
+ * @param {number} cycleDays - Number of days between reminder cycles.
+ * @returns True if today is a cycle day (i.e. days since start is divisible by cycleDays).
+ */
 function shouldRunCycle(now: Date, startDate: Date, cycleDays: number): boolean {
   if (now.getTime() < startDate.getTime()) {
     return false;
@@ -46,6 +58,14 @@ function shouldRunCycle(now: Date, startDate: Date, cycleDays: number): boolean 
   return daysSinceStart % cycleDays === 0;
 }
 
+/**
+ * Returns the ISO date string (YYYY-MM-DD) of the start of the current cycle.
+ * Used as a deduplication key to prevent sending duplicate reminders in the same cycle.
+ * @param {Date} now - Current date/time.
+ * @param {Date} startDate - The cycle anchor date.
+ * @param {number} cycleDays - Number of days between reminder cycles.
+ * @returns YYYY-MM-DD string representing the current cycle's start date.
+ */
 function getCycleMarker(now: Date, startDate: Date, cycleDays: number): string {
   if (now.getTime() < startDate.getTime()) {
     return now.toISOString().slice(0, 10);
@@ -58,6 +78,12 @@ function getCycleMarker(now: Date, startDate: Date, cycleDays: number): string {
   return cycleStart.toISOString().slice(0, 10);
 }
 
+/**
+ * Checks if the request is authorized via bearer token or x-reminder-secret header.
+ * If no secret is configured in the environment, all requests are allowed.
+ * @param {NextRequest} req - The incoming request.
+ * @returns True if authorized.
+ */
 function isAuthorized(req: NextRequest): boolean {
   const expectedSecret = process.env.REMINDER_API_SECRET ?? process.env.CRON_SECRET;
   if (!expectedSecret) {
@@ -83,6 +109,13 @@ function isAuthorized(req: NextRequest): boolean {
   return bearerToken === expectedSecret;
 }
 
+/**
+ * Core reminder processing logic. Finds overdue form requests and sends email reminders
+ * to raters who have not yet completed them, deduplicating by cycle marker.
+ * @param {NextRequest} req - The incoming request (used for auth check).
+ * @param body - Optional config: `thresholdHours` (default 96), `cycleDays` (default 4), `forceRun` (skip cycle check).
+ * @returns JSON response with counts of sent/skipped reminders and tracking status.
+ */
 async function processReminders(req: NextRequest, body?: { thresholdHours?: number; cycleDays?: number; forceRun?: boolean }) {
   try {
     if (!isAuthorized(req)) {
@@ -304,6 +337,11 @@ async function processReminders(req: NextRequest, body?: { thresholdHours?: numb
   }
 }
 
+/**
+ * GET /api/rater-email-api/reminders
+ * Triggers reminder processing via query params.
+ * Accepts: `forceRun`, `thresholdHours`, `cycleDays`.
+ */
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const forceRun = url.searchParams.get('forceRun') === 'true';
@@ -317,6 +355,11 @@ export async function GET(req: NextRequest) {
   return processReminders(req, { forceRun, thresholdHours, cycleDays });
 }
 
+/**
+ * POST /api/rater-email-api/reminders
+ * Triggers reminder processing via JSON body.
+ * Accepts: `{ thresholdHours?, cycleDays?, forceRun? }`.
+ */
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   return processReminders(req, body);

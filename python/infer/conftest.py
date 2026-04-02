@@ -1,3 +1,9 @@
+"""Pytest configuration for the inference package.
+
+This module patches Docker-specific filesystem and logging behavior so the
+listener module can be imported safely during local test runs.
+"""
+
 import logging
 import os
 from unittest.mock import MagicMock, patch
@@ -8,9 +14,11 @@ from unittest.mock import MagicMock, patch
 # We patch both before collection via pytest_configure.
 
 def pytest_configure(config):
+    """Apply test-safe patches before pytest collects inference modules."""
     # Patch os.makedirs to skip /app paths
     original_makedirs = os.makedirs
     def safe_makedirs(path, *args, **kwargs):
+        """Ignore Docker-only ``/app`` directories while preserving local calls."""
         if str(path).startswith('/app'):
             return
         original_makedirs(path, *args, **kwargs)
@@ -21,6 +29,7 @@ def pytest_configure(config):
     # can compare record.levelno >= hdlr.level without AttributeError.
     original_file_handler = logging.FileHandler
     def safe_file_handler(filename, *args, **kwargs):
+        """Return a mock file handler for container-only log file paths."""
         if str(filename).startswith('/app'):
             mock_handler = MagicMock()
             mock_handler.level = 0  # logging.NOTSET — accept all records

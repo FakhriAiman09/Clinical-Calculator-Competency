@@ -4,6 +4,12 @@ import { getLatestMCQs } from '@/utils/get-epa-data';
 import { createClient } from '@/utils/supabase/server';
 import type { MCQ } from '@/utils/types';
 
+/**
+ * Fetches the display name and email of a user by their Supabase ID.
+ * Used to show who last updated an MCQ question or option.
+ * @param {string} id - Supabase user ID of the updater.
+ * @returns The user's id, display_name, and email, or null values if not found.
+ */
 export async function getUpdaterDetails(
   id: string
 ): Promise<{ id: string; display_name: string | null; email: string } | null> {
@@ -33,6 +39,12 @@ export async function getUpdaterDetails(
   };
 }
 
+/**
+ * Updates the text of an MCQ option across all questions that use it.
+ * Inserts a new version of the MCQ dataset into `mcqs_options`.
+ * @param {string} key - The option key to update (e.g. 'optionA').
+ * @param {string} newText - The new text for the option.
+ */
 export async function submitNewOption(key: string, newText: string) {
   const supabase = await createClient();
 
@@ -53,6 +65,12 @@ export async function submitNewOption(key: string, newText: string) {
   if (error) console.error('Error updating MCQ option:', error);
 }
 
+/**
+ * Updates the question text of a specific MCQ.
+ * Inserts a new version of the MCQ dataset into `mcqs_options`.
+ * @param {MCQ} mcq - The MCQ object whose question text should be updated.
+ * @param {string} newText - The new question text.
+ */
 export async function submitNewQuestion(mcq: MCQ, newText: string) {
   const supabase = await createClient();
 

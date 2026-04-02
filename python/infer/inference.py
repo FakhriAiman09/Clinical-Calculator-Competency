@@ -1,6 +1,8 @@
-"""
-Inference module for BERT model to classify sentences.
-This module loads a pre-trained BERT model and predicts the class for each sentence
+"""Inference helpers for the Clinical Competency Calculator.
+
+This module loads trained BERT and SVM models, performs inference for incoming
+assessment data, downloads model artifacts from Supabase Storage, and generates
+AI-written report summaries from averaged key-function results.
 """
 
 import os
@@ -17,7 +19,14 @@ from sklearn import svm
 
 def bert_infer(model: tf.keras.Model, data: dict[str, list[str]]) -> dict[str, int]:
   """
-  Loads a pre-trained BERT model and predicts the class for each sentence.
+  Predict development levels for free-text responses with a loaded BERT model.
+
+  Args:
+    model: Loaded TensorFlow BERT model.
+    data: Mapping of key-function IDs to lists of free-text responses.
+
+  Returns:
+    A mapping of key-function IDs to predicted development levels.
   """
   print('Running inference on BERT model...')
 
@@ -34,7 +43,14 @@ def bert_infer(model: tf.keras.Model, data: dict[str, list[str]]) -> dict[str, i
 
 def svm_infer(models: dict[str, svm.SVC], data: dict[str, list[bool]]) -> dict[str, int]:
   """
-  Loads pre-trained SVM models and predicts the class for each response.
+  Predict development levels for multiple-choice responses with SVM models.
+
+  Args:
+    models: Mapping of model names to loaded scikit-learn SVM classifiers.
+    data: Mapping of key-function IDs to encoded feature lists.
+
+  Returns:
+    A mapping of key-function IDs to predicted development levels.
   """
   print('Running inference on SVM models...')
 
@@ -50,7 +66,14 @@ def svm_infer(models: dict[str, svm.SVC], data: dict[str, list[bool]]) -> dict[s
 
 def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str:
   """
-  Generates a summary report based on the average scores of key functions.
+  Generate a JSON summary of student performance from key-function averages.
+
+  Args:
+    data: Mapping of key-function IDs to average scores.
+    gemini: Authenticated Gemini client used to generate the summary.
+
+  Returns:
+    A JSON-formatted string suitable for storage in PostgreSQL ``jsonb``.
   """
 
   datastr = '\n'.join(f'{k}: {v}' for k, v in data.items())
@@ -176,7 +199,16 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
 
 def load_bert_model(model_path: str):
   """
-  Loads a pre-trained BERT model from the specified path.
+  Load a SavedModel-format BERT model from disk.
+
+  Args:
+    model_path: Filesystem path to the exported TensorFlow model.
+
+  Returns:
+    The loaded TensorFlow model instance.
+
+  Raises:
+    FileNotFoundError: If the provided model path does not exist.
   """
   if not os.path.exists(model_path):
     raise FileNotFoundError(f"The model path '{model_path}' does not exist.")
@@ -192,8 +224,11 @@ def load_bert_model(model_path: str):
 
 def download_bert_model(supabase: spb.Client, local_path: str = 'models/bert') -> None:
   """
-  Downloads the pre-trained BERT model files from Supabase Storage bucket 'bert-model'.
-  The bucket should contain the SavedModel files uploaded from your local models/bert/ folder.
+  Download the exported BERT model from Supabase Storage to local disk.
+
+  Args:
+    supabase: Authenticated Supabase client.
+    local_path: Local directory that will receive the model files.
 
   Expected bucket structure:
     bert-model/
@@ -201,9 +236,6 @@ def download_bert_model(supabase: spb.Client, local_path: str = 'models/bert') -
       variables/
         variables.index
         variables.data-00000-of-00001
-
-  :param supabase: Authenticated Supabase client.
-  :param local_path: Local directory to download the model into.
   """
 
   bucket_name = 'bert-model'
@@ -212,7 +244,7 @@ def download_bert_model(supabase: spb.Client, local_path: str = 'models/bert') -
   print(f"Downloading BERT model from Supabase bucket '{bucket_name}'...")
 
   def download_folder(prefix: str, local_dir: str) -> None:
-    """Recursively list and download all files under a prefix."""
+    """Recursively list and download every file beneath a storage prefix."""
     os.makedirs(local_dir, exist_ok=True)
     items = bucket.list(prefix) if prefix else bucket.list()
 
@@ -243,7 +275,10 @@ def download_bert_model(supabase: spb.Client, local_path: str = 'models/bert') -
 
 def download_svm_models(supabase: spb.Client) -> None:
   """
-  Downloads the pre-trained SVM models from Supabase Storage bucket 'svm-models'.
+  Download all serialized SVM model files from Supabase Storage.
+
+  Args:
+    supabase: Authenticated Supabase client.
   """
 
   if not os.path.exists('svm-models'):
@@ -269,7 +304,10 @@ def download_svm_models(supabase: spb.Client) -> None:
 
 def load_svm_models() -> dict[str, svm.SVC]:
   """
-  Loads the pre-trained SVM models from the local 'svm-models' directory.
+  Load all serialized SVM models from the local ``svm-models`` directory.
+
+  Returns:
+    A dictionary keyed by model filename stem.
   """
   svm_models = {}
   print("Loading SVM models from 'svm-models' directory...")

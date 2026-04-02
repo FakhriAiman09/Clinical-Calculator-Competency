@@ -1,11 +1,14 @@
-'''
-This script connects to the Supabase Realtime server and listens for new form responses.
+"""Supabase Realtime listener for inference and report generation.
+
+This service subscribes to inserts on ``form_responses`` and
+``student_reports``. New form responses are scored with the BERT and SVM
+models, and new student reports are enriched with Gemini-generated feedback.
 
 Required environment variables:
-- SUPABASE_URL
-- SUPABASE_SERVICE_ROLE_KEY
-- GOOGLE_GENAI_API_KEY
-'''
+  - ``SUPABASE_URL``
+  - ``SUPABASE_SERVICE_ROLE_KEY``
+  - ``GOOGLE_GENAI_API_KEY``
+"""
 
 import asyncio
 import logging
@@ -28,6 +31,7 @@ SVM_MODELS_PATH = 'svm-models'
 os.makedirs('/app/logs', exist_ok=True)
 
 def make_logger(name: str, filename: str) -> logging.Logger:
+  """Create a logger that writes to both a file and stdout."""
   logger = logging.getLogger(name)
   logger.setLevel(logging.DEBUG)
   formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
@@ -96,6 +100,7 @@ def wait_for_models(timeout_minutes: int = 60) -> None:
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 async def main() -> None:
+  """Initialize clients, load models, subscribe to realtime events, and run forever."""
   app_log.info('Loading environment variables...')
   load_dotenv()
 
@@ -162,6 +167,7 @@ async def main() -> None:
 # ── Event handlers ─────────────────────────────────────────────────────────────
 
 def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
+  """Process a new form response and persist weighted model predictions."""
   try:
     record = payload['data']['record']
     response_id = record['response_id']
@@ -182,6 +188,7 @@ def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
     infer_log.info(f'[{response_id}] SVM results: {svms_res}')
 
     def weighted_average(bert: float, svm: float) -> float:
+      """Combine BERT and SVM outputs using the project weighting rule."""
       return bert * 0.25 + svm * 0.75
 
     res = {k: weighted_average(bert=v, svm=svms_res[k]) for k, v in bert_res.items()}
@@ -197,6 +204,7 @@ def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
 
 
 def handle_new_report(payload, gemini, supabase) -> None:
+  """Generate and persist AI feedback for a newly created student report."""
   record = payload['data']['record']
   report_id = record['id']
   app_log.info(f'New report received: {report_id}')

@@ -133,6 +133,44 @@ Compose files are available for the frontend (`frontend/compose.yaml`) and infer
 
 ---
 
+## Documentation Deliverables
+
+This repository includes the required submission documentation in three forms:
+
+- Code comments and docstrings using JSDoc/TSDoc for TypeScript and PyDoc-style docstrings for Python
+- Updated README files for the root project and major submodules
+- OpenAPI-based API documentation for the current frontend server routes
+
+Documentation entry points:
+
+- Root project overview: `README.md`
+- Frontend module guide: `frontend/README.md`
+- Inference engine guide: `python/infer/README.md`
+- API docs landing page: `frontend/src/app/api-docs/page.tsx`
+- OpenAPI JSON route: `frontend/src/app/api/openapi/route.ts`
+- Submission report: `doc/documentation-report.md`
+
+---
+
+## Viewing API Documentation
+
+Run the frontend locally:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open:
+
+- Interactive Swagger UI: `http://localhost:3000/api-docs`
+- Raw OpenAPI JSON: `http://localhost:3000/api/openapi`
+
+The Swagger UI page supports in-browser inspection and test submission for the documented endpoints.
+
+---
+
 ## Testing
 
 ```bash

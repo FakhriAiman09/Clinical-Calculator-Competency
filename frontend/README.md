@@ -97,6 +97,16 @@ npm test -- --watch   # watch mode
 
 Tests use Jest and React Testing Library. Configuration is in `jest.config.mjs`.
 
+## API Documentation
+
+The frontend exposes its current server routes through an OpenAPI 3.1 document:
+
+- OpenAPI JSON: `/api/openapi`
+- Human-readable landing page: `/api-docs`
+
+That spec covers the current Next.js endpoints for AI summaries, CSV export, and reminder processing.
+You can import the JSON into Swagger UI, Swagger Editor, Postman, or any OpenAPI-compatible tooling.
+
 ## Deployment
 
 The app is deployed on [Vercel](https://vercel.com). Every push to `main` triggers an automatic deployment. See `vercel.json` for project-level configuration.

@@ -9,6 +9,14 @@ const DEFAULT_MODEL  = 'z-ai/glm-4.5-air:free';
 // Automatic fallback: OpenRouter picks whichever free model is available
 const FALLBACK_MODEL = 'openrouter/free';
 
+/**
+ * Sends a chat completion request to the OpenRouter API.
+ * @param {string} apiKey - OpenRouter API key.
+ * @param {string} model - Model ID to use (e.g. 'z-ai/glm-4.5-air:free').
+ * @param {string} system - System prompt defining assistant behavior.
+ * @param {string} userContent - User message content.
+ * @returns The raw fetch Response from OpenRouter.
+ */
 async function callOpenRouter(apiKey: string, model: string, system: string, userContent: string) {
   return fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -29,6 +37,13 @@ async function callOpenRouter(apiKey: string, model: string, system: string, use
   });
 }
 
+/**
+ * POST /api/ai/summary
+ * Generates a concise AI summary of rater comments using OpenRouter.
+ * Falls back to 'openrouter/free' if the requested model has no available endpoints.
+ * @param {Request} req - JSON body: `{ text: string, model?: string }`.
+ * @returns JSON `{ summary: string }` on success, or an error object with status code.
+ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();

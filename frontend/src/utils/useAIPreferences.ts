@@ -11,6 +11,13 @@ function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Hook that manages a user's AI model preference and daily usage count.
+ * Loads from and persists to the `user_preferences` table in Supabase.
+ * Resets the usage count automatically when the stored date is not today.
+ * @param {string | undefined} userId - The authenticated user's Supabase ID.
+ * @returns `{ model, usageCount, remaining, isLoading, saveModel, incrementUsage }`
+ */
 export function useAIPreferences(userId: string | undefined) {
   const [model, setModel]           = useState<string>(DEFAULT_MODEL_ID);
   const [usageCount, setUsageCount] = useState<number>(0);

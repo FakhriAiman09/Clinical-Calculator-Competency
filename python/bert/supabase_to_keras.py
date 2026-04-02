@@ -10,6 +10,10 @@ import pandas as pd
 from utils import augmentData, equalizeClasses, exportKerasFolder, querySupabase
 
 def getDatasetName(name: str, training_split: float, augment_count: int, equalize: bool) -> str:
+  '''
+  Constructs the dataset name from the given parameters.
+  If name is None, auto-generates a name in the format <yymmdd>-<split>[-aug-<n>][-eq].
+  '''
   dataset_name = name
   if dataset_name is None:
     yymmdd = pd.Timestamp.now().strftime('%y%m%d')

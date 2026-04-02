@@ -8,6 +8,11 @@ type AuthErrorLike = {
   message: string;
 };
 
+/**
+ * Type guard to check if an unknown error has Supabase auth error shape.
+ * @param {unknown} error - The error to check.
+ * @returns {boolean} True if the error has `code` and `message` string fields.
+ */
 function isAuthErrorLike(error: unknown): error is AuthErrorLike {
   return (
     typeof error === 'object' &&
@@ -19,6 +24,11 @@ function isAuthErrorLike(error: unknown): error is AuthErrorLike {
   );
 }
 
+/**
+ * Authenticates a user with email and password via Supabase.
+ * @param {FormData} formData - Form data containing `email` and `password`.
+ * @returns An object with `alertColor` ('success' | 'danger' | 'warning') and an `error` message string.
+ */
 export async function login(formData: FormData): Promise<{ alertColor: string; error: string }> {
   const supabase = await createClient();
 
@@ -48,6 +58,11 @@ export async function login(formData: FormData): Promise<{ alertColor: string; e
   }
 }
 
+/**
+ * Registers a new user with email and password via Supabase.
+ * @param {FormData} formData - Form data containing `email` and `password`.
+ * @returns An object with `alertColor` and an `error` message string.
+ */
 export async function signup(formData: FormData): Promise<{ alertColor: string; error: string }> {
   const supabase = await createClient();
 
@@ -69,11 +84,20 @@ export async function signup(formData: FormData): Promise<{ alertColor: string; 
   }
 }
 
+/**
+ * Signs the current user out of Supabase.
+ */
 export async function logout(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
 }
 
+/**
+ * Sends a password reset email to the provided address via Supabase.
+ * Redirects to `/login?reset=true` on completion using the configured base URL.
+ * @param {FormData} formData - Form data containing `email`.
+ * @returns An object with `alertColor` and a `message` string.
+ */
 export async function forgotPassword(formData: FormData): Promise<{ alertColor: string; message: string }> {
   const supabase = await createClient();
   const email = formData.get('email') as string;

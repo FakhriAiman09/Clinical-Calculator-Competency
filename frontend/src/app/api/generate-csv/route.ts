@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { logger } from '../../../utils/logger';
 
+/**
+ * GET /api/generate-csv
+ * Generates and streams a CSV export of a student's competency report.
+ * Includes a summary section, individual assessment scores, and AI feedback if available.
+ * @param {NextRequest} req - Query params: `studentId` and `reportId`.
+ * @returns A CSV file download response, or a JSON error with status code.
+ */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const studentId = searchParams.get('studentId');
