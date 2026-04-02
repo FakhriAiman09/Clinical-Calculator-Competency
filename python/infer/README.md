@@ -20,6 +20,12 @@ source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+Use the dependency file that matches your environment when needed:
+
+- Default/Windows: `requirements.txt`
+- Ubuntu/Linux: `requirements.ubuntu.txt`
+- macOS: `requirements.mac.txt`
+
 Create a `.env` file:
 
 ```

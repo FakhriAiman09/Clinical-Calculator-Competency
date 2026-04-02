@@ -99,6 +99,12 @@ cp .env.example .env                # fill in your Supabase and Gemini keys
 python listener.py
 ```
 
+If you are installing dependencies on a platform-specific environment, use the matching file:
+
+- Default/Windows: `requirements.txt`
+- Ubuntu/Linux: `requirements.ubuntu.txt`
+- macOS: `requirements.mac.txt`
+
 See [python/infer/README.md](python/infer/README.md) for full setup details.
 
 ### Docker (full stack)
