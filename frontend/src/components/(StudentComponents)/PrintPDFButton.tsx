@@ -29,7 +29,7 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
 
     // Pass 'from' so the Back button in print-report knows where to return
     const from = returnUrl || window.location.pathname;
-    const url = buildPrintReportUrl(studentId, reportId, from);
+    const url = buildPrintReportUrl(studentId!, reportId!, from);
     const win = window.open(url, '_blank');
 
     if (win) {
