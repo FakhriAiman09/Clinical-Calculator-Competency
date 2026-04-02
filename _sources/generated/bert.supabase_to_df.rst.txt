@@ -1,0 +1,12 @@
+﻿bert.supabase\_to\_df
+=====================
+
+.. automodule:: bert.supabase_to_df
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      main
+   

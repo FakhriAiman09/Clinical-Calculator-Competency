@@ -1,0 +1,19 @@
+{
+    "api": 0.024,
+    "bert": 0.054,
+    "changelog": 0.001,
+    "generated/bert.supabase_to_csv": 0.006,
+    "generated/bert.supabase_to_df": 0.005,
+    "generated/bert.supabase_to_keras": 0.005,
+    "generated/bert.utils": 0.015,
+    "generated/infer.inference": 0.017,
+    "generated/svm.fetch_data": 0.007,
+    "generated/svm.train": 0.008,
+    "generated/svm.util": 0.008,
+    "index": 0.003,
+    "infer": 0.026,
+    "intro": 0.002,
+    "model_doc": 0.007,
+    "svm": 0.024,
+    "testing": 0.001
+}

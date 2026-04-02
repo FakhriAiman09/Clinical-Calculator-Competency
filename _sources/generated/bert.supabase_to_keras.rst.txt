@@ -1,0 +1,12 @@
+﻿bert.supabase\_to\_keras
+========================
+
+.. automodule:: bert.supabase_to_keras
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      getDatasetName
+   

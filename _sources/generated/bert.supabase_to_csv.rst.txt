@@ -1,0 +1,12 @@
+﻿bert.supabase\_to\_csv
+======================
+
+.. automodule:: bert.supabase_to_csv
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      main
+   

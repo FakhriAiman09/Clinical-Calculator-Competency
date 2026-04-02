@@ -1,0 +1,13 @@
+﻿svm.fetch\_data
+===============
+
+.. automodule:: svm.fetch_data
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      fetch_data
+      query_supabase
+   
