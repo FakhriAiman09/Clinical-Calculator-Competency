@@ -54,7 +54,7 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
       const url = URL.createObjectURL(blob);
 
       const disposition = res.headers.get('Content-Disposition');
-      const filename = parseCsvFilename(disposition, reportId);
+      const filename = parseCsvFilename(disposition, reportId!);
 
       const link = document.createElement('a');
       link.href = url;
