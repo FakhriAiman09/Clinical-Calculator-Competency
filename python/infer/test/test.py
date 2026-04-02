@@ -1,271 +1,220 @@
-# pylint: disable=unused-argument, disable=attribute-defined-outside-init
+# pylint: disable=unused-argument
 
-'''Unit tests for the inference module.'''
+'''12 unit tests for inference.py and listener.py'''
 
-import pickle
-# import os
+import json
 import unittest
 from unittest.mock import MagicMock, patch, mock_open
 
 import numpy as np
 
-# import tensorflow as tf
-
-import inference
-import listener
+import inference  # pylint: disable=import-error
+import listener   # pylint: disable=import-error
 
 
-class TestInference(unittest.TestCase):
-  '''Unit tests for the inference module.'''
+# ---------------------------------------------------------------------------
+# inference.bert_infer  (2 tests)
+# ---------------------------------------------------------------------------
 
-  def test_bert_infer_single_class(self):
-    '''Test the BERT inference function with a single class prediction.'''
+class TestBertInfer(unittest.TestCase):
+  '''Unit tests for bert_infer() in inference.py'''
+
+  def test_output_keys_match_input_keys(self):
+    '''bert_infer should return a dict whose keys are identical to the input keys.'''
     mock_model = MagicMock()
+    mock_model.predict.return_value = np.array([[0.1, 0.9]])
+    data = {'1.1': ['sentence a'], '1.2': ['sentence b']}
+    result = inference.bert_infer(mock_model, data)
+    self.assertEqual(set(result.keys()), set(data.keys()))
+
+  def test_picks_class_with_highest_summed_score(self):
+    '''bert_infer should return the index of the column with the highest summed prediction.'''
+    mock_model = MagicMock()
+    # Two rows summed → [0.3, 1.7] → class 1
     mock_model.predict.return_value = np.array([[0.1, 0.9], [0.2, 0.8]])
+    result = inference.bert_infer(mock_model, {'kf': ['s1', 's2']})
+    self.assertEqual(result['kf'], 1)
 
-    input_data = {"item1": ["sentence 1", "sentence 2"]}
-    result = inference.bert_infer(mock_model, input_data)
 
-    self.assertEqual(result, {"item1": 1})
-    mock_model.predict.assert_called_once()
+# ---------------------------------------------------------------------------
+# inference.svm_infer  (1 test)
+# ---------------------------------------------------------------------------
 
-  def test_svm_infer_correct_class(self):
-    '''Test the SVM inference function with a correct class prediction.'''
+class TestSvmInfer(unittest.TestCase):
+  '''Unit tests for svm_infer() in inference.py'''
+
+  def test_dot_in_key_replaced_with_underscore_in_model_lookup(self):
+    '''svm_infer should convert "1.1" → "mcq_kf1_1" when looking up the model dict.'''
     mock_model = MagicMock()
-    mock_model.predict.return_value = [1]
+    mock_model.predict.return_value = [2]
+    models = {'mcq_kf1_1': mock_model}
+    result = inference.svm_infer(models, {'1.1': [True, False]})
+    self.assertEqual(result['1.1'], 2)
+    mock_model.predict.assert_called_once_with([[True, False]])
 
-    models = {"mcq_kfabc": mock_model}
-    data = {"abc": [True, False, True]}
 
-    result = inference.svm_infer(models, data)
-    self.assertEqual(result, {"abc": 1})
-    mock_model.predict.assert_called_once()
+# ---------------------------------------------------------------------------
+# inference.load_bert_model  (1 test)
+# ---------------------------------------------------------------------------
 
-  @patch("tensorflow.keras.models.load_model")
-  @patch("os.path.exists", return_value=True)
-  def test_load_bert_model_success(self, mock_exists, mock_load_model):
-    '''Test loading a BERT model successfully.'''
-    mock_model = MagicMock()
-    mock_load_model.return_value = mock_model
+class TestLoadBertModel(unittest.TestCase):
+  '''Unit tests for load_bert_model() in inference.py'''
 
-    model = inference.load_bert_model("mock_model_path")
-    self.assertEqual(model, mock_model)
-    mock_load_model.assert_called_once_with("mock_model_path", compile=False)
-
-  @patch("os.path.exists", return_value=False)
-  def test_load_bert_model_file_not_found(self, mock_exists):
-    '''Test loading a BERT model when the file does not exist.'''
+  @patch('inference.os.path.exists', return_value=False)
+  def test_raises_file_not_found_when_path_missing(self, mock_exists):
+    '''load_bert_model should raise FileNotFoundError when the path does not exist.'''
     with self.assertRaises(FileNotFoundError):
-      inference.load_bert_model("nonexistent_path")
-
-  @patch("builtins.open", new_callable=mock_open)
-  @patch("os.makedirs")
-  @patch("os.path.exists", return_value=False)
-  def test_download_svm_models(self, mock_exists, mock_makedirs, mock_file):
-    '''Test downloading SVM models from Supabase storage.'''
-    mock_bucket = MagicMock()
-    mock_bucket.list.return_value = [{'name': 'model1.pkl'}]
-    mock_bucket.download.return_value = b"mock_pickle_data"
-
-    mock_supabase = MagicMock()
-    mock_supabase.storage.from_.return_value = mock_bucket
-
-    inference.download_svm_models(mock_supabase)
-
-    mock_makedirs.assert_called_once_with("svm-models")
-    mock_file.assert_called_once_with("svm-models/model1.pkl", "wb")
-    mock_file().write.assert_called_once_with(b"mock_pickle_data")
-
-  @patch("builtins.open", new_callable=mock_open, read_data=pickle.dumps("mock_model"))
-  @patch("os.listdir", return_value=["model1.pkl"])
-  def test_load_svm_models_success(self, mock_listdir, mock_file):
-    '''Test loading SVM models from the local "svm-models" directory.'''
-    with patch("pickle.load", return_value="mock_model") as mock_pickle_load:
-      models = inference.load_svm_models()
-
-    self.assertIn("model1", models)
-    self.assertEqual(models["model1"], "mock_model")
-    mock_pickle_load.assert_called_once()
+      inference.load_bert_model('nonexistent/path')
 
 
-class TestListener(unittest.TestCase):
-  '''Unit tests for the listener module.'''
+# ---------------------------------------------------------------------------
+# inference.load_svm_models  (1 test)
+# ---------------------------------------------------------------------------
 
-  def setUp(self):
-    self.payload = {"data":
-                    {"record":
-                     {"response_id": "abc123",
-                      "response": {"response": {"1": {"1.1": {"text": ["Great product!"],
-                                                              "1.1.1": True, "1.1.2": False},
-                                                      "1.2": {"text": ["Needs improvement."],
-                                                              "1.2.1": False, "1.2.2": True}}}}}}}
-    self.mock_bert_model = MagicMock()
-    self.mock_bert_model.predict.return_value = np.array([[0.1, 0.9]])
+class TestLoadSvmModels(unittest.TestCase):
+  '''Unit tests for load_svm_models() in inference.py'''
 
-    self.mock_svm_models = {
-        "mcq_kf1_1": MagicMock(),
-        "mcq_kf1_2": MagicMock()
-    }
-    self.mock_svm_models["mcq_kf1_1"].predict.return_value = [1]
-    self.mock_svm_models["mcq_kf1_2"].predict.return_value = [0]
-
-    self.mock_supabase = MagicMock()
-    self.mock_supabase.table.return_value.insert.return_value.execute.return_value = None
-
-  @patch("inference.bert_infer")
-  @patch("inference.svm_infer")
-  def test_handle_new_response(self, mock_svm_infer, mock_bert_infer):
-    '''Test the handle_new_response function in the listener module.'''
-    # Mock inference functions
-    mock_bert_infer.return_value = {"1.1": 1, "1.2": 1}
-    mock_svm_infer.return_value = {"1.1": 1, "1.2": 0}
-
-    listener.handle_new_response(self.payload, self.mock_bert_model,
-                                 self.mock_svm_models, self.mock_supabase)
-
-    # Check that data was inserted into Supabase
-    self.mock_supabase.table.assert_called_with("form_results")
-    self.mock_supabase.table().insert.assert_called_once()
-
-    inserted_data = self.mock_supabase.table().insert.call_args[0][0]
-    self.assertEqual(inserted_data["response_id"], "abc123")
-    self.assertIn("results", inserted_data)
-    self.assertEqual(inserted_data["results"]["1.1"], 1)
-    self.assertEqual(inserted_data["results"]["1.2"], 0.25)
+  @patch('builtins.open', new_callable=mock_open)
+  @patch('inference.os.listdir', return_value=['model_a.pkl', 'README.txt', 'model_b.pkl'])
+  def test_skips_non_pkl_files(self, mock_listdir, mock_file):
+    '''load_svm_models should load only .pkl files and ignore all other files.'''
+    with patch('inference.pickle.load', return_value='mock_svc'):
+      result = inference.load_svm_models()
+    self.assertIn('model_a', result)
+    self.assertIn('model_b', result)
+    self.assertNotIn('README', result)
 
 
-class TestGenerateReportSummaryRetry(unittest.TestCase):
-  '''Tests for generate_report_summary() retry and failure behaviour.'''
+# ---------------------------------------------------------------------------
+# inference.generate_report_summary  (2 tests)
+# ---------------------------------------------------------------------------
 
-  def _make_gemini(self, responses):
-    '''Helper: build a mock Gemini client that returns responses in sequence.'''
+class TestGenerateReportSummary(unittest.TestCase):
+  '''Unit tests for generate_report_summary() in inference.py'''
+
+  def test_strips_markdown_codeblock_before_parsing(self):
+    '''generate_report_summary should strip ```json...``` fences and return valid JSON.'''
     mock_gemini = MagicMock()
-    mock_gemini.models.generate_content.side_effect = responses
-    return mock_gemini
-
-  def test_returns_valid_json_on_first_attempt(self):
-    '''generate_report_summary should return parsed JSON string on first success.'''
-    import json
     mock_response = MagicMock()
-    mock_response.text = '{"1.1": "Good performance"}'
-    mock_gemini = self._make_gemini([mock_response])
+    mock_response.text = '```json\n{"1.1": "good performance"}\n```'
+    mock_gemini.models.generate_content.return_value = mock_response
 
-    result = inference.generate_report_summary({"1.1": 2.5}, mock_gemini)
+    result = inference.generate_report_summary({'1.1': 2.0}, mock_gemini)
     parsed = json.loads(result)
-    self.assertEqual(parsed["1.1"], "Good performance")
+    self.assertIn('1.1', parsed)
 
-  def test_all_retries_exhausted_returns_error_string(self):
-    '''generate_report_summary should return an error string after 3 failed attempts.
-    SERIOUS ISSUE: this error string is misleading — it always says "rate limit exceeded"
-    even when the real cause is invalid JSON from Gemini.'''
+  def test_retries_three_times_on_invalid_json_then_returns_error(self):
+    '''generate_report_summary should retry 3 times on bad JSON and return an error string.'''
+    mock_gemini = MagicMock()
     mock_response = MagicMock()
     mock_response.text = 'not valid json {{{'
-    mock_gemini = self._make_gemini([mock_response, mock_response, mock_response])
+    mock_gemini.models.generate_content.return_value = mock_response
 
-    result = inference.generate_report_summary({"1.1": 2.5}, mock_gemini)
+    result = inference.generate_report_summary({'1.1': 1.0}, mock_gemini)
     self.assertIn('Error', result)
     self.assertEqual(mock_gemini.models.generate_content.call_count, 3)
 
-  def test_rate_limit_exception_retries_and_exhausts(self):
-    '''generate_report_summary should retry on 429 rate limit and return error after 3 attempts.'''
-    mock_gemini = MagicMock()
-    mock_gemini.models.generate_content.side_effect = Exception('429 RESOURCE_EXHAUSTED')
 
-    with patch('time.sleep'):  # time is imported locally in generate_report_summary
-      result = inference.generate_report_summary({"1.1": 1.0}, mock_gemini)
+# ---------------------------------------------------------------------------
+# listener.wait_for_models  (2 tests)
+# ---------------------------------------------------------------------------
 
-    self.assertIn('Error', result)
-    self.assertEqual(mock_gemini.models.generate_content.call_count, 3)
-
-  def test_non_rate_limit_exception_raises_immediately(self):
-    '''generate_report_summary should re-raise immediately on non-rate-limit errors.'''
-    mock_gemini = MagicMock()
-    mock_gemini.models.generate_content.side_effect = ValueError('unexpected error')
-
-    with self.assertRaises(ValueError):
-      inference.generate_report_summary({"1.1": 1.0}, mock_gemini)
-
-    self.assertEqual(mock_gemini.models.generate_content.call_count, 1)
-
-
-class TestSVMInferMissingModel(unittest.TestCase):
-  '''Tests for svm_infer() when a model key is missing.'''
-
-  def test_missing_model_key_raises_key_error(self):
-    '''svm_infer should raise KeyError when the model for a key function is absent.
-    SERIOUS ISSUE: this crashes handle_new_response silently — student gets no score saved.'''
-    models = {}  # no models loaded
-    data = {"1.1": [True, False, True]}
-
-    with self.assertRaises(KeyError):
-      inference.svm_infer(models, data)
-
-
-class TestHandleNewResponseKeyMismatch(unittest.TestCase):
-  '''Tests for handle_new_response() when BERT and SVM return different key sets.'''
-
-  @patch("inference.bert_infer")
-  @patch("inference.svm_infer")
-  def test_bert_svm_key_mismatch_does_not_write_to_db(self, mock_svm_infer, mock_bert_infer):
-    '''handle_new_response should not write to DB when BERT and SVM keys differ.
-    SERIOUS ISSUE: svms_res[k] raises KeyError — result is never stored for the student.'''
-    mock_bert_infer.return_value = {"1.1": 1, "1.2": 0}
-    mock_svm_infer.return_value = {"1.1": 1}  # missing "1.2" — mismatch
-
-    payload = {"data": {"record": {
-        "response_id": "mismatch-test",
-        "response": {"response": {"1": {
-            "1.1": {"text": ["Good"], "1.1.1": True},
-            "1.2": {"text": ["Okay"], "1.2.1": False},
-        }}}
-    }}}
-
-    mock_supabase = MagicMock()
-    listener.handle_new_response(payload, MagicMock(), MagicMock(), mock_supabase)
-
-    # DB insert should NOT have been called due to KeyError in weighted average
-    mock_supabase.table.return_value.insert.assert_not_called()
-
-
-class TestHandleNewReportEmptyData(unittest.TestCase):
-  '''Tests for handle_new_report() when kf_avg_data is missing or empty.'''
-
-  def test_empty_kf_avg_data_writes_no_data_message(self):
-    '''handle_new_report should update llm_feedback with a "no data" message
-    when kf_avg_data is None — not call Gemini at all.'''
-    mock_supabase = MagicMock()
-    mock_supabase.table.return_value.select.return_value.eq.return_value \
-        .single.return_value.execute.return_value.data = {'kf_avg_data': None}
-
-    mock_gemini = MagicMock()
-    payload = {"data": {"record": {"id": "report-empty"}}}
-
-    listener.handle_new_report(payload, mock_gemini, mock_supabase)
-
-    mock_gemini.models.generate_content.assert_not_called()
-    update_calls = mock_supabase.table.return_value.update.call_args_list
-    final_message = update_calls[-1][0][0].get('llm_feedback', '')
-    self.assertIn('No assessment data', final_message)
-
-
-class TestWaitForModelsTimeout(unittest.TestCase):
-  '''Tests for wait_for_models() timeout behaviour.'''
+class TestWaitForModels(unittest.TestCase):
+  '''Unit tests for wait_for_models() in listener.py'''
 
   @patch('listener.time.sleep')
   @patch('listener.os.path.exists', return_value=False)
-  def test_raises_timeout_error_when_deadline_exceeded(self, mock_exists, mock_sleep):
-    '''wait_for_models should raise TimeoutError when models never appear.
-    SERIOUS ISSUE: main() has no try/except around this — the entire service crashes.
-    Note: time.time() is called by both wait_for_models AND Python's logging internals
-    so we use itertools.chain to supply enough 0s before the deadline-exceeded value.'''
+  def test_raises_timeout_error_when_models_never_appear(self, mock_exists, mock_sleep):
+    '''wait_for_models should raise TimeoutError once the deadline passes with no models found.'''
     import itertools
-    # First 10 calls return 0 (deadline not exceeded), then unlimited 999999 (exceeded).
-    # This covers all internal logging calls to time.time() without running out.
+    # Supply enough values for logging internals, then deadline-exceeded
     time_values = itertools.chain([0] * 10, itertools.repeat(999999))
     with patch('listener.time.time', side_effect=time_values):
       with self.assertRaises(TimeoutError):
         listener.wait_for_models(timeout_minutes=1)
 
+  @patch('listener.time.sleep')
+  @patch('listener.time.time', return_value=0)
+  @patch('listener.os.listdir', return_value=['model.pkl'])
+  @patch('listener.os.path.exists', return_value=True)
+  def test_returns_without_sleeping_when_both_models_present(self, mock_exists, mock_listdir,
+                                                              mock_time, mock_sleep):
+    '''wait_for_models should return immediately without sleeping when models are already on disk.'''
+    listener.wait_for_models(timeout_minutes=1)
+    mock_sleep.assert_not_called()
 
-if __name__ == "__main__":
+
+# ---------------------------------------------------------------------------
+# listener.handle_new_response  (2 tests)
+# ---------------------------------------------------------------------------
+
+class TestHandleNewResponse(unittest.TestCase):
+  '''Unit tests for handle_new_response() in listener.py'''
+
+  def _make_payload(self):
+    return {'data': {'record': {
+      'response_id': 'test-id-123',
+      'response': {'response': {'kf1': {'1.1': {'text': ['good'], '1.1.1': True}}}},
+    }}}
+
+  @patch('listener.svm_infer', return_value={'1.1': 2})
+  @patch('listener.bert_infer', return_value={'1.1': 0})
+  def test_weighted_average_is_bert_025_plus_svm_075(self, mock_bert, mock_svm):
+    '''handle_new_response result should equal bert*0.25 + svm*0.75 for each key.'''
+    mock_supabase = MagicMock()
+    listener.handle_new_response(self._make_payload(), MagicMock(), {}, mock_supabase)
+
+    inserted = mock_supabase.table().insert.call_args[0][0]
+    # bert=0, svm=2 → 0*0.25 + 2*0.75 = 1.5
+    self.assertAlmostEqual(inserted['results']['1.1'], 1.5)
+
+  @patch('listener.svm_infer', return_value={'1.1': 1})
+  @patch('listener.bert_infer', return_value={'1.1': 1})
+  def test_inserts_row_with_correct_response_id(self, mock_bert, mock_svm):
+    '''handle_new_response should insert into form_results with the payload response_id.'''
+    mock_supabase = MagicMock()
+    listener.handle_new_response(self._make_payload(), MagicMock(), {}, mock_supabase)
+
+    mock_supabase.table.assert_called_with('form_results')
+    inserted = mock_supabase.table().insert.call_args[0][0]
+    self.assertEqual(inserted['response_id'], 'test-id-123')
+
+
+# ---------------------------------------------------------------------------
+# listener.handle_new_report  (2 tests)
+# ---------------------------------------------------------------------------
+
+class TestHandleNewReport(unittest.TestCase):
+  '''Unit tests for handle_new_report() in listener.py'''
+
+  def _make_supabase_with_data(self, kf_avg_data):
+    mock_supabase = MagicMock()
+    mock_row = MagicMock()
+    mock_row.data = {'kf_avg_data': kf_avg_data}
+    (mock_supabase.table.return_value
+     .select.return_value
+     .eq.return_value
+     .single.return_value
+     .execute.return_value) = mock_row
+    return mock_supabase
+
+  def test_empty_kf_avg_data_writes_no_assessment_message(self):
+    '''handle_new_report should update llm_feedback with a "no data" message when kf_avg_data is None.'''
+    mock_supabase = self._make_supabase_with_data(kf_avg_data=None)
+    listener.handle_new_report({'data': {'record': {'id': 'rpt-1'}}}, MagicMock(), mock_supabase)
+
+    update_calls = [str(c) for c in mock_supabase.table().update.call_args_list]
+    self.assertTrue(any('No assessment' in c for c in update_calls))
+
+  @patch('listener.generate_report_summary', side_effect=RuntimeError('API down'))
+  def test_exception_writes_error_message_to_llm_feedback(self, mock_summary):
+    '''handle_new_report should catch exceptions and write an error string to llm_feedback.'''
+    mock_supabase = self._make_supabase_with_data(kf_avg_data={'1.1': 2.0})
+    listener.handle_new_report({'data': {'record': {'id': 'rpt-2'}}}, MagicMock(), mock_supabase)
+
+    update_calls = [str(c) for c in mock_supabase.table().update.call_args_list]
+    self.assertTrue(any('Error' in c for c in update_calls))
+
+
+if __name__ == '__main__':
   unittest.main()

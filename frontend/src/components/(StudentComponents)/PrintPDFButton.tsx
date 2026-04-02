@@ -1,6 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
+import {
+  buildCsvUrl,
+  buildPrintReportUrl,
+  hasRequiredReportParams,
+  parseCsvFilename,
+} from '@/utils/report-export-utils';
 
 interface PrintPDFButtonProps {
   studentId?: string;
@@ -14,7 +20,7 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
   const [generatingCsv, setGeneratingCsv] = useState(false);
 
   const handlePrint = () => {
-    if (!studentId || !reportId) {
+    if (!hasRequiredReportParams(studentId, reportId)) {
       window.open('/dashboard/print-report', '_blank');
       return;
     }
@@ -23,7 +29,7 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
 
     // Pass 'from' so the Back button in print-report knows where to return
     const from = returnUrl || window.location.pathname;
-    const url = `/dashboard/print-report?studentId=${studentId}&reportId=${reportId}&from=${encodeURIComponent(from)}`;
+    const url = buildPrintReportUrl(studentId!, reportId!, from);
     const win = window.open(url, '_blank');
 
     if (win) {
@@ -36,20 +42,19 @@ const PrintPDFButton: React.FC<PrintPDFButtonProps> = ({ studentId, reportId, re
   };
 
   const handleExportCSV = async () => {
-    if (!studentId || !reportId) {
+    if (!hasRequiredReportParams(studentId, reportId)) {
       alert('Cannot export CSV: missing student or report information.');
       return;
     }
     setGeneratingCsv(true);
     try {
-      const res = await fetch(`/api/generate-csv?studentId=${studentId}&reportId=${reportId}`);
+      const res = await fetch(buildCsvUrl(studentId!, reportId!));
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
 
       const disposition = res.headers.get('Content-Disposition');
-      const filenameMatch = disposition?.match(/filename="(.+)"/);
-      const filename = filenameMatch ? filenameMatch[1] : `report-${reportId}.csv`;
+      const filename = parseCsvFilename(disposition, reportId!);
 
       const link = document.createElement('a');
       link.href = url;

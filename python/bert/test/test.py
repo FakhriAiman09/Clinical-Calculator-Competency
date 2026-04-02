@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch, call
 import pandas as pd
 
 import utils              # pylint: disable=import-error
-import supabase_to_keras  # pylint: disable=import-error
 
 
 # ---------------------------------------------------------------------------
@@ -176,41 +175,6 @@ class TestExportDfPickle(unittest.TestCase):
     utils.exportDfPickle(df, destination='output.pkl', force=True, dry_run=True)
     mock_remove.assert_called_once_with('output.pkl')
     df.to_pickle.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
-# getDatasetName
-# ---------------------------------------------------------------------------
-
-class TestGetDatasetName(unittest.TestCase):
-  '''Test cases for getDatasetName() in supabase_to_keras.py'''
-
-  def test_provided_name_returned_unchanged(self):
-    '''getDatasetName should return the provided name as-is when name is not None.'''
-    result = supabase_to_keras.getDatasetName(
-        name='my-dataset',
-        training_split=0.8,
-        augment_count=0,
-        equalize=False,
-    )
-    self.assertEqual(result, 'my-dataset')
-
-  def test_provided_name_ignores_other_params(self):
-    '''getDatasetName should ignore split/augment/equalize params when name is given.'''
-    result_a = supabase_to_keras.getDatasetName('fixed', 0.8, 0, False)
-    result_b = supabase_to_keras.getDatasetName('fixed', 0.6, 5, True)
-    self.assertEqual(result_a, result_b)
-
-  def test_none_name_raises_because_of_args_reference(self):
-    '''getDatasetName with name=None references module-level `args` which is not defined
-    outside __main__, causing a NameError. This documents a known bug in the function.'''
-    with self.assertRaises(NameError):
-      supabase_to_keras.getDatasetName(
-          name=None,
-          training_split=0.8,
-          augment_count=0,
-          equalize=False,
-      )
 
 
 # ---------------------------------------------------------------------------

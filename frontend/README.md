@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CCC Frontend
+
+The web application for the Clinical Competency Calculator, built with Next.js 16, React 19, and TypeScript.
+
+## Tech Stack
+
+- **Framework:** Next.js 16.1.7 (App Router)
+- **UI:** React 19, Bootstrap 5.3, Bootstrap Icons
+- **Language:** TypeScript 5.8
+- **Auth & Database:** Supabase (auth, realtime, storage)
+- **Testing:** Jest, React Testing Library
+- **Deployment:** Vercel
+
+## Project Structure
+
+```
+frontend/src/
+├── app/
+│   ├── page.tsx                  # Landing page
+│   ├── layout.tsx                # Root layout (Supabase setup, theme)
+│   ├── api/
+│   │   ├── ai/summary/           # AI-powered feedback summary endpoint
+│   │   ├── generate-csv/         # CSV export endpoint
+│   │   └── rater-email-api/      # Email reminder endpoint (Nodemailer)
+│   ├── auth/                     # Login, signup, confirm, signout pages
+│   └── dashboard/
+│       ├── admin/                # Admin: user management, question editing, reports
+│       ├── rater/form/           # Rater: feedback submission form
+│       ├── student/              # Student: report viewing
+│       ├── print-report/         # Printable/PDF report export
+│       └── AboutUsPage/          # About page
+├── components/
+│   ├── (AdminComponents)/        # Admin-specific UI components
+│   ├── (RaterComponents)/        # Rater-specific UI components
+│   ├── (StudentComponents)/      # Student-specific UI components
+│   └── Header/                   # Shared header/nav
+├── context/
+│   ├── ThemeContext.tsx           # Dark/light theme provider
+│   └── UserContext.tsx           # Auth state provider
+└── utils/                        # Shared helper functions
+```
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- A configured Supabase project
+
+### Setup
+
+```bash
+npm install
+cp .env.local.example .env.local
+```
+
+Fill in `.env.local`:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+GEMINI_API_KEY=<google-gemini-key>
+SMTP_HOST=<smtp-host>
+SMTP_PORT=587
+SMTP_USER=<smtp-user>
+SMTP_PASS=<smtp-password>
+```
+
+### Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Production Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+### Docker
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+docker compose up --build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Testing
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm test          # run all tests
+npm test -- --watch   # watch mode
+```
 
-## Deploy on Vercel
+Tests use Jest and React Testing Library. Configuration is in `jest.config.mjs`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The app is deployed on [Vercel](https://vercel.com). Every push to `main` triggers an automatic deployment. See `vercel.json` for project-level configuration.

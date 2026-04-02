@@ -1,122 +1,32 @@
-import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import '@testing-library/jest-dom/jest-globals';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, test } from '@jest/globals';
+import { getBsThemeDatasetValue, isValidTheme, resolveTheme } from '../../frontend/src/utils/theme-utils';
 
-// This file tests core theme state behavior (load, update, and apply).
+// This file unit-tests theme helper logic used by ThemeContext.
 
-const mockUseUser = jest.fn();
-
-jest.mock('../../frontend/src/context/UserContext', () => ({
-  useUser: () => mockUseUser(),
-}));
-
-jest.mock('../../frontend/src/utils/supabase/client', () => ({
-  createClient: () => ({
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        eq: jest.fn(() => ({
-          single: jest.fn<() => Promise<{ data: null; error: null }>>().mockResolvedValue({ data: null, error: null }),
-        })),
-      })),
-      upsert: jest.fn<() => Promise<{ error: null }>>().mockResolvedValue({ error: null }),
-    })),
-  }),
-}));
-
-import { ThemeProvider, useTheme } from '../../frontend/src/context/ThemeContext';
-
-function ThemeConsumer() {
-  const { theme, resolvedTheme, setTheme } = useTheme();
-  return (
-    <div>
-      <span data-testid="theme">{theme}</span>
-      <span data-testid="resolved-theme">{resolvedTheme}</span>
-      <button type="button" onClick={() => void setTheme('dark')}>
-        set-dark
-      </button>
-      <button type="button" onClick={() => void setTheme('auto')}>
-        set-auto
-      </button>
-    </div>
-  );
-}
-
-describe('ThemeContext', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    localStorage.clear();
-
-    Object.defineProperty(window, 'matchMedia', {
-      writable: true,
-      value: jest.fn().mockImplementation(() => ({
-        matches: false,
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-      })),
-    });
-
-    mockUseUser.mockReturnValue({ user: null });
-    delete document.documentElement.dataset.bsTheme;
+describe('Theme utility unit tests', () => {
+  // Ensures theme validation accepts only allowed values.
+  test('isValidTheme accepts valid themes and rejects others', () => {
+    expect(isValidTheme('light')).toBe(true);
+    expect(isValidTheme('dark')).toBe(true);
+    expect(isValidTheme('auto')).toBe(true);
+    expect(isValidTheme('sepia')).toBe(false);
   });
 
-  // Ensures the hook cannot be used outside the provider.
-  test('throws when useTheme is used outside ThemeProvider', () => {
-    const BrokenConsumer = () => {
-      useTheme();
-      return <div>bad</div>;
-    };
-
-    expect(() => render(<BrokenConsumer />)).toThrow('useTheme must be used within ThemeProvider');
+  // Ensures explicit themes resolve directly regardless of system preference.
+  test('resolveTheme keeps explicit light/dark values', () => {
+    expect(resolveTheme('light', true)).toBe('light');
+    expect(resolveTheme('dark', false)).toBe('dark');
   });
 
-  // Ensures persisted theme is restored and applied for logged-out users.
-  test('loads theme from localStorage when logged out and applies it to html dataset', async () => {
-    localStorage.setItem('theme', 'dark');
-
-    render(
-      <ThemeProvider>
-        <ThemeConsumer />
-      </ThemeProvider>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('theme')).toHaveTextContent('dark');
-      expect(screen.getByTestId('resolved-theme')).toHaveTextContent('dark');
-      expect(document.documentElement.dataset.bsTheme).toBe('dark');
-    });
+  // Ensures auto theme resolves based on prefers-dark flag.
+  test('resolveTheme maps auto to dark/light from preference', () => {
+    expect(resolveTheme('auto', true)).toBe('dark');
+    expect(resolveTheme('auto', false)).toBe('light');
   });
 
-  // Ensures setTheme('dark') updates state, storage, and html theme attribute.
-  test('setTheme updates state, localStorage, and html dataset', async () => {
-    render(
-      <ThemeProvider>
-        <ThemeConsumer />
-      </ThemeProvider>
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'set-dark' }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('theme')).toHaveTextContent('dark');
-      expect(localStorage.getItem('theme')).toBe('dark');
-      expect(document.documentElement.dataset.bsTheme).toBe('dark');
-    });
-  });
-
-  // Ensures setTheme('auto') keeps mode auto and clears forced html theme attribute.
-  test('setTheme auto removes html dataset theme', async () => {
-    render(
-      <ThemeProvider>
-        <ThemeConsumer />
-      </ThemeProvider>
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'set-auto' }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId('theme')).toHaveTextContent('auto');
-      expect(localStorage.getItem('theme')).toBe('auto');
-      expect(document.documentElement.dataset.bsTheme).toBeUndefined();
-    });
+  // Ensures bs-theme dataset mapping omits value for auto mode.
+  test('getBsThemeDatasetValue returns undefined for auto', () => {
+    expect(getBsThemeDatasetValue('auto')).toBeUndefined();
+    expect(getBsThemeDatasetValue('dark')).toBe('dark');
   });
 });

@@ -6,7 +6,9 @@
         "dev": "next dev --turbopack",
         "build": "next build",
         "start": "next start",
-        "lint": "next lint"
+        "lint": "next lint",
+        "test": "jest --config jest.config.cjs --testPathPattern=tests/",
+        "test:coverage": "jest --config jest.config.cjs --testPathPattern=tests/ --coverage"
     },
     "dependencies": {
         "@supabase/ssr": "^0.5.2",

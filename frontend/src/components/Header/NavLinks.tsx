@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
+import { getNavButtonClass, getNavItemsByRole } from '@/utils/header-nav-utils';
 
 /**
  * NavLinks component
@@ -14,45 +15,17 @@ const NavLinks = () => {
   const { userRoleStudent, userRoleAuthorized, userRoleRater, userRoleDev } = useUser();
 
   const link = (href: string, label: string) => (
-    <Link key={href} href={href} className={`btn ${pathname === href ? 'btn-secondary' : 'btn-outline-secondary'}`}>
+    <Link key={`${href}-${label}`} href={href} className={getNavButtonClass(pathname, href)}>
       {label}
     </Link>
   );
 
-  const links = [];
-
-  // Student + Developer Links
-  if (userRoleStudent || userRoleDev) {
-    links.push(
-      link('/dashboard', 'Dashboard'),
-      link('/dashboard/student/form-requests', 'Request Assessment'),
-      link('/dashboard/student/report', 'Comprehensive Report'),
-    );
-  }
-
-  // Admin + Developer Links
-  if (userRoleAuthorized || userRoleDev) {
-    links.push(
-      link('/dashboard/admin/userList', 'Manage Users'),
-      link('/dashboard/admin/all-reports', 'All Reports'),
-      link('/dashboard/admin/edit-questions-options', 'Edit Questions'),
-      link('/dashboard/admin/form', 'Add MCQ Data'),
-    );
-  }
-
-  // Rater-only view (non-admin, non-dev)
-  if (userRoleRater && !userRoleAuthorized && !userRoleDev) {
-    links.push(
-      link('/dashboard', 'Home'),
-    );
-  }
-
-  // About Us always appears once at the end for all roles
-  links.push(link('/dashboard/AboutUsPage', 'About Us'));
-
-  if (userRoleDev) {
-    links.push(link('/tickets', 'Tickets'));
-  }
+  const links = getNavItemsByRole({
+    userRoleStudent,
+    userRoleAuthorized,
+    userRoleRater,
+    userRoleDev,
+  }).map((item) => link(item.href, item.label));
 
   return <>{links}</>;
 };
