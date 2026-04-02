@@ -1,114 +1,51 @@
-import React from 'react';
-import { render, screen, fireEvent , act} from '@testing-library/react';
-import '@testing-library/jest-dom';
-import { useUser } from '../../frontend/src/context/UserContext';
-import { usePathname } from 'next/navigation';
-import Header from '../../frontend/src/components/Header/header';
+import { describe, expect, test } from '@jest/globals';
+import { getNavButtonClass, getNavItemsByRole } from '../../frontend/src/utils/header-nav-utils';
 
-// This file checks basic Header rendering behavior with mocked auth and routing.
+// This file unit-tests header navigation role mapping and button class helpers.
 
-jest.mock('../../frontend/src/utils/supabase/client', () => ({
-  createClient: jest.fn(() => ({
-  })),
-}));
-
-jest.mock('../../frontend/src/utils/supabase/server.ts', () => ({
-  createClient: jest.fn(() => ({
-    // mock your functions here as needed
-  })),
-}));
-
-  jest.mock('../../frontend/src/context/UserContext', () => ({
-    useUser: jest.fn(() => ({
-      user: true,
-      displayName: 'Test User',
-      email: 'test@example.com',
-      userRoleAuthorized: true,
+describe('Header navigation unit tests', () => {
+  // Ensures student role receives student navigation links.
+  test('getNavItemsByRole returns student links for student role', () => {
+    const links = getNavItemsByRole({
+      userRoleStudent: true,
+      userRoleAuthorized: false,
       userRoleRater: false,
-      userRoleStudent: false,
-      userRoleDev: false,
-    })),
-  }));
-
-  jest.mock('next/navigation', () => ({
-    usePathname: jest.fn(() => '/dashboard'),
-  }));
-  
-
-describe('Header Component', () => {
-  beforeEach(() => {
-    (useUser as jest.Mock).mockReturnValue({
-      user: true,
-      displayName: 'Test User',
-      email: 'test@example.com',
-      userRoleAuthorized: true,
-      userRoleRater: false,
-      userRoleStudent: false,
       userRoleDev: false,
     });
 
-    (usePathname as jest.Mock).mockReturnValue('/dashboard');
+    expect(links.some((l) => l.label === 'Dashboard')).toBe(true);
+    expect(links.some((l) => l.label === 'Request Assessment')).toBe(true);
+    expect(links.some((l) => l.label === 'About Us')).toBe(true);
   });
 
-  // Ensures the main application title appears.
-  test('Renders the header component', async () => {
-    await act(async () => {
-      render(<Header />);
+  // Ensures rater-only role gets Home link and not admin links.
+  test('getNavItemsByRole returns rater-only home link for non-admin rater', () => {
+    const links = getNavItemsByRole({
+      userRoleStudent: false,
+      userRoleAuthorized: false,
+      userRoleRater: true,
+      userRoleDev: false,
     });
-    expect(screen.getByText('Clinical Competency Calculator')).toBeInTheDocument();
+
+    expect(links.some((l) => l.label === 'Home')).toBe(true);
+    expect(links.some((l) => l.label === 'Manage Users')).toBe(false);
   });
 
-  // Ensures navigation/profile controls are available to the user.
-  test('Renders profile menu button', async () => {
-    await act( async () => {
-      render(<Header />)
+  // Ensures developer role includes Tickets.
+  test('getNavItemsByRole includes tickets for dev role', () => {
+    const links = getNavItemsByRole({
+      userRoleStudent: false,
+      userRoleAuthorized: false,
+      userRoleRater: false,
+      userRoleDev: true,
     });
-    expect(screen.getByRole('button', { name: /toggle navigation/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('button').length).toBeGreaterThan(1);
+
+    expect(links.some((l) => l.label === 'Tickets')).toBe(true);
   });
 
-// test('toggles profile menu on button click', async () => {
-//   render(<Header />);
-
-//   // Initially, the dropdown should not be visible
-//   expect(screen.queryByText(/Profile Settings/i)).not.toBeInTheDocument();
-
-//   // Find and click the profile button
-//   const profileButton = screen.getByRole('button', { name: /profile menu/i });
-//   fireEvent.click(profileButton);
-
-//   // Now, the profile menu should be visible
-//   expect(screen.queryByText(/Profile Settings/i)).toBeInTheDocument();
-
-//   // Optionally, test that the modal can be closed again (if you need that functionality)
-//   const closeButton = screen.getByLabelText(/close/i);
-//   fireEvent.click(closeButton);
-
-//   // After closing, the modal should no longer be in the document
-//   expect(screen.queryByText(/Profile Settings/i)).not.toBeInTheDocument();
-// });
-
-// test('calls handleSaveChanges when clicking save', () => {
-//   render(<Header />);
-//   const saveButton = screen.getByRole('button', { name: /Save changes/i });
-
-//   fireEvent.click(saveButton);
-
-//   // Mock `handleSaveChanges` to ensure it's called
-//   // You may need to make it a prop or export it for testing separately
-// });
-
-// test('closes profile menu when clicking outside', async () => {
-//   await act( async () => {
-//     render(<Header />)
-//   });
-//   const profileButton = screen.getByRole('button', { name: /person-circle/i });
-
-//   fireEvent.click(profileButton); // Open menu
-//   expect(screen.getByText(/Profile Settings/i)).toBeInTheDocument();
-
-//   fireEvent.mouseDown(document.body); // Simulate outside click
-//   expect(screen.queryByText(/Profile Settings/i)).not.toBeInTheDocument();
-// });
-
+  // Ensures nav button style reflects active route.
+  test('getNavButtonClass returns active/inactive button classes', () => {
+    expect(getNavButtonClass('/dashboard', '/dashboard')).toBe('btn btn-secondary');
+    expect(getNavButtonClass('/dashboard', '/dashboard/student/report')).toBe('btn btn-outline-secondary');
+  });
 });

@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useUser } from './UserContext';
+import { getBsThemeDatasetValue, isValidTheme, resolveTheme } from '@/utils/theme-utils';
 
 export type Theme = 'light' | 'dark' | 'auto';
 
@@ -21,10 +22,11 @@ const supabase = createClient();
  */
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
-  if (theme === 'auto') {
+  const datasetValue = getBsThemeDatasetValue(theme);
+  if (datasetValue === undefined) {
     delete root.dataset.bsTheme;
   } else {
-    root.dataset.bsTheme = theme;
+    root.dataset.bsTheme = datasetValue;
   }
 }
 
@@ -32,8 +34,7 @@ function applyTheme(theme: Theme) {
  * Resolves 'auto' to the actual system preference.
  */
 function getResolvedTheme(theme: Theme): 'light' | 'dark' {
-  if (theme !== 'auto') return theme;
-  return globalThis.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return resolveTheme(theme, globalThis.matchMedia('(prefers-color-scheme: dark)').matches);
 }
 
 export function ThemeProvider({ children }: { readonly children: ReactNode }) {
@@ -47,7 +48,7 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (globalThis.window === undefined) return 'auto';
     const stored = localStorage.getItem('theme') as Theme | null;
-    return stored && ['light', 'dark', 'auto'].includes(stored) ? stored : 'auto';
+    return stored && isValidTheme(stored) ? stored : 'auto';
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
@@ -78,7 +79,7 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
       } else {
         // Logged out: use whatever is in localStorage
         const stored = localStorage.getItem('theme') as Theme | null;
-        if (stored && ['light', 'dark', 'auto'].includes(stored)) {
+        if (stored && isValidTheme(stored)) {
           loaded = stored;
         }
       }

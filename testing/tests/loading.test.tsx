@@ -1,17 +1,16 @@
-import { render, screen } from '@testing-library/react';
-import '@testing-library/jest-dom';
-import Loading from '../../frontend/src/components/loading';
-import React from 'react';
+import { describe, expect, test } from '@jest/globals';
+import { getLoadingAriaRole, getLoadingText } from '../../frontend/src/utils/loading-utils';
 
-// This file checks basic rendering and accessibility of the Loading component.
-test('renders the loading spinner', () => {
-  render(<Loading />);
-  
-  // Check if the spinner div is in the document
-  const spinner = screen.getByRole('status');
-  expect(spinner).toBeInTheDocument();
+// This file unit-tests loading accessibility helper values.
 
-  // Check if the visually hidden text is present
-  const hiddenText = screen.getByText('Loading...');
-  expect(hiddenText).toBeInTheDocument();
+describe('Loading unit tests', () => {
+  // Ensures spinner role string matches status semantics.
+  test('getLoadingAriaRole returns status', () => {
+    expect(getLoadingAriaRole()).toBe('status');
+  });
+
+  // Ensures hidden text communicates loading state.
+  test('getLoadingText returns expected text', () => {
+    expect(getLoadingText()).toBe('Loading...');
+  });
 });

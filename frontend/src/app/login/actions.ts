@@ -1,8 +1,23 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
-import { AuthError } from '@supabase/supabase-js';
 import { logger } from '@/utils/logger';
+
+type AuthErrorLike = {
+  code: string;
+  message: string;
+};
+
+function isAuthErrorLike(error: unknown): error is AuthErrorLike {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string' &&
+    'message' in error &&
+    typeof (error as { message?: unknown }).message === 'string'
+  );
+}
 
 export async function login(formData: FormData): Promise<{ alertColor: string; error: string }> {
   const supabase = await createClient();
@@ -18,7 +33,7 @@ export async function login(formData: FormData): Promise<{ alertColor: string; e
 
     return { alertColor: 'success', error: '' };
   } catch (error) {
-    if (error instanceof AuthError) {
+    if (isAuthErrorLike(error)) {
       switch (error.code) {
         case 'invalid_credentials':
           return { alertColor: 'danger', error: 'Invalid email or password.' };
@@ -47,7 +62,7 @@ export async function signup(formData: FormData): Promise<{ alertColor: string; 
 
     return { alertColor: 'success', error: '' };
   } catch (error) {
-    if (error instanceof AuthError) {
+    if (isAuthErrorLike(error)) {
       return { alertColor: 'danger', error: `${error.code}: ${error.message}` };
     }
     return { alertColor: 'warning', error: 'Something went wrong.' };
@@ -89,7 +104,7 @@ export async function forgotPassword(formData: FormData): Promise<{ alertColor: 
       message: 'Password reset email sent! Check your inbox (and spam folder).',
     };
   } catch (error) {
-    if (error instanceof AuthError) {
+    if (isAuthErrorLike(error)) {
       logger.error('[forgotPassword] Auth error', { code: error.code, message: error.message });
       return { alertColor: 'danger', message: error.message };
     }
