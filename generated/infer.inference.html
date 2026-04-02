@@ -248,32 +248,34 @@
         <article role="main" id="furo-main-content">
           <section id="module-infer.inference">
 <span id="infer-inference"></span><h1>infer.inference<a class="headerlink" href="#module-infer.inference" title="Link to this heading">¶</a></h1>
-<p>Inference module for BERT model to classify sentences.
-This module loads a pre-trained BERT model and predicts the class for each sentence</p>
+<p>Inference helpers for the Clinical Competency Calculator.</p>
+<p>This module loads trained BERT and SVM models, performs inference for incoming
+assessment data, downloads model artifacts from Supabase Storage, and generates
+AI-written report summaries from averaged key-function results.</p>
 <p class="rubric">Functions</p>
 <div class="table-wrapper autosummary longtable docutils container">
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.inference.bert_infer" title="infer.inference.bert_infer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bert_infer</span></code></a>(model, data)</p></td>
-<td><p>Loads a pre-trained BERT model and predicts the class for each sentence.</p></td>
+<td><p>Predict development levels for free-text responses with a loaded BERT model.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">download_bert_model</span></code>(supabase[, local_path])</p></td>
-<td><p>Downloads the pre-trained BERT model files from Supabase Storage bucket 'bert-model'.</p></td>
+<td><p>Download the exported BERT model from Supabase Storage to local disk.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.inference.download_svm_models" title="infer.inference.download_svm_models"><code class="xref py py-obj docutils literal notranslate"><span class="pre">download_svm_models</span></code></a>(supabase)</p></td>
-<td><p>Downloads the pre-trained SVM models from Supabase Storage bucket 'svm-models'.</p></td>
+<td><p>Download all serialized SVM model files from Supabase Storage.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="../infer.html#infer.inference.generate_report_summary" title="infer.inference.generate_report_summary"><code class="xref py py-obj docutils literal notranslate"><span class="pre">generate_report_summary</span></code></a>(data, gemini)</p></td>
-<td><p>Generates a summary report based on the average scores of key functions.</p></td>
+<td><p>Generate a JSON summary of student performance from key-function averages.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.inference.load_bert_model" title="infer.inference.load_bert_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_bert_model</span></code></a>(model_path)</p></td>
-<td><p>Loads a pre-trained BERT model from the specified path.</p></td>
+<td><p>Load a SavedModel-format BERT model from disk.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="../infer.html#infer.inference.load_svm_models" title="infer.inference.load_svm_models"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_svm_models</span></code></a>()</p></td>
-<td><p>Loads the pre-trained SVM models from the local 'svm-models' directory.</p></td>
+<td><p>Load all serialized SVM models from the local <code class="docutils literal notranslate"><span class="pre">svm-models</span></code> directory.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="../infer.html#infer.inference.svm_infer" title="infer.inference.svm_infer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">svm_infer</span></code></a>(models, data)</p></td>
-<td><p>Loads pre-trained SVM models and predicts the class for each response.</p></td>
+<td><p>Predict development levels for multiple-choice responses with SVM models.</p></td>
 </tr>
 </tbody>
 </table>

@@ -253,37 +253,74 @@
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.bert_infer">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">bert_infer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#infer.inference.bert_infer" title="Link to this definition">¶</a></dt>
-<dd><p>Loads a pre-trained BERT model and predicts the class for each sentence.</p>
+<dd><p>Predict development levels for free-text responses with a loaded BERT model.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>model: Loaded TensorFlow BERT model.
+data: Mapping of key-function IDs to lists of free-text responses.</p>
+</dd>
+<dt>Returns:</dt><dd><p>A mapping of key-function IDs to predicted development levels.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.svm_infer">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">svm_infer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">models</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">SVC</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">bool</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#infer.inference.svm_infer" title="Link to this definition">¶</a></dt>
-<dd><p>Loads pre-trained SVM models and predicts the class for each response.</p>
+<dd><p>Predict development levels for multiple-choice responses with SVM models.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>models: Mapping of model names to loaded scikit-learn SVM classifiers.
+data: Mapping of key-function IDs to encoded feature lists.</p>
+</dd>
+<dt>Returns:</dt><dd><p>A mapping of key-function IDs to predicted development levels.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.generate_report_summary">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">generate_report_summary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gemini</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Client</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#infer.inference.generate_report_summary" title="Link to this definition">¶</a></dt>
-<dd><p>Generates a summary report based on the average scores of key functions.</p>
+<dd><p>Generate a JSON summary of student performance from key-function averages.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>data: Mapping of key-function IDs to average scores.
+gemini: Authenticated Gemini client used to generate the summary.</p>
+</dd>
+<dt>Returns:</dt><dd><p>A JSON-formatted string suitable for storage in PostgreSQL <code class="docutils literal notranslate"><span class="pre">jsonb</span></code>.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.load_bert_model">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">load_bert_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#infer.inference.load_bert_model" title="Link to this definition">¶</a></dt>
-<dd><p>Loads a pre-trained BERT model from the specified path.</p>
+<dd><p>Load a SavedModel-format BERT model from disk.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>model_path: Filesystem path to the exported TensorFlow model.</p>
+</dd>
+<dt>Returns:</dt><dd><p>The loaded TensorFlow model instance.</p>
+</dd>
+<dt>Raises:</dt><dd><p>FileNotFoundError: If the provided model path does not exist.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.download_svm_models">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">download_svm_models</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">supabase</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">SyncClient</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#infer.inference.download_svm_models" title="Link to this definition">¶</a></dt>
-<dd><p>Downloads the pre-trained SVM models from Supabase Storage bucket ‘svm-models’.</p>
+<dd><p>Download all serialized SVM model files from Supabase Storage.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>supabase: Authenticated Supabase client.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="infer.inference.load_svm_models">
 <span class="sig-prename descclassname"><span class="pre">infer.inference.</span></span><span class="sig-name descname"><span class="pre">load_svm_models</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">SVC</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#infer.inference.load_svm_models" title="Link to this definition">¶</a></dt>
-<dd><p>Loads the pre-trained SVM models from the local ‘svm-models’ directory.</p>
+<dd><p>Load all serialized SVM models from the local <code class="docutils literal notranslate"><span class="pre">svm-models</span></code> directory.</p>
+<dl class="simple">
+<dt>Returns:</dt><dd><p>A dictionary keyed by model filename stem.</p>
+</dd>
+</dl>
 </dd></dl>
 
 </section>
