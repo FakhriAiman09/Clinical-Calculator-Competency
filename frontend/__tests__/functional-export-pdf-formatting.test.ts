@@ -1,4 +1,4 @@
-// Mock Supabase client — print-report page imports it but it's not needed for helper tests.
+// Mock Supabase client — print-report page imports it but doesn't use it directly.
 jest.mock('@/utils/supabase/client', () => ({
   createClient: () => ({ from: jest.fn() }),
 }));

@@ -11,7 +11,7 @@ import {
   getTierLabel,
 } from '@/utils/ai-models';
 
-// ── Theme helpers (mirrors ThemeContext.tsx logic) ────────────────────────────
+// Theme helpers (mirrors ThemeContext.tsx logic)
 type Theme = 'light' | 'dark' | 'auto';
 
 function applyTheme(theme: Theme) {
@@ -30,7 +30,7 @@ function getResolvedTheme(theme: Theme): 'light' | 'dark' {
     : 'light';
 }
 
-// ── DB fixture ────────────────────────────────────────────────────────────────
+// DB fixture 
 type DbFixture = {
   studentId: string;
   studentName: string;
@@ -88,7 +88,7 @@ async function loadDbFixture() {
   }
 }
 
-// ── UI component ──────────────────────────────────────────────────────────────
+// UI component 
 function ThemeAndAISettingsPanel() {
   const [selectedTheme, setSelectedTheme] = useState<Theme>(dbFixture.theme);
   const [selectedModel, setSelectedModel] = useState<string>(dbFixture.aiModel);
@@ -147,7 +147,7 @@ function ThemeAndAISettingsPanel() {
   );
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// Tests
 beforeAll(async () => {
   await loadDbFixture();
 }, 15000);
