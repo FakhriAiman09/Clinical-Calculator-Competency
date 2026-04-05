@@ -273,7 +273,7 @@ def download_bert_model(supabase: spb.Client, local_path: str = 'models/bert') -
 # ==================================================================================================
 
 
-def download_svm_models(supabase: spb.Client) -> None:
+def download_svm_models(supabase: spb.Client, local_dir: str = 'svm-models') -> None:
   """
   Download all serialized SVM model files from Supabase Storage.
 
@@ -281,8 +281,8 @@ def download_svm_models(supabase: spb.Client) -> None:
     supabase: Authenticated Supabase client.
   """
 
-  if not os.path.exists('svm-models'):
-    os.makedirs('svm-models')
+  if not os.path.exists(local_dir):
+    os.makedirs(local_dir)
 
   print('Downloading SVM models from Supabase...')
   bucket_name = 'svm-models'
@@ -291,7 +291,7 @@ def download_svm_models(supabase: spb.Client) -> None:
   for model in models:
     model_name = model['name']
     print(f'  Downloading {model_name}...', end=' ')
-    file_path = f'svm-models/{model_name}'
+    file_path = os.path.join(local_dir, model_name)
     with open(file_path, 'wb') as f:
       response = bucket.download(model_name)
       f.write(response)
@@ -302,7 +302,7 @@ def download_svm_models(supabase: spb.Client) -> None:
 # ==================================================================================================
 
 
-def load_svm_models() -> dict[str, svm.SVC]:
+def load_svm_models(local_dir: str = 'svm-models') -> dict[str, svm.SVC]:
   """
   Load all serialized SVM models from the local ``svm-models`` directory.
 
@@ -310,11 +310,11 @@ def load_svm_models() -> dict[str, svm.SVC]:
     A dictionary keyed by model filename stem.
   """
   svm_models = {}
-  print("Loading SVM models from 'svm-models' directory...")
+  print(f"Loading SVM models from '{local_dir}' directory...")
 
-  for filename in os.listdir('svm-models'):
+  for filename in os.listdir(local_dir):
     if filename.endswith('.pkl'):
-      model_path = os.path.join('svm-models', filename)
+      model_path = os.path.join(local_dir, filename)
       print(f'  Loading {filename}...', end=' ')
       with open(model_path, 'rb') as f:
         svm_models[filename.removesuffix('.pkl')] = pickle.load(f)

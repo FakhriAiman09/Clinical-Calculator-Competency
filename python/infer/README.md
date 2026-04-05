@@ -30,11 +30,13 @@ Create a `.env` file:
 
 ```
 SUPABASE_URL=https://<project>.supabase.co
-SUPABASE_KEY=<service-role-key>
-GEMINI_API_KEY=<google-gemini-api-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+GOOGLE_GENAI_API_KEY=<google-gemini-api-key>
 ```
 
-BERT and SVM models are downloaded automatically from Supabase Storage on first run.
+`listener.py` also accepts the legacy aliases `SUPABASE_KEY` and `GEMINI_API_KEY`.
+
+BERT and SVM models are downloaded automatically from Supabase Storage on first run when they are not already present locally.
 
 ## Running
 
@@ -64,7 +66,7 @@ The listener runs indefinitely, processing events as they arrive.
 
 ## Logging
 
-Three log files are written to the working directory:
+Three log files are written to `python/infer/logs` by default. You can override this with `INFER_LOGS_PATH`.
 
 | File | Contents |
 |------|----------|

@@ -72,7 +72,7 @@ Clinical-Calculator-Competency/
 ### Prerequisites
 
 - Node.js 18+
-- Python 3.12+
+- Python 3.11 for the inference listener (`python/infer`)
 - A Supabase project with the required tables and storage buckets
 - Google Gemini API key
 - OpenRouter API key
@@ -92,10 +92,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ```bash
 cd python/infer
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate           # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env                # fill in your Supabase and Gemini keys
+pip install -r requirements.ubuntu.txt   # Linux/Ubuntu
+cp .env.example .env                     # fill in your Supabase and Gemini keys
 python listener.py
 ```
 
@@ -134,8 +134,10 @@ Compose files are available for the frontend (`frontend/compose.yaml`) and infer
 | Variable | Description |
 |----------|-------------|
 | `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_KEY` | Supabase service role key |
-| `GEMINI_API_KEY` | Google Gemini API key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
+| `GOOGLE_GENAI_API_KEY` | Google Gemini API key |
+
+`python/infer/listener.py` also accepts `SUPABASE_KEY` and `GEMINI_API_KEY` as legacy aliases.
 
 ---
 

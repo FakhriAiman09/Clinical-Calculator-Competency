@@ -13,6 +13,7 @@ Required environment variables:
 import asyncio
 import logging
 import os
+from pathlib import Path
 import time
 
 import tensorflow_text as text
@@ -24,20 +25,32 @@ from inference import (bert_infer, download_bert_model, download_svm_models,
                        generate_report_summary, load_bert_model,
                        load_svm_models, svm_infer)
 
-BERT_MODEL_PATH = '/app/models/bert'
-SVM_MODELS_PATH = 'svm-models'
+BERT_MODEL_PATH = Path(os.environ.get('BERT_MODEL_PATH', Path(__file__).resolve().parent / 'models' / 'bert'))
+SVM_MODELS_PATH = Path(os.environ.get('SVM_MODELS_PATH', Path(__file__).resolve().parent / 'svm-models'))
+LOGS_PATH = Path(os.environ.get('INFER_LOGS_PATH', Path(__file__).resolve().parent / 'logs'))
 
 # ── Logging setup ──────────────────────────────────────────────────────────────
-os.makedirs('/app/logs', exist_ok=True)
+LOGS_PATH.mkdir(parents=True, exist_ok=True)
+
+
+def get_env(*names: str) -> str:
+  """Return the first non-empty environment variable from the provided aliases."""
+  for name in names:
+    value = os.environ.get(name, '')
+    if value:
+      return value
+  return ''
 
 def make_logger(name: str, filename: str) -> logging.Logger:
   """Create a logger that writes to both a file and stdout."""
   logger = logging.getLogger(name)
   logger.setLevel(logging.DEBUG)
+  logger.handlers.clear()
+  logger.propagate = False
   formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
 
   # File handler
-  fh = logging.FileHandler(f'/app/logs/{filename}')
+  fh = logging.FileHandler(LOGS_PATH / filename)
   fh.setFormatter(formatter)
   logger.addHandler(fh)
 
@@ -69,13 +82,13 @@ def wait_for_models(timeout_minutes: int = 60) -> None:
 
   while time.time() < deadline:
     bert_ready = (
-      os.path.exists(BERT_MODEL_PATH) and
-      os.path.exists(os.path.join(BERT_MODEL_PATH, 'saved_model.pb'))
+      BERT_MODEL_PATH.exists() and
+      (BERT_MODEL_PATH / 'saved_model.pb').exists()
     )
     svm_ready = (
-      os.path.exists(SVM_MODELS_PATH) and
+      SVM_MODELS_PATH.exists() and
       any(f.endswith('.pkl') for f in os.listdir(SVM_MODELS_PATH))
-    ) if os.path.exists(SVM_MODELS_PATH) else False
+    ) if SVM_MODELS_PATH.exists() else False
 
     if bert_ready and svm_ready:
       app_log.info('Model files found!')
@@ -104,20 +117,20 @@ async def main() -> None:
   app_log.info('Loading environment variables...')
   load_dotenv()
 
-  supabase_url: str = os.environ.get('SUPABASE_URL', '')
+  supabase_url: str = get_env('SUPABASE_URL')
   if not supabase_url:
     error_log.error('SUPABASE_URL environment variable is not set')
     raise ValueError('SUPABASE_URL environment variable is not set')
 
-  supabase_key: str = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
+  supabase_key: str = get_env('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_KEY')
   if not supabase_key:
-    error_log.error('SUPABASE_SERVICE_ROLE_KEY environment variable is not set')
-    raise ValueError('SUPABASE_SERVICE_ROLE_KEY environment variable is not set')
+    error_log.error('SUPABASE_SERVICE_ROLE_KEY or SUPABASE_KEY environment variable is not set')
+    raise ValueError('SUPABASE_SERVICE_ROLE_KEY or SUPABASE_KEY environment variable is not set')
 
-  gemini_key: str = os.environ.get('GOOGLE_GENAI_API_KEY', '')
+  gemini_key: str = get_env('GOOGLE_GENAI_API_KEY', 'GEMINI_API_KEY')
   if not gemini_key:
-    error_log.error('GOOGLE_GENAI_API_KEY environment variable is not set')
-    raise ValueError('GOOGLE_GENAI_API_KEY environment variable is not set')
+    error_log.error('GOOGLE_GENAI_API_KEY or GEMINI_API_KEY environment variable is not set')
+    raise ValueError('GOOGLE_GENAI_API_KEY or GEMINI_API_KEY environment variable is not set')
 
   app_log.info('Environment variables loaded.')
 
@@ -125,14 +138,22 @@ async def main() -> None:
   supabase: spb.Client = spb.create_client(supabase_url, supabase_key)
   asupabase: spb.AClient = await spb.acreate_client(supabase_url, supabase_key)
 
+  if not (BERT_MODEL_PATH / 'saved_model.pb').exists():
+    app_log.info('BERT model not found locally. Downloading from Supabase Storage...')
+    download_bert_model(supabase, str(BERT_MODEL_PATH))
+
+  if not SVM_MODELS_PATH.exists() or not any(f.endswith('.pkl') for f in os.listdir(SVM_MODELS_PATH)):
+    app_log.info('SVM models not found locally. Downloading from Supabase Storage...')
+    download_svm_models(supabase, str(SVM_MODELS_PATH))
+
   wait_for_models(timeout_minutes=60)
 
   app_log.info('Loading SVM models...')
-  svm_models = load_svm_models()
+  svm_models = load_svm_models(str(SVM_MODELS_PATH))
   app_log.info('All SVM models loaded successfully.')
 
   app_log.info('Loading BERT model...')
-  bert_model = load_bert_model(BERT_MODEL_PATH)
+  bert_model = load_bert_model(str(BERT_MODEL_PATH))
   app_log.info('BERT model loaded successfully.')
 
   app_log.info('Connecting to Supabase Realtime server...')
