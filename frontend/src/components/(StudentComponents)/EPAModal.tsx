@@ -87,25 +87,30 @@ const EPAModal: React.FC<EPAModalProps> = ({ selectedEpa, onClose, range }) => {
                 <p className='text-muted text-center mb-0'>No assessments in this time range.</p>
               ) : (
                 sortedDates.map((dateKey) => (
-                  <div key={dateKey} className='mb-3'>
-                    <div className='text-muted small fw-semibold border-bottom pb-1 mb-2'>
+                  <div key={dateKey} className='mb-3 border rounded'>
+                    <div className='px-3 py-2 fw-semibold small border-bottom' style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
                       {new Date(dateKey + 'T00:00:00').toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric',
                       })}
                     </div>
-                    {byDate.get(dateKey)!.map((item, i) => (
-                      <div key={i} className='d-flex justify-content-between align-items-center py-1'>
-                        <div className='me-3'>{item.description}</div>
-                        <span
-                          className='badge text-white flex-shrink-0'
-                          style={{ backgroundColor: devLevelColors[item.levelIndex] }}
+                    <div className='px-3'>
+                      {byDate.get(dateKey)!.map((item, i, arr) => (
+                        <div
+                          key={i}
+                          className={`d-flex justify-content-between align-items-center py-2${i < arr.length - 1 ? ' border-bottom' : ''}`}
                         >
-                          {devLevelLabels[item.levelIndex]}
-                        </span>
-                      </div>
-                    ))}
+                          <div className='me-3'>{item.description}</div>
+                          <span
+                            className='badge text-white flex-shrink-0'
+                            style={{ backgroundColor: devLevelColors[item.levelIndex] }}
+                          >
+                            {devLevelLabels[item.levelIndex]}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))
               )}
