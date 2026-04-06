@@ -61,8 +61,10 @@ The listener runs indefinitely, processing events as they arrive.
 
 1. Supabase Realtime fires on new `student_reports` row
 2. `generate_report_summary()` sends Key Function average scores to Google Gemini 2.5 Flash
-3. Gemini returns a markdown-formatted narrative evaluating the student's performance per EPA
-4. Summary is stored back on the `student_reports` row (retry logic: 3 attempts with rate-limit backoff)
+3. Gemini is called with `response_mime_type='application/json'` — output is constrained to valid JSON at the token level, eliminating formatting retries
+4. A regex fallback extracts the outermost `{…}` block in case of any residual wrapping
+5. Summary is stored back on the `student_reports` row (retry logic: 3 attempts with rate-limit backoff)
+6. On failure, a structured `{"_error": "…"}` JSON object is stored so the frontend can display a clean per-EPA warning without leaking raw error text across all EPA boxes
 
 ## Logging
 

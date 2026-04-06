@@ -44,6 +44,7 @@ Clinical-Calculator-Competency/
    - SVM (75%) — classifies multiple-choice responses
 4. **Weighted average score** is stored in `form_results`
 5. **Google Gemini** generates a markdown-formatted narrative summary per student report
+6. **AI comment assistant** — raters can generate AI-polished rewrites of their open-text comments; the AI receives both the comment text and any selected checkbox options for context
 
 ### User Roles
 
@@ -101,7 +102,6 @@ python listener.py
 
 If you are installing dependencies on a platform-specific environment, use the matching file:
 
-- Default/Windows: `requirements.txt`
 - Ubuntu/Linux: `requirements.ubuntu.txt`
 - macOS: `requirements.mac.txt`
 
@@ -207,6 +207,20 @@ GitHub Actions workflows in `.github/workflows/`:
 | `sphinx.yml` | Build Sphinx documentation |
 | `auto-release.yml` | Automated version releases |
 | `*-docker.yml` | Build and push Docker images |
+
+---
+
+## Recent Changes
+
+| Area | Change |
+|------|--------|
+| Rater form | Autosave runs silently — "Autosaved at…" status message removed from UI |
+| AI comment assistant | Selected checkbox options are now sent to the AI alongside the comment text, giving it full context |
+| Performance graph | Fixed UTC timezone shift that misassigned April assessments to March |
+| Performance graph | X-axis now spans the report's exact time window (1 / 3 / 6 / 12 months) |
+| Performance graph | Assessments submitted after a report was generated are now included in the graph |
+| Gemini integration | `response_mime_type='application/json'` enforced — eliminates invalid JSON retries |
+| Gemini integration | AI generation errors stored as structured JSON; each EPA box shows a clean warning instead of a raw error string |
 
 ---
 
