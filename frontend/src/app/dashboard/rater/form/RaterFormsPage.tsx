@@ -9,7 +9,7 @@ import { useRequireRole } from '@/utils/useRequiredRole';
 import { useUser } from '@/context/UserContext';
 import { useAIPreferences } from '@/utils/useAIPreferences';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap-icons/font/bootstrap-icons.css';
+import 'bootstrap-icons/font/bootstrap-icons.min.css';
 import { sendEmail as sendRaterEmail } from './rater-email-api/send-email-rater.server';
 
 const supabase = createClient();

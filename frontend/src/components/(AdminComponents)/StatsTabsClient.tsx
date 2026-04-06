@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getSystemStats, SystemStats } from '@/utils/getSystemStats';
+import { sendReminderEmail } from '@/app/dashboard/rater/form/rater-email-api/send-reminder-rater.server';
 
 const tabs = ['Overview', 'Delinquent Raters', 'Monthly Trends', 'EPA Distribution'] as const;
 type TabType = (typeof tabs)[number];
@@ -11,6 +12,8 @@ export default function StatsTabsClient() {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [reminderSending, setReminderSending] = useState<Record<string, boolean>>({});
+  const [reminderStatus, setReminderStatus] = useState<Record<string, 'sent' | 'error'>>({});
 
   const loadStats = async () => {
     setLoading(true);
@@ -23,6 +26,19 @@ export default function StatsTabsClient() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const handleSendReminder = async (rater: SystemStats['topDelinquentRaters'][number]) => {
+    setReminderSending((prev) => ({ ...prev, [rater.rater_id]: true }));
+    setReminderStatus((prev) => { const next = { ...prev }; delete next[rater.rater_id]; return next; });
+    try {
+      await sendReminderEmail({ to: rater.email, facultyName: rater.display_name });
+      setReminderStatus((prev) => ({ ...prev, [rater.rater_id]: 'sent' }));
+    } catch {
+      setReminderStatus((prev) => ({ ...prev, [rater.rater_id]: 'error' }));
+    } finally {
+      setReminderSending((prev) => ({ ...prev, [rater.rater_id]: false }));
     }
   };
 
@@ -100,8 +116,27 @@ export default function StatsTabsClient() {
                       <div>
                         <div className='fw-semibold'>{r.display_name}</div>
                         <div className='text-muted small'>{r.email}</div>
+                        <div className='d-flex align-items-center gap-2 mt-2'>
+                          <button
+                            className='btn btn-sm btn-outline-warning'
+                            disabled={!!reminderSending[r.rater_id]}
+                            onClick={() => handleSendReminder(r)}
+                          >
+                            {reminderSending[r.rater_id] ? (
+                              <><span className='spinner-border spinner-border-sm me-1' role='status' />Sending...</>
+                            ) : (
+                              <><i className='bi bi-envelope me-1' />Send Reminder</>
+                            )}
+                          </button>
+                          {reminderStatus[r.rater_id] === 'sent' && (
+                            <span className='text-success small'><i className='bi bi-check-circle me-1' />Sent</span>
+                          )}
+                          {reminderStatus[r.rater_id] === 'error' && (
+                            <span className='text-danger small'><i className='bi bi-x-circle me-1' />Failed</span>
+                          )}
+                        </div>
                       </div>
-                      <span className='badge bg-danger align-self-sm-center mt-2 mt-sm-0'>{r.count} overdue</span>
+                      <span className='badge bg-danger align-self-sm-start mt-1'>{r.count} overdue</span>
                     </li>
                   ))}
                 </ul>
