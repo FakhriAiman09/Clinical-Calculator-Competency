@@ -12,11 +12,6 @@ const endpoints = [
     path: '/api/generate-csv',
     purpose: 'Export a student report as CSV.',
   },
-  {
-    method: 'GET, POST',
-    path: '/api/rater-email-api/reminders',
-    purpose: 'Run overdue reminder processing for raters.',
-  },
 ];
 
 /**

@@ -38,42 +38,6 @@ const genericErrorSchema = {
   },
 };
 
-const reminderResponseSchema = {
-  type: 'object',
-  properties: {
-    message: { type: 'string' },
-    mode: { type: 'string', enum: ['service_role', 'anon_rpc'] },
-    thresholdHours: { type: 'number' },
-    cycleDays: { type: 'number' },
-    cycleStartDate: { type: 'string', format: 'date' },
-    cycleMarker: { type: 'string', format: 'date' },
-    overdueCount: { type: 'number' },
-    sent: { type: 'number' },
-    sentThisRun: { type: 'boolean' },
-    sentTodayCount: { type: 'number' },
-    trackingWriteOk: { type: 'boolean' },
-    trackingError: { type: ['string', 'null'] },
-    trackedCount: { type: 'number' },
-    trackingSkippedCount: { type: 'number' },
-    skipped: { type: 'number' },
-    sentDetails: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          requestId: { type: 'string' },
-          raterId: { type: 'string' },
-          raterEmail: { type: 'string', format: 'email' },
-          studentId: { type: 'string' },
-          studentName: { type: 'string' },
-          facultyName: { type: ['string', 'null'] },
-          sentAt: { type: 'string', format: 'date-time' },
-        },
-      },
-    },
-  },
-};
-
 export function getOpenApiDocument(baseUrl?: string): OpenApiDocument {
   const serverUrl = baseUrl || 'http://localhost:3000';
 
@@ -100,10 +64,6 @@ export function getOpenApiDocument(baseUrl?: string): OpenApiDocument {
         name: 'Reports',
         description: 'Endpoints for report export and generation.',
       },
-      {
-        name: 'Notifications',
-        description: 'Endpoints for scheduled reminder processing.',
-      },
     ],
     components: {
       securitySchemes: {
@@ -111,13 +71,7 @@ export function getOpenApiDocument(baseUrl?: string): OpenApiDocument {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'token',
-          description: 'Used by reminder-processing routes when a secret is configured.',
-        },
-        reminderSecretHeader: {
-          type: 'apiKey',
-          in: 'header',
-          name: 'x-reminder-secret',
-          description: 'Alternative secret header for reminder-processing routes.',
+          description: 'Bearer token authentication scheme.',
         },
       },
       schemas: {
@@ -156,33 +110,6 @@ export function getOpenApiDocument(baseUrl?: string): OpenApiDocument {
         },
         SummaryError: summaryErrorSchema,
         CsvError: genericErrorSchema,
-        ReminderRequest: {
-          type: 'object',
-          example: {
-            thresholdHours: 96,
-            cycleDays: 4,
-            forceRun: true,
-          },
-          properties: {
-            thresholdHours: {
-              type: 'number',
-              description: 'Minimum age in hours before a request counts as overdue.',
-              default: 96,
-            },
-            cycleDays: {
-              type: 'number',
-              description: 'Reminder repeat interval in days.',
-              default: 4,
-            },
-            forceRun: {
-              type: 'boolean',
-              description: 'When true, bypasses the cycle-day check.',
-              default: false,
-            },
-          },
-        },
-        ReminderResponse: reminderResponseSchema,
-        ReminderError: genericErrorSchema,
       },
     },
     paths: {
@@ -299,148 +226,6 @@ export function getOpenApiDocument(baseUrl?: string): OpenApiDocument {
               content: {
                 'application/json': {
                   schema: { $ref: '#/components/schemas/CsvError' },
-                },
-              },
-            },
-          },
-        },
-      },
-      '/api/rater-email-api/reminders': {
-        get: {
-          tags: ['Notifications'],
-          summary: 'Trigger overdue-rater reminder processing with query parameters',
-          description:
-            'Processes overdue form requests and sends reminder emails. When a secret is configured, provide it with either bearer auth or the x-reminder-secret header.',
-          operationId: 'processRemindersGet',
-          security: [{ bearerAuth: [] }, { reminderSecretHeader: [] }],
-          parameters: [
-            {
-              in: 'query',
-              name: 'forceRun',
-              required: false,
-              schema: { type: 'boolean' },
-              description: 'Set to true to run regardless of the current cycle day.',
-            },
-            {
-              in: 'query',
-              name: 'thresholdHours',
-              required: false,
-              schema: { type: 'number' },
-              description: 'Minimum age in hours before a request is considered overdue.',
-            },
-            {
-              in: 'query',
-              name: 'cycleDays',
-              required: false,
-              schema: { type: 'number' },
-              description: 'Reminder repeat interval in days.',
-            },
-          ],
-          responses: {
-            '200': {
-              description: 'Reminder processing completed or was skipped for cycle timing.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ReminderResponse' },
-                  example: {
-                    message: 'Reminder processing complete',
-                    mode: 'service_role',
-                    thresholdHours: 96,
-                    cycleDays: 4,
-                    cycleStartDate: '2026-03-22',
-                    cycleMarker: '2026-04-01',
-                    overdueCount: 3,
-                    sent: 2,
-                    sentThisRun: true,
-                    sentTodayCount: 2,
-                    trackingWriteOk: true,
-                    trackingError: null,
-                    trackedCount: 2,
-                    trackingSkippedCount: 0,
-                    skipped: 1,
-                    sentDetails: [],
-                  },
-                },
-              },
-            },
-            '401': {
-              description: 'Missing or invalid reminder secret when auth is configured.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ReminderError' },
-                },
-              },
-            },
-            '500': {
-              description: 'Configuration, database, or email-processing error.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ReminderError' },
-                },
-              },
-            },
-          },
-        },
-        post: {
-          tags: ['Notifications'],
-          summary: 'Trigger overdue-rater reminder processing with a JSON body',
-          description:
-            'Processes overdue form requests using JSON configuration. Supports force-run behavior for manual testing or admin-triggered runs.',
-          operationId: 'processRemindersPost',
-          security: [{ bearerAuth: [] }, { reminderSecretHeader: [] }],
-          requestBody: {
-            required: false,
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ReminderRequest' },
-                example: {
-                  thresholdHours: 96,
-                  cycleDays: 4,
-                  forceRun: true,
-                },
-              },
-            },
-          },
-          responses: {
-            '200': {
-              description: 'Reminder processing completed or was skipped for cycle timing.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ReminderResponse' },
-                  example: {
-                    message: 'Reminder processing complete',
-                    mode: 'service_role',
-                    thresholdHours: 96,
-                    cycleDays: 4,
-                    cycleStartDate: '2026-03-22',
-                    cycleMarker: '2026-04-01',
-                    overdueCount: 3,
-                    sent: 2,
-                    sentThisRun: true,
-                    sentTodayCount: 2,
-                    trackingWriteOk: true,
-                    trackingError: null,
-                    trackedCount: 2,
-                    trackingSkippedCount: 0,
-                    skipped: 1,
-                    sentDetails: [],
-                  },
-                },
-              },
-            },
-            '401': {
-              description: 'Missing or invalid reminder secret when auth is configured.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ReminderError' },
-                },
-              },
-            },
-            '500': {
-              description: 'Configuration, database, or email-processing error.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ReminderError' },
                 },
               },
             },
