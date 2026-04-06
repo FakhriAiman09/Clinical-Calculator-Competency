@@ -94,6 +94,12 @@ type EPACheckSummary = {
   examples: FlaggedComment[]; // small sample for admin preview
 };
 
+type FormFlagSummary = {
+  totalComments: number;
+  flaggedComments: number;
+  topReason: FaultReason | null;
+};
+
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
 
 function formatTimeWindowLabel(timeWindow: StudentReport['time_window']): string {
@@ -284,6 +290,7 @@ export default function AdminAllReportsPage() {
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [comments, setComments] = useState<string[]>([]);
+  const [formFlagsByResponse, setFormFlagsByResponse] = useState<Record<string, FormFlagSummary>>({});
   const [reportSearch, setReportSearch] = useState('');
 
   // Comment-quality checks per EPA
@@ -647,6 +654,104 @@ export default function AdminAllReportsPage() {
     return formResults.filter((f) => Object.keys(f.results).some((k) => k.startsWith(`${editingEPA}.`)));
   }, [formResults, editingEPA]);
 
+  const fetchFormFlagsForEPA = useCallback(async () => {
+    if (!selectedStudent || editingEPA === null) {
+      setFormFlagsByResponse({});
+      return;
+    }
+
+    const responseIds = formsForEPA.map((f) => f.response_id);
+    if (responseIds.length === 0) {
+      setFormFlagsByResponse({});
+      return;
+    }
+
+    const { data: resultData, error } = await supabase
+      .from('form_results')
+      .select(
+        `
+        response_id,
+        created_at,
+        results,
+        form_responses:form_responses!form_results_response_id_fkey (
+          response,
+          form_requests:form_requests!form_responses_request_id_fkey (
+            student_id,
+            clinical_settings
+          )
+        )
+      `
+      )
+      .in('response_id', responseIds)
+      .returns<SupabaseRow[]>();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const commentsByResponse: Record<string, string[]> = {};
+    responseIds.forEach((id) => {
+      commentsByResponse[id] = [];
+    });
+
+    for (const row of resultData ?? []) {
+      const formResponse = row.form_responses;
+      if (formResponse?.form_requests?.student_id !== selectedStudent.id) continue;
+
+      if (formResponse.response?.response) {
+        const epaKey = String(editingEPA);
+        const commentBlock = formResponse.response.response[epaKey];
+        if (commentBlock) {
+          Object.values(commentBlock).forEach((kfObj) => {
+            if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
+              const texts = (kfObj as KeyFunctionResponse).text;
+              if (Array.isArray(texts)) {
+                commentsByResponse[row.response_id].push(
+                  ...texts.filter((t) => typeof t === 'string' && t.trim() !== '')
+                );
+              }
+            }
+          });
+        }
+      }
+    }
+
+    const next: Record<string, FormFlagSummary> = {};
+    responseIds.forEach((responseId) => {
+      const list = commentsByResponse[responseId] ?? [];
+      const { flagged, total, reasonCounts } = analyzeCommentsQuality(list);
+      const entries = Object.entries(reasonCounts) as [FaultReason, number][];
+      const top = entries.sort((a, b) => b[1] - a[1]).find(([, count]) => count > 0);
+
+      next[responseId] = {
+        totalComments: total,
+        flaggedComments: flagged.length,
+        topReason: top ? top[0] : null,
+      };
+    });
+
+    setFormFlagsByResponse(next);
+  }, [selectedStudent, editingEPA, formsForEPA]);
+
+  useEffect(() => {
+    if (editingEPA === null) {
+      setFormFlagsByResponse({});
+      return;
+    }
+    fetchFormFlagsForEPA();
+  }, [editingEPA, fetchFormFlagsForEPA]);
+
+  const formsForEPASorted = useMemo(() => {
+    return [...formsForEPA].sort((a, b) => {
+      const aFlagged = (formFlagsByResponse[a.response_id]?.flaggedComments ?? 0) > 0;
+      const bFlagged = (formFlagsByResponse[b.response_id]?.flaggedComments ?? 0) > 0;
+
+      if (aFlagged !== bFlagged) return aFlagged ? -1 : 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [formsForEPA, formFlagsByResponse]);
+
   const handleReportSelect = (r: StudentReport) => {
     setLoadingReport(true);
     setSelectedReport(null);
@@ -891,6 +996,10 @@ export default function AdminAllReportsPage() {
           font-weight: 600;
           background: var(--bs-secondary-bg, rgba(255,255,255,0.06));
           border: 1px solid var(--bs-border-color, rgba(255,255,255,0.1));
+        }
+        .form-option-flagged {
+          border-color: rgba(220, 53, 69, 0.55) !important;
+          box-shadow: inset 0 0 0 1px rgba(220, 53, 69, 0.15);
         }
       `}</style>
 
@@ -1223,17 +1332,36 @@ export default function AdminAllReportsPage() {
                   </div>
 
                   <div className='modal-body'>
-                    {formsForEPA.map((form) => (
-                      <button
-                        key={form.response_id}
-                        className={`btn btn-outline-secondary w-100 mb-2 ${
-                          selectedFormId === form.response_id ? 'active' : ''
-                        }`}
-                        onClick={() => setSelectedFormId(form.response_id)}
-                      >
-                        {new Date(form.created_at).toLocaleString()}
-                      </button>
-                    ))}
+                    {formsForEPASorted.map((form) => {
+                      const summary = formFlagsByResponse[form.response_id];
+                      const flagged = (summary?.flaggedComments ?? 0) > 0;
+
+                      return (
+                        <button
+                          key={form.response_id}
+                          className={`btn w-100 mb-2 text-start ${
+                            selectedFormId === form.response_id ? 'active' : ''
+                          } ${flagged ? 'btn-outline-danger form-option-flagged' : 'btn-outline-secondary'}`}
+                          onClick={() => setSelectedFormId(form.response_id)}
+                        >
+                          <div className='d-flex w-100 justify-content-between align-items-center gap-2'>
+                            <span>{new Date(form.created_at).toLocaleString()}</span>
+                            {summary ? (
+                              flagged ? (
+                                <span className='epa-flag-badge'>⚑ {summary.flaggedComments} flagged</span>
+                              ) : (
+                                <span className='mini-muted'>No flags</span>
+                              )
+                            ) : (
+                              <span className='mini-muted'>Checking...</span>
+                            )}
+                          </div>
+                          {flagged && summary?.topReason ? (
+                            <div className='mini-muted mt-1'>Flag means: {reasonLabel(summary.topReason)}</div>
+                          ) : null}
+                        </button>
+                      );
+                    })}
 
                     {selectedFormId && (
                       <div className='mt-4'>
