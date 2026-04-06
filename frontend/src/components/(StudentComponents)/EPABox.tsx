@@ -88,11 +88,12 @@ function extractRelevantFeedback(
   if (typeof llmFeedback === 'string') {
     try {
       const feedbackObj = JSON.parse(llmFeedback) as Record<string, string>;
+      if ('_error' in feedbackObj) return `_error:${feedbackObj['_error']}`;
       const relevantEntries = Object.entries(feedbackObj).filter(([key]) => parseInt(key.split('.')[0]) === epaId);
       const merged = relevantEntries.map(([, val]) => val).filter(Boolean).join('\n\n');
       return merged || null;
     } catch {
-      return llmFeedback.trim() || null;
+      return null;
     }
   }
 
@@ -161,6 +162,10 @@ const EPABox: React.FC<EPABoxProps> = ({
 
   // daysSinceLast is always relative to today so it remains meaningful.
   const today = new Date();
+
+  // Graph x-axis: full time window from cutoff to now (includes new assessments after report).
+  const graphWindowStart = cutoff.toISOString();
+  const graphWindowEnd   = new Date(Math.max(reportDate.getTime(), today.getTime())).toISOString();
 
   const fetchTitle = useCallback(async () => {
     const { data } = await supabase.from('epa_kf_descriptions').select('epa_descriptions').single();
@@ -276,9 +281,11 @@ const EPABox: React.FC<EPABoxProps> = ({
     }
 
     // ── 4. Build the graph using assessments within this report's time window ──
-    // Use reportDate (not today) so old reports show their historical window.
+    // Use the later of reportDate or now so new assessments submitted after
+    // the report was generated still appear on the graph.
     const windowStart = new Date(reportCreatedAt);
     windowStart.setMonth(windowStart.getMonth() - timeRange);
+    const graphUpperBound = new Date(Math.max(reportDate.getTime(), Date.now()));
 
     const monthlyMap: Record<string, number[]> = {};
     const lifetimeScores: number[] = [];
@@ -289,7 +296,7 @@ const EPABox: React.FC<EPABoxProps> = ({
         lifetimeScores.push(val);
 
         const aDate = new Date(a.date);
-        if (aDate >= windowStart && aDate <= reportDate) {
+        if (aDate >= windowStart && aDate <= graphUpperBound) {
           const year = aDate.getFullYear();
           const month = String(aDate.getMonth() + 1).padStart(2, '0');
           const key = `${year}-${month}-01`;
@@ -410,7 +417,7 @@ const EPABox: React.FC<EPABoxProps> = ({
         <div className='row mb-4'>
           <div className='col-md-6'>
             <h6 className='fw-bold border-bottom pb-1'>Performance Over Time</h6>
-            <LineGraph data={lineGraphData} />
+            <LineGraph data={lineGraphData} windowStart={graphWindowStart} windowEnd={graphWindowEnd} />
           </div>
           <div className='col-md-6'>
             <h6 className='fw-bold border-bottom pb-1'>EPA Stats</h6>
@@ -488,9 +495,16 @@ const EPABox: React.FC<EPABoxProps> = ({
           <h6 className='fw-bold border-bottom pb-1'>AI Summary &amp; Recommendations</h6>
           <div className='border rounded p-3 bg-body-secondary scrollable-box markdown-preview'>
             {llmFeedback ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                {llmFeedback}
-              </ReactMarkdown>
+              llmFeedback.startsWith('_error:') ? (
+                <p className='text-warning mb-0'>
+                  <i className='bi bi-exclamation-triangle me-2' />
+                  {llmFeedback.slice('_error:'.length)}
+                </p>
+              ) : (
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                  {llmFeedback}
+                </ReactMarkdown>
+              )
             ) : (
               <p className='text-muted mb-0'>
                 <em>Generating Feedback...</em>

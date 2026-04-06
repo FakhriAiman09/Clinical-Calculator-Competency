@@ -11,6 +11,7 @@ Required environment variables:
 """
 
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
@@ -331,11 +332,13 @@ def handle_new_report(payload, gemini, supabase) -> None:
     summary = generate_report_summary(data, gemini)
     if summary.startswith('Error generating feedback:'):
       error_log.error(f'[{report_id}] {summary}')
+      stored = json.dumps({'_error': 'AI feedback could not be generated. Please regenerate the report.'})
     else:
       app_log.info(f'[{report_id}] Gemini response received.')
+      stored = summary
 
     (supabase.table('student_reports')
-     .update({'llm_feedback': summary})
+     .update({'llm_feedback': stored})
      .eq('id', report_id)
      .execute())
     if summary.startswith('Error generating feedback:'):
@@ -355,7 +358,7 @@ def handle_new_report(payload, gemini, supabase) -> None:
     else:
       friendly = 'AI feedback could not be generated. Please regenerate the report or contact support if the problem persists.'
     (supabase.table('student_reports')
-     .update({'llm_feedback': friendly})
+     .update({'llm_feedback': json.dumps({'_error': friendly})})
      .eq('id', report_id)
      .execute())
 

@@ -4,6 +4,10 @@ import React from 'react';
 
 interface LineGraphProps {
   data: { date: string; value: number }[];
+  /** ISO date string — start of the x-axis window (inclusive). */
+  windowStart: string;
+  /** ISO date string — end of the x-axis window (inclusive). */
+  windowEnd: string;
 }
 
 // ── FIX 2 (part 2): Replace every `currentColor` with explicit hex values.
@@ -21,7 +25,7 @@ const GRID_COLOR   = '#cccccc';   // dashed grid lines
 const LINE_COLOR   = '#007bff';   // trend line + filled dots
 const LATEST_RING  = '#28a745';   // green ring on last data point
 
-const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
+const LineGraph: React.FC<LineGraphProps> = ({ data, windowStart, windowEnd }) => {
   const width         = 600;
   const height        = 200;
   const labelPadding  = 105;
@@ -37,13 +41,16 @@ const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
     return new Date(y, m - 1, d);
   };
 
-  const buckets: Record<string, number[]> = {};
-  const firstDate = new Date(Math.min(...data.map((d) => parseLocalDate(d.date).getTime())));
-  const now = new Date();
+  // Build month intervals spanning the full window, not just data range.
+  const winStart = new Date(windowStart);
+  const winEnd   = new Date(windowEnd);
+  const startMonth = new Date(winStart.getFullYear(), winStart.getMonth(), 1);
+  const endMonth   = new Date(winEnd.getFullYear(),   winEnd.getMonth(),   1);
 
+  const buckets: Record<string, number[]> = {};
   const intervals: { label: string; start: Date }[] = [];
-  const current = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
-  while (current <= now) {
+  const current = new Date(startMonth);
+  while (current <= endMonth) {
     const label = `${current.toLocaleString('default', { month: 'short' })} '${String(current.getFullYear()).slice(-2)}`;
     intervals.push({ label, start: new Date(current) });
     current.setMonth(current.getMonth() + 1);

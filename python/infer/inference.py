@@ -13,6 +13,7 @@ import supabase as spb
 import tensorflow as tf
 import tensorflow_text as text
 from google import genai
+from google.genai import types as genai_types
 from google.genai.types import GenerateContentResponse
 from sklearn import svm
 
@@ -84,14 +85,7 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   Student scores by key function:
   {datastr}
 
-  Write a brief performance summary per key function with one actionable suggestion each. Return a JSON object with KF IDs as keys and Markdown strings as values. No markdown code block wrapper — response must start and end with a curly brace.
-
-  e.g.
-  {{
-    "1.1": "**markdown stuff**",
-    "1.2": "...",
-    ...
-  }}
+  Write a brief performance summary per key function with one actionable suggestion each. Return a JSON object with KF IDs as keys and Markdown strings as values.
   """
 
   import json
@@ -99,14 +93,22 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   for attempt in range(3):
     try:
       response: GenerateContentResponse = gemini.models.generate_content(
-        model='gemini-2.5-flash', contents=query
+        model='gemini-2.5-flash',
+        contents=query,
+        config=genai_types.GenerateContentConfig(
+          response_mime_type='application/json',
+        ),
       )
       if response.text:
         text = response.text.strip()
+        # Strip any residual markdown fences
         if text.startswith('```'):
-          lines = text.split('\n')
-          lines = [l for l in lines if not l.strip().startswith('```')]
-          text = '\n'.join(lines).strip()
+          text = re.sub(r'^```[a-zA-Z]*\n?', '', text)
+          text = re.sub(r'\n?```$', '', text.strip()).strip()
+        # Extract outermost JSON object even if there is surrounding text
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+          text = match.group(0)
         try:
           parsed = json.loads(text)
           return json.dumps(parsed)
