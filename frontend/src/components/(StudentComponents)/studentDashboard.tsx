@@ -227,7 +227,7 @@ const StudentDashboard: React.FC = () => {
           />
         ))}
       </div>
-      <EPAModal selectedEpa={selectedEpa} onClose={() => setSelectedEpa(null)} getAverage={getAverage} />
+      <EPAModal selectedEpa={selectedEpa} onClose={() => setSelectedEpa(null)} range={range} />
     </div>
   );
 };

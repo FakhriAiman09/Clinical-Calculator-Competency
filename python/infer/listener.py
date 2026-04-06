@@ -300,10 +300,13 @@ def handle_updated_report(payload, gemini, supabase) -> None:
   record = payload['data']['record']
   old_record = payload['data'].get('old_record', {})
 
-  # Only act when llm_feedback transitions TO 'Generating...' to avoid loops
+  # Only act when an existing feedback value is manually reset to 'Generating...'
+  # Skip if new value is not 'Generating...', old was already 'Generating...', or
+  # old was null/empty (meaning this UPDATE came from handle_new_report's own status step)
   if record.get('llm_feedback') != 'Generating...':
     return
-  if old_record.get('llm_feedback') == 'Generating...':
+  old_feedback = old_record.get('llm_feedback')
+  if not old_feedback or old_feedback == 'Generating...':
     return
 
   report_id = record['id']
