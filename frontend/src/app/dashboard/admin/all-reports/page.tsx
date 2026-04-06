@@ -150,6 +150,18 @@ function detectFaultReasons(textRaw: string): FaultReason[] {
   const wordCount = words.length;
   if (wordCount > 0 && wordCount <= 3) reasons.push('TOO_SHORT');
 
+  // Detail signals used by multiple heuristics.
+  // This helps avoid flagging comments that contain concrete clinical context.
+  const hasClinicalSpecificity =
+    /\b(diagnos(?:is|es|tic)|treat(?:ment|ments)|management|assessment|differential|investigation|screening|interpret(?:ing|ation)?|results?|plan|follow-?up|risk|symptom|history|exam|test(?:s)?|finding(?:s)?|intervention(?:s)?)\b/i.test(
+      lower
+    );
+  const hasConnector =
+    /\b(because|so that|however|but|improve|suggest|recommend|next time|specific|example|when|therefore|due to)\b/i.test(
+      lower
+    );
+  const hasDetailSignal = hasConnector || hasClinicalSpecificity || wordCount >= 12;
+
   // All caps (shouting) - only if enough letters
   const letters = text.replace(/[^a-zA-Z]/g, '');
   if (letters.length >= 10 && letters === letters.toUpperCase()) reasons.push('ALL_CAPS');
@@ -185,7 +197,10 @@ function detectFaultReasons(textRaw: string): FaultReason[] {
     'no issues',
     'nothing to add',
   ];
-  if (genericContains.some((p) => lower.includes(p))) reasons.push('GENERIC');
+  if (genericContains.some((p) => lower.includes(p))) {
+    const tooVagueTemplate = !hasDetailSignal || (wordCount < 8 && !hasClinicalSpecificity);
+    if (tooVagueTemplate) reasons.push('GENERIC');
+  }
 
   // Profanity (simple heuristic list; extend as needed)
   const profanity = ['fuck', 'shit', 'bitch', 'asshole', 'bastard', 'dick', 'cunt'];
@@ -197,10 +212,7 @@ function detectFaultReasons(textRaw: string): FaultReason[] {
   // Low-signal: praise without any detail indicators
   const praiseWords = ['good', 'great', 'nice', 'excellent', 'well done', 'amazing'];
   const hasPraise = praiseWords.some((w) => lower.includes(w));
-  const hasDetailSignal =
-    /\b(because|so that|however|but|improve|suggest|recommend|next time|specific|example|when)\b/i.test(lower) ||
-    wordCount >= 12; // longer comments more likely to have content
-  if (hasPraise && !hasDetailSignal) reasons.push('LOW_SIGNAL');
+  if (hasPraise && !hasDetailSignal && wordCount <= 10) reasons.push('LOW_SIGNAL');
 
   return Array.from(new Set(reasons));
 }
