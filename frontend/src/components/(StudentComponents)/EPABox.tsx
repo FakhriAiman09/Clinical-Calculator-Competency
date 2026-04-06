@@ -36,6 +36,7 @@ interface FormResponsesInner {
 }
 
 interface SupabaseRow {
+  response_id: string;
   created_at: string;
   results: Record<string, number>;
   form_responses: FormResponsesInner;
@@ -49,16 +50,65 @@ interface Assessment {
   setting?: string | null;
 }
 
+interface CommentEntry {
+  text: string;
+  responseId: string;
+}
+
 interface EPABoxProps {
   epaId: number;
   timeRange: 3 | 6 | 12;
   kfDescriptions?: Record<string, string[]> | null;
   studentId: string;
+  /** The ID of the specific report being displayed. */
+  reportId: string;
+  /** ISO timestamp of when the report was generated — used as the end of the time window. */
+  reportCreatedAt: string;
+  /** When true, shows a delete button next to each comment. */
+  isAdmin?: boolean;
+  /** Called after a comment is successfully deleted so the parent can trigger recalculation. */
+  onCommentDeleted?: () => void;
 }
 
 const supabase = createClient();
 
-const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, studentId }) => {
+function extractRelevantFeedback(
+  llmFeedback: unknown,
+  epaId: number
+): string | null {
+  if (!llmFeedback) return null;
+
+  if (typeof llmFeedback === 'object') {
+    const feedbackObj = llmFeedback as Record<string, string>;
+    const relevantEntries = Object.entries(feedbackObj).filter(([key]) => parseInt(key.split('.')[0]) === epaId);
+    const merged = relevantEntries.map(([, val]) => val).filter(Boolean).join('\n\n');
+    return merged || null;
+  }
+
+  if (typeof llmFeedback === 'string') {
+    try {
+      const feedbackObj = JSON.parse(llmFeedback) as Record<string, string>;
+      const relevantEntries = Object.entries(feedbackObj).filter(([key]) => parseInt(key.split('.')[0]) === epaId);
+      const merged = relevantEntries.map(([, val]) => val).filter(Boolean).join('\n\n');
+      return merged || null;
+    } catch {
+      return llmFeedback.trim() || null;
+    }
+  }
+
+  return null;
+}
+
+const EPABox: React.FC<EPABoxProps> = ({
+  epaId,
+  timeRange,
+  kfDescriptions,
+  studentId,
+  reportId,
+  reportCreatedAt,
+  isAdmin = false,
+  onCommentDeleted,
+}) => {
   const [expanded, setExpanded] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.matchMedia('print').matches;
@@ -66,14 +116,9 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
     return false;
   });
 
-  // ── FIX 3: track whether we auto-expanded for print so we can collapse after ──
   const wasAutoExpandedRef = useRef(false);
 
   useEffect(() => {
-    // FIX 3: Use CSS display toggling so card-body is always in the DOM.
-    // beforeprint / afterprint only need to flip the `expanded` flag; because
-    // the DOM node already exists the browser captures it immediately without
-    // waiting for a React re-render cycle.
     const handleBeforePrint = () => {
       if (!expanded) {
         setExpanded(true);
@@ -99,7 +144,7 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
 
   const [epaTitle, setEpaTitle] = useState('');
   const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [comments, setComments] = useState<string[]>([]);
+  const [comments, setComments] = useState<CommentEntry[]>([]);
   const [llmFeedback, setLlmFeedback] = useState<string | null>(null);
   const [lifetimeAverage, setLifetimeAverage] = useState<number | null>(null);
   const [lineGraphData, setLineGraphData] = useState<{ date: string; value: number }[]>([]);
@@ -107,9 +152,15 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
   const [epaAvgFromKFs, setEpaAvgFromKFs] = useState<number | null>(null);
 
   const epaStr = String(epaId);
-  const now = new Date();
-  const cutoff = new Date();
-  cutoff.setMonth(now.getMonth() - timeRange);
+
+  // Use the report's creation time as the reference point so that opening an
+  // old report shows the data as it was at generation time, not relative to today.
+  const reportDate = new Date(reportCreatedAt);
+  const cutoff = new Date(reportCreatedAt);
+  cutoff.setMonth(cutoff.getMonth() - timeRange);
+
+  // daysSinceLast is always relative to today so it remains meaningful.
+  const today = new Date();
 
   const fetchTitle = useCallback(async () => {
     const { data } = await supabase.from('epa_kf_descriptions').select('epa_descriptions').single();
@@ -119,10 +170,12 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
   }, [epaStr]);
 
   const fetchData = useCallback(async () => {
+    // ── 1. Fetch assessments from form_results (live, filtered by student) ──
     const { data: resultData } = await supabase
       .from('form_results')
       .select(
         `
+        response_id,
         created_at,
         results,
         form_responses:form_responses!form_results_response_id_fkey (
@@ -136,14 +189,15 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
       )
       .returns<SupabaseRow[]>();
 
-    const { data: reportData } = await supabase
+    // ── 2. Fetch the specific report by its ID ──
+    const { data: targetReport } = await supabase
       .from('student_reports')
       .select('created_at, time_window, report_data, kf_avg_data, llm_feedback')
-      .eq('user_id', studentId)
-      .order('created_at', { ascending: false });
+      .eq('id', reportId)
+      .single();
 
     const parsedAssessments: Assessment[] = [];
-    const parsedComments: string[] = [];
+    const parsedComments: CommentEntry[] = [];
 
     for (const row of resultData ?? []) {
       const formResponse = row.form_responses;
@@ -151,11 +205,8 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
 
       const date = row.created_at;
       const setting = formResponse.form_requests?.clinical_settings || null;
+      const responseId = row.response_id ?? '';
 
-      // ── FIX 1: track whether this row has already contributed comments for
-      //    this EPA. Without this flag, comments were pushed once per matching
-      //    KF key — so a rater who rated 3 KFs would produce 3 copies of every
-      //    comment they left on that EPA. ──────────────────────────────────────
       let commentExtractedForThisRow = false;
 
       for (const [kfKey, level] of Object.entries(row.results)) {
@@ -169,7 +220,6 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
             setting,
           });
 
-          // Extract comments exactly once per form-response row, not once per KF
           if (!commentExtractedForThisRow) {
             commentExtractedForThisRow = true;
             const commentBlock = formResponse.response?.response?.[epaStr];
@@ -178,7 +228,9 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
                 if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
                   const texts = (kfObj as KeyFunctionResponse).text;
                   if (Array.isArray(texts)) {
-                    parsedComments.push(...texts.filter((t) => typeof t === 'string' && t.trim() !== ''));
+                    texts.filter((t) => typeof t === 'string' && t.trim() !== '').forEach((t) => {
+                      parsedComments.push({ text: t, responseId });
+                    });
                   }
                 }
               });
@@ -189,12 +241,16 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
     }
 
     setAssessments(parsedAssessments);
-    // Deduplicate in case the same comment text appears across different raters
-    setComments(Array.from(new Set(parsedComments)));
+    // Deduplicate by text+responseId
+    const seen = new Set<string>();
+    setComments(parsedComments.filter((c) => {
+      const key = `${c.responseId}::${c.text}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }));
 
-    const targetWindow = `${timeRange}m`;
-    const targetReport = (reportData ?? []).find((r) => r.time_window === targetWindow);
-
+    // ── 3. Load stored scores and AI feedback from this specific report ──
     if (targetReport) {
       const kfs: Record<string, number> = {};
       const epaKfScores: number[] = [];
@@ -216,40 +272,13 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
         epaKfScores.length > 0 ? Math.floor(epaKfScores.reduce((a, b) => a + b, 0) / epaKfScores.length) : null
       );
 
-      if (targetReport.llm_feedback) {
-        let feedbackObj: Record<string, string> | null = null;
-
-        if (typeof targetReport.llm_feedback === 'object') {
-          feedbackObj = targetReport.llm_feedback as Record<string, string>;
-        } else if (typeof targetReport.llm_feedback === 'string') {
-          try {
-            feedbackObj = JSON.parse(targetReport.llm_feedback);
-          } catch {
-            feedbackObj = null;
-          }
-        }
-
-        if (feedbackObj) {
-          const relevantEntries = Object.entries(feedbackObj).filter(([key]) => {
-            return parseInt(key.split('.')[0]) === epaId;
-          });
-          const merged = relevantEntries.map(([, val]) => val).filter(Boolean).join('\n\n');
-          setLlmFeedback(merged || null);
-        } else {
-          setLlmFeedback(null);
-        }
-      } else {
-        setLlmFeedback(null);
-      }
+      setLlmFeedback(extractRelevantFeedback(targetReport.llm_feedback, epaId));
     }
 
-    // ── FIX 2: Build graph only from assessments within the selected time
-    //    window (using `cutoff`). Previously it used all-time `parsedAssessments`
-    //    which could include months far outside the report window, making the
-    //    quarter-bucket logic in LineGraph show "More assessments needed" even
-    //    when recent data existed. ────────────────────────────────────────────
-    const windowCutoff = new Date();
-    windowCutoff.setMonth(windowCutoff.getMonth() - timeRange);
+    // ── 4. Build the graph using assessments within this report's time window ──
+    // Use reportDate (not today) so old reports show their historical window.
+    const windowStart = new Date(reportCreatedAt);
+    windowStart.setMonth(windowStart.getMonth() - timeRange);
 
     const monthlyMap: Record<string, number[]> = {};
     const lifetimeScores: number[] = [];
@@ -259,10 +288,9 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
       if (typeof val === 'number') {
         lifetimeScores.push(val);
 
-        // Only include data points inside the selected time window for the graph
-        if (new Date(a.date) >= windowCutoff) {
-          const d = new Date(a.date);
-          const key = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+        const aDate = new Date(a.date);
+        if (aDate >= windowStart && aDate <= reportDate) {
+          const key = new Date(aDate.getFullYear(), aDate.getMonth(), 1).toISOString().slice(0, 10);
           if (!monthlyMap[key]) monthlyMap[key] = [];
           monthlyMap[key].push(val);
         }
@@ -281,7 +309,7 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
     if (lifetimeScores.length > 0) {
       setLifetimeAverage(Math.floor(lifetimeScores.reduce((a, b) => a + b, 0) / lifetimeScores.length));
     }
-  }, [epaId, studentId, timeRange, epaStr]);
+  }, [epaId, studentId, timeRange, epaStr, reportId, reportCreatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchTitle();
@@ -291,7 +319,7 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
     fetchData();
   }, [fetchData]);
 
-  // Poll for llm_feedback every 5s until it arrives (Gemini can take 2-3 minutes)
+  // Poll for llm_feedback every 5s until it arrives — scoped to this specific report.
   useEffect(() => {
     if (!expanded) return;
     if (llmFeedback && llmFeedback !== 'Generating...') return;
@@ -300,43 +328,66 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
       const { data } = await supabase
         .from('student_reports')
         .select('llm_feedback')
-        .eq('user_id', studentId)
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .eq('id', reportId)
         .single();
 
       if (!data?.llm_feedback) return;
       if (data.llm_feedback === 'Generating...') return;
 
-      let feedbackObj: Record<string, string> | null = null;
-      if (typeof data.llm_feedback === 'object') {
-        feedbackObj = data.llm_feedback as Record<string, string>;
-      } else if (typeof data.llm_feedback === 'string') {
-        try { feedbackObj = JSON.parse(data.llm_feedback); } catch { return; }
-      }
-      if (!feedbackObj) return;
-      const relevantEntries = Object.entries(feedbackObj).filter(([key]) => {
-        return parseInt(key.split('.')[0]) === epaId;
-      });
-      const merged = relevantEntries.map(([, val]) => val).filter(Boolean).join('\n\n');
-      if (merged) setLlmFeedback(merged);
+      const extracted = extractRelevantFeedback(data.llm_feedback, epaId);
+      if (extracted) setLlmFeedback(extracted);
     };
 
     const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
-  }, [expanded, llmFeedback, studentId, epaId]);
+  }, [expanded, llmFeedback, reportId, epaId]);
 
-  const filtered = assessments.filter((a) => new Date(a.date) >= cutoff);
+  const filtered = assessments.filter((a) => {
+    const aDate = new Date(a.date);
+    return aDate >= cutoff && aDate <= reportDate;
+  });
   const settings = Array.from(new Set(filtered.map((a) => a.setting).filter(Boolean)));
   const lastDate = [...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.date;
   const daysSinceLast = lastDate
-    ? Math.floor((now.getTime() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24))
+    ? Math.floor((today.getTime() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24))
     : 'N/A';
 
   const formAssessmentDates = new Set(filtered.map((a) => a.date));
   const assessmentCount = formAssessmentDates.size;
 
   const allGreen = Object.values(kfAverages).length >= 3 && Object.values(kfAverages).every((v) => Math.floor(v) === 3);
+
+  const deleteComment = async (entry: CommentEntry) => {
+    const { data } = await supabase
+      .from('form_responses')
+      .select('response')
+      .eq('response_id', entry.responseId)
+      .single();
+
+    if (!data?.response) return;
+
+    // Remove the comment text from every text[] array under this EPA
+    const responseObj = data.response as Record<string, unknown>;
+    const epaSection = (responseObj?.response as Record<string, unknown>)?.[epaStr] as
+      | Record<string, { text?: string[] }>
+      | undefined;
+
+    if (epaSection) {
+      for (const kf of Object.values(epaSection)) {
+        if (Array.isArray(kf.text)) {
+          kf.text = kf.text.filter((t) => t !== entry.text);
+        }
+      }
+    }
+
+    await supabase
+      .from('form_responses')
+      .update({ response: responseObj })
+      .eq('response_id', entry.responseId);
+
+    setComments((prev) => prev.filter((c) => !(c.responseId === entry.responseId && c.text === entry.text)));
+    onCommentDeleted?.();
+  };
 
   return (
     <div className={`card rounded shadow-sm ${expanded ? 'expanded' : ''}`}>
@@ -353,19 +404,6 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
         <HalfCircleGauge average={epaAvgFromKFs} allGreen={allGreen} />
       </div>
 
-      {/*
-        FIX 3: card-body is ALWAYS rendered in the DOM — visibility is controlled
-        by `display` style, not by a conditional `{expanded && ...}`.
-
-        The old pattern (`{expanded && <div>...</div>}`) meant that when the
-        browser fired `beforeprint`, React's setState hadn't finished re-rendering
-        before the browser captured the print layout, so the AI block (and the
-        rest of the card body) was missing from the PDF.
-
-        With `display: expanded ? 'block' : 'none'` the node already exists in
-        the DOM; toggling `expanded` in the beforeprint handler is enough for the
-        browser to see the full content at print time.
-      */}
       <div className='card-body' style={{ display: expanded ? 'block' : 'none' }}>
         <div className='row mb-4'>
           <div className='col-md-6'>
@@ -424,8 +462,17 @@ const EPABox: React.FC<EPABoxProps> = ({ epaId, timeRange, kfDescriptions, stude
             <ul className='list-group list-group-flush'>
               {comments.length > 0 ? (
                 comments.map((c, i) => (
-                  <li key={i} className='list-group-item bg-transparent'>
-                    {c}
+                  <li key={i} className='list-group-item bg-transparent d-flex justify-content-between align-items-start gap-2'>
+                    <span>{c.text}</span>
+                    {isAdmin && (
+                      <button
+                        className='btn btn-sm btn-outline-danger flex-shrink-0'
+                        title='Delete comment'
+                        onClick={() => deleteComment(c)}
+                      >
+                        <i className='bi bi-trash' />
+                      </button>
+                    )}
                   </li>
                 ))
               ) : (

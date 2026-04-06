@@ -170,6 +170,16 @@ async def main() -> None:
          .subscribe())
   app_log.info('Subscribed to form_responses_insert.')
 
+  app_log.info('Subscribing to "form_responses_update" channel...')
+  await (asupabase.realtime
+         .channel('form_responses_update')
+         .on_postgres_changes('UPDATE',
+                              schema='public', table='form_responses',
+                              callback=lambda payload:
+                              handle_updated_response(payload, bert_model, svm_models, supabase))
+         .subscribe())
+  app_log.info('Subscribed to form_responses_update.')
+
   app_log.info('Subscribing to "student_reports_insert" channel...')
   await (asupabase.realtime
          .channel('student_reports_insert')
@@ -179,6 +189,16 @@ async def main() -> None:
                               handle_new_report(payload, gemini, supabase))
          .subscribe())
   app_log.info('Subscribed to student_reports_insert.')
+
+  app_log.info('Subscribing to "student_reports_update" channel...')
+  await (asupabase.realtime
+         .channel('student_reports_update')
+         .on_postgres_changes('UPDATE',
+                              schema='public', table='student_reports',
+                              callback=lambda payload:
+                              handle_updated_report(payload, gemini, supabase))
+         .subscribe())
+  app_log.info('Subscribed to student_reports_update.')
 
   app_log.info('Listening for events...')
   while True:
@@ -224,6 +244,59 @@ def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
     error_log.exception(f'Error in handle_new_response: {e}')
 
 
+def handle_updated_response(payload, bert_model, svm_models, supabase) -> None:
+  """Re-score an edited form response and upsert the result into form_results."""
+  try:
+    record = payload['data']['record']
+    response_id = record['response_id']
+    infer_log.info(f'Form response updated: {response_id}')
+
+    response = record['response']['response']
+
+    ds = [kf for kf in response.values()]
+    bert_inputs = {k: v['text'] for d in ds for k, v in d.items()}
+    svm_inputs = {k: [vv for kk, vv in v.items() if kk != 'text'] for d in ds for k, v in d.items()}
+
+    infer_log.info(f'[{response_id}] Running BERT inference (update)...')
+    bert_res = bert_infer(bert_model, bert_inputs)
+    infer_log.info(f'[{response_id}] BERT results: {bert_res}')
+
+    infer_log.info(f'[{response_id}] Running SVM inference (update)...')
+    svms_res = svm_infer(svm_models, svm_inputs)
+    infer_log.info(f'[{response_id}] SVM results: {svms_res}')
+
+    def weighted_average(bert: float, svm: float) -> float:
+      return bert * 0.25 + svm * 0.75
+
+    res = {k: weighted_average(bert=v, svm=svms_res[k]) for k, v in bert_res.items()}
+    infer_log.info(f'[{response_id}] Updated weighted results: {res}')
+
+    # UPSERT so the existing form_results row is replaced, not duplicated
+    (supabase.table('form_results')
+     .upsert({'response_id': response_id, 'results': res}, on_conflict='response_id')
+     .execute())
+    infer_log.info(f'[{response_id}] form_results upserted successfully.')
+
+  except Exception as e:
+    error_log.exception(f'Error in handle_updated_response: {e}')
+
+
+def handle_updated_report(payload, gemini, supabase) -> None:
+  """Regenerate AI feedback when a report's llm_feedback is reset to 'Generating...'."""
+  record = payload['data']['record']
+  old_record = payload['data'].get('old_record', {})
+
+  # Only act when llm_feedback transitions TO 'Generating...' to avoid loops
+  if record.get('llm_feedback') != 'Generating...':
+    return
+  if old_record.get('llm_feedback') == 'Generating...':
+    return
+
+  report_id = record['id']
+  app_log.info(f'Report updated with Generating... — regenerating feedback: {report_id}')
+  handle_new_report(payload, gemini, supabase)
+
+
 def handle_new_report(payload, gemini, supabase) -> None:
   """Generate and persist AI feedback for a newly created student report."""
   record = payload['data']['record']
@@ -256,13 +329,19 @@ def handle_new_report(payload, gemini, supabase) -> None:
 
     app_log.info(f'[{report_id}] Calling Gemini...')
     summary = generate_report_summary(data, gemini)
-    app_log.info(f'[{report_id}] Gemini response received.')
+    if summary.startswith('Error generating feedback:'):
+      error_log.error(f'[{report_id}] {summary}')
+    else:
+      app_log.info(f'[{report_id}] Gemini response received.')
 
     (supabase.table('student_reports')
      .update({'llm_feedback': summary})
      .eq('id', report_id)
      .execute())
-    app_log.info(f'[{report_id}] AI feedback written successfully.')
+    if summary.startswith('Error generating feedback:'):
+      error_log.error(f'[{report_id}] Error feedback written to student_reports.')
+    else:
+      app_log.info(f'[{report_id}] AI feedback written successfully.')
 
   except Exception as e:
     error_log.exception(f'[{report_id}] Error in handle_new_report: {e}')

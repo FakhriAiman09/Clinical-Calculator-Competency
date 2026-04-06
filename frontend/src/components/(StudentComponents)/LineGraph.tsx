@@ -36,16 +36,16 @@ const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
   const now = new Date();
 
   const intervals: { label: string; start: Date }[] = [];
-  const current = new Date(firstDate.getFullYear(), Math.floor(firstDate.getMonth() / 3) * 3, 1);
+  const current = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
   while (current <= now) {
     const label = `${current.toLocaleString('default', { month: 'short' })} '${String(current.getFullYear()).slice(-2)}`;
     intervals.push({ label, start: new Date(current) });
-    current.setMonth(current.getMonth() + 3);
+    current.setMonth(current.getMonth() + 1);
   }
 
   intervals.forEach(({ start }) => {
     const end = new Date(start);
-    end.setMonth(start.getMonth() + 3);
+    end.setMonth(start.getMonth() + 1);
     const key = start.toISOString();
     buckets[key] = data
       .filter((d) => {
@@ -63,13 +63,13 @@ const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
 
   const pointsWithData = bucketData.filter((d) => d.value !== null);
 
-  if (pointsWithData.length < 2) {
+  if (pointsWithData.length < 1) {
     return (
       <div
         className='d-flex align-items-center justify-content-center text-muted'
         style={{ height: 80, fontSize: '0.85rem', fontStyle: 'italic' }}
       >
-        More assessments needed to show a trend
+        No assessment data available
       </div>
     );
   }

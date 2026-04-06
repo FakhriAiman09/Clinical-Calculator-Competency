@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { getEPAKFDescs } from '@/utils/get-epa-data';
 import { useRequireRole } from '@/utils/useRequiredRole';
@@ -17,13 +17,21 @@ interface StudentReport {
   id: string;
   user_id: string;
   title: string;
-  time_window: '3m' | '6m' | '12m';
+  time_window: string;
   report_data: Record<string, number>;
   llm_feedback: string | null;
   created_at: string;
 }
 
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
+
+function formatTimeWindowLabel(timeWindow: string): string {
+  return `${parseInt(timeWindow, 10)} months`;
+}
+
+function getDisplayReportTitle(title: string): string {
+  return title.replace(/\s*\((3m|6m|12m)\)\s*$/i, '').trim() || title;
+}
 
 export default function StudentReportPage() {
   useRequireRole(['student', 'dev']);
@@ -35,6 +43,7 @@ export default function StudentReportPage() {
   const [loadingReports, setLoadingReports] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
   const [kfDescriptions, setKfDescriptions] = useState<Record<string, string[]> | null>(null);
+  const [reportSearch, setReportSearch] = useState('');
 
   const fetchReports = useCallback(async (userId: string) => {
     setLoadingReports(true);
@@ -43,7 +52,13 @@ export default function StudentReportPage() {
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    setReports(data ?? []);
+    setReports(
+      (data ?? []).map((report) => ({
+        ...report,
+        title: getDisplayReportTitle(report.title),
+        time_window: formatTimeWindowLabel(report.time_window),
+      }))
+    );
     setLoadingReports(false);
   }, []);
 
@@ -75,8 +90,37 @@ export default function StudentReportPage() {
     }, 400);
   };
 
+  const filteredReports = useMemo(() => {
+    const search = reportSearch.trim().toLowerCase();
+    return reports.filter((r) => !search || r.title.toLowerCase().includes(search));
+  }, [reportSearch, reports]);
+
   return (
     <div className="container py-5">
+      <style>{`
+        .report-list-shell {
+          border: 1px solid var(--bs-border-color, rgba(255,255,255,0.12));
+          border-radius: 0.85rem;
+          overflow: hidden;
+          background: var(--bs-body-bg, transparent);
+        }
+        .report-list-scroll {
+          max-height: 420px;
+          overflow-y: auto;
+        }
+        .report-row {
+          border: 0;
+          border-bottom: 1px solid var(--bs-border-color, rgba(255,255,255,0.08));
+          background: transparent;
+        }
+        .report-row:last-child {
+          border-bottom: 0;
+        }
+        .report-meta {
+          font-size: 0.85rem;
+          color: var(--bs-secondary-color, #6c757d);
+        }
+      `}</style>
 
       {/* Generate New Report form — matches the design in the screenshot */}
       {user?.id && (
@@ -90,6 +134,17 @@ export default function StudentReportPage() {
       <div className="mt-4 mb-3">
         <h4 className="fw-semibold mb-3">Past Reports</h4>
 
+        <div className="d-flex flex-wrap gap-2 mb-3">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Search reports by name"
+            value={reportSearch}
+            onChange={(e) => setReportSearch(e.target.value)}
+            style={{ maxWidth: 280 }}
+          />
+        </div>
+
         {loadingReports ? (
           <div className="text-center py-4">
             <div className="spinner-border text-primary" role="status">
@@ -100,26 +155,32 @@ export default function StudentReportPage() {
           <div className="alert alert-info">
             No reports have been generated yet. Use the form above to generate your first report.
           </div>
+        ) : filteredReports.length === 0 ? (
+          <div className="alert alert-secondary">
+            No reports match the current filters.
+          </div>
         ) : (
-          <ul className="list-group shadow-sm">
-            {reports.map((r) => (
-              <li
-                key={r.id}
-                className={`list-group-item list-group-item-action d-flex justify-content-between align-items-center ${
-                  selectedReport?.id === r.id ? 'active' : ''
-                }`}
-                onClick={() => handleReportSelect(r)}
-                style={{ cursor: 'pointer' }}
-              >
-                <span>
-                  {r.title} ({r.time_window})
-                </span>
-                <small className={selectedReport?.id === r.id ? 'text-white-50' : 'text-muted'}>
-                  {new Date(r.created_at).toLocaleDateString()}
-                </small>
-              </li>
-            ))}
-          </ul>
+          <div className="report-list-shell shadow-sm">
+            <div className="report-list-scroll">
+              <ul className="list-group list-group-flush">
+                {filteredReports.map((r) => (
+                  <li
+                    key={r.id}
+                    className={`list-group-item list-group-item-action report-row ${
+                      selectedReport?.id === r.id ? 'active' : ''
+                    }`}
+                    onClick={() => handleReportSelect(r)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div className="fw-semibold">{r.title}</div>
+                    <div className={`report-meta mt-1 ${selectedReport?.id === r.id ? 'text-white-50' : ''}`}>
+                      {new Date(r.created_at).toLocaleDateString()}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         )}
       </div>
 
@@ -139,7 +200,7 @@ export default function StudentReportPage() {
             <div>
               <h3 className="m-0">{selectedReport.title}</h3>
               <small className="text-muted">
-                {selectedReport.time_window} window &middot; Generated{' '}
+                {selectedReport.time_window} &middot; Generated{' '}
                 {new Date(selectedReport.created_at).toLocaleDateString()}
               </small>
             </div>
@@ -183,6 +244,8 @@ export default function StudentReportPage() {
               timeRange={parseInt(selectedReport.time_window) as 3 | 6 | 12}
               kfDescriptions={kfDescriptions}
               studentId={user.id}
+              reportId={selectedReport.id}
+              reportCreatedAt={selectedReport.created_at}
             />
           ))}
         </div>

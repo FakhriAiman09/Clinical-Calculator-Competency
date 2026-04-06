@@ -94,6 +94,7 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   }}
   """
 
+  import json
   import time
   for attempt in range(3):
     try:
@@ -101,7 +102,6 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
         model='gemini-2.5-flash', contents=query
       )
       if response.text:
-        import json
         text = response.text.strip()
         if text.startswith('```'):
           lines = text.split('\n')
@@ -124,7 +124,7 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
         time.sleep(wait)
       else:
         raise
-  return 'Error: Gemini rate limit exceeded after 3 retries. Try again later.'
+  return 'Error generating feedback: Gemini did not return valid JSON after 3 attempts.'
 
 
 # ==================================================================================================

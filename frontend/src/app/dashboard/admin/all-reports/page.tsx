@@ -21,7 +21,7 @@ interface StudentReport {
   id: string;
   user_id: string;
   title: string;
-  time_window: '3m' | '6m' | '12m';
+  time_window: string;
   report_data: Record<string, number>;
   llm_feedback: string | null;
   created_at: string;
@@ -285,7 +285,6 @@ export default function AdminAllReportsPage() {
   const [saving, setSaving] = useState(false);
   const [comments, setComments] = useState<string[]>([]);
   const [reportSearch, setReportSearch] = useState('');
-  const [reportRangeFilter, setReportRangeFilter] = useState<'all' | 3 | 6 | 12>('all');
 
   // Comment-quality checks per EPA
   const [epaChecks, setEpaChecks] = useState<Record<number, EPACheckSummary>>({});
@@ -296,6 +295,10 @@ export default function AdminAllReportsPage() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [formRequestData, setFormRequestData] = useState<FormRequestWithRater | null>(null);
+
+  // Comment deletion / score recalculation state
+  const [commentDeleted, setCommentDeleted] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -319,7 +322,15 @@ export default function AdminAllReportsPage() {
       .select('*')
       .eq('user_id', studentId)
       .order('created_at', { ascending: false });
-    if (data) setReports(data);
+    if (data) {
+      setReports(
+        data.map((report) => ({
+          ...report,
+          title: getDisplayReportTitle(report.title),
+          time_window: formatTimeWindowLabel(report.time_window),
+        }))
+      );
+    }
   }, []);
 
   const fetchFormResults = useCallback(async () => {
@@ -575,6 +586,62 @@ export default function AdminAllReportsPage() {
     setSelectedFormId(null);
   };
 
+  const recalculateReport = useCallback(async () => {
+    if (!selectedStudent || !selectedReport) return;
+    setRecalculating(true);
+    try {
+      // 1. Fetch all response_ids for this student
+      const { data: requests } = await supabase.from('form_requests').select('id').eq('student_id', selectedStudent.id);
+      const requestIds = (requests ?? []).map((r) => r.id);
+      if (requestIds.length === 0) return;
+
+      const { data: responses } = await supabase.from('form_responses').select('response_id').in('request_id', requestIds);
+      const responseIds = (responses ?? []).map((r) => r.response_id);
+      if (responseIds.length === 0) return;
+
+      // 2. Fetch form_results within the report's time window
+      const reportDate = new Date(selectedReport.created_at);
+      const cutoff = new Date(selectedReport.created_at);
+      cutoff.setMonth(cutoff.getMonth() - parseInt(selectedReport.time_window));
+
+      const { data: results } = await supabase
+        .from('form_results')
+        .select('created_at, results')
+        .in('response_id', responseIds);
+
+      const windowResults = (results ?? []).filter((r) => {
+        const d = new Date(r.created_at);
+        return d >= cutoff && d <= reportDate;
+      });
+
+      // 3. Average per KF across all results in window
+      const kfSums: Record<string, number[]> = {};
+      for (const result of windowResults) {
+        for (const [kfKey, val] of Object.entries(result.results as Record<string, number>)) {
+          if (typeof val === 'number') {
+            if (!kfSums[kfKey]) kfSums[kfKey] = [];
+            kfSums[kfKey].push(val);
+          }
+        }
+      }
+      const kfAvgData: Record<string, number> = {};
+      for (const [kfKey, vals] of Object.entries(kfSums)) {
+        kfAvgData[kfKey] = vals.reduce((a, b) => a + b, 0) / vals.length;
+      }
+
+      // 4. Update the report — setting llm_feedback to 'Generating...' triggers
+      //    the Python listener to regenerate the Gemini summary.
+      await supabase
+        .from('student_reports')
+        .update({ kf_avg_data: kfAvgData, llm_feedback: 'Generating...' })
+        .eq('id', selectedReport.id);
+
+      setCommentDeleted(false);
+    } finally {
+      setRecalculating(false);
+    }
+  }, [selectedStudent, selectedReport]);
+
   const formsForEPA = useMemo(() => {
     if (!editingEPA) return [];
     return formResults.filter((f) => Object.keys(f.results).some((k) => k.startsWith(`${editingEPA}.`)));
@@ -587,6 +654,7 @@ export default function AdminAllReportsPage() {
     // reset checks when switching report
     setEpaChecks({});
     setLastCheckAt(null);
+    setCommentDeleted(false);
 
     setTimeout(() => {
       setSelectedReport(r);
@@ -699,12 +767,8 @@ export default function AdminAllReportsPage() {
 
   const filteredReports = useMemo(() => {
     const search = reportSearch.trim().toLowerCase();
-    return reports.filter((r) => {
-      const matchesSearch = !search || getDisplayReportTitle(r.title).toLowerCase().includes(search);
-      const matchesRange = reportRangeFilter === 'all' || parseInt(r.time_window, 10) === reportRangeFilter;
-      return matchesSearch && matchesRange;
-    });
-  }, [reportRangeFilter, reportSearch, reports]);
+    return reports.filter((r) => !search || getDisplayReportTitle(r.title).toLowerCase().includes(search));
+  }, [reportSearch, reports]);
 
   const hasAnyFlags = useMemo(() => Object.values(epaChecks).some((s) => s.flaggedComments > 0), [epaChecks]);
 
@@ -994,10 +1058,7 @@ export default function AdminAllReportsPage() {
 
         {selectedStudent && reports.length > 0 && (
           <div className='mb-4 d-print-none'>
-            <div className='d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3'>
-              <h5 className='mb-0'>Past Reports for {selectedStudent.display_name}</h5>
-              <small className='text-muted'>Newest first</small>
-            </div>
+            <h5 className='mb-3'>Past Reports for {selectedStudent.display_name}</h5>
             <div className='d-flex flex-wrap gap-2 mb-3'>
               <input
                 type='text'
@@ -1007,20 +1068,8 @@ export default function AdminAllReportsPage() {
                 onChange={(e) => setReportSearch(e.target.value)}
                 style={{ maxWidth: 280 }}
               />
-              <div className='btn-group' role='group' aria-label='Report range filter'>
-                {(['all', 3, 6, 12] as const).map((value) => (
-                  <button
-                    key={String(value)}
-                    type='button'
-                    className={`btn btn-outline-secondary ${reportRangeFilter === value ? 'active' : ''}`}
-                    onClick={() => setReportRangeFilter(value)}
-                  >
-                    {value === 'all' ? 'All' : `${value} mo`}
-                  </button>
-                ))}
-              </div>
             </div>
-            <div className='report-list-shell'>
+            <ul className='list-group report-list-shell report-list-scroll'>
               {filteredReports.map((r) => (
                 <li
                   key={r.id}
@@ -1128,10 +1177,30 @@ export default function AdminAllReportsPage() {
                   timeRange={parseInt(selectedReport.time_window) as 3 | 6 | 12}
                   kfDescriptions={kfDescriptions}
                   studentId={selectedStudent.id}
+                  reportId={selectedReport.id}
+                  reportCreatedAt={selectedReport.created_at}
+                  isAdmin
+                  onCommentDeleted={() => setCommentDeleted(true)}
                 />
               </div>
             );
           })}
+
+          {/* Recalculate banner — appears after a comment is deleted */}
+          {commentDeleted && (
+            <div className='alert alert-warning d-flex align-items-center justify-content-between gap-3 mt-3 d-print-none'>
+              <div>
+                <strong>Comment deleted.</strong> BERT is rescoring in the background. Click Recalculate when ready to update scores and regenerate AI feedback.
+              </div>
+              <button
+                className='btn btn-warning btn-sm flex-shrink-0'
+                onClick={recalculateReport}
+                disabled={recalculating}
+              >
+                {recalculating ? 'Recalculating...' : 'Recalculate Scores & Feedback'}
+              </button>
+            </div>
+          )}
 
           {/* Modal */}
           {editingEPA && (
@@ -1313,3 +1382,4 @@ export default function AdminAllReportsPage() {
     </div>
   );
 }
+
