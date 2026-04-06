@@ -96,6 +96,14 @@ type EPACheckSummary = {
 
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
 
+function formatTimeWindowLabel(timeWindow: StudentReport['time_window']): string {
+  return `${parseInt(timeWindow, 10)} months`;
+}
+
+function getDisplayReportTitle(title: string): string {
+  return title.replace(/\s*\((3m|6m|12m)\)\s*$/i, '').trim() || title;
+}
+
 /** -------------------- Comment-quality heuristics (local, no LLM) -------------------- */
 function normalize(s: string) {
   if (!s || typeof s !== 'string') return '';
@@ -276,6 +284,8 @@ export default function AdminAllReportsPage() {
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [comments, setComments] = useState<string[]>([]);
+  const [reportSearch, setReportSearch] = useState('');
+  const [reportRangeFilter, setReportRangeFilter] = useState<'all' | 3 | 6 | 12>('all');
 
   // Comment-quality checks per EPA
   const [epaChecks, setEpaChecks] = useState<Record<number, EPACheckSummary>>({});
@@ -534,8 +544,9 @@ export default function AdminAllReportsPage() {
     await supabase.rpc('generate_report', {
       student_id_input: selectedStudent.id,
       time_range_input: timeRange,
-      report_title: title || `Admin Generated (${timeRange}m)`,
+      report_title: title.trim() || 'Admin Generated',
     });
+    setTitle('');
     fetchReports(selectedStudent.id);
   };
 
@@ -686,6 +697,15 @@ export default function AdminAllReportsPage() {
     }
   }, [selectedStudent]);
 
+  const filteredReports = useMemo(() => {
+    const search = reportSearch.trim().toLowerCase();
+    return reports.filter((r) => {
+      const matchesSearch = !search || getDisplayReportTitle(r.title).toLowerCase().includes(search);
+      const matchesRange = reportRangeFilter === 'all' || parseInt(r.time_window, 10) === reportRangeFilter;
+      return matchesSearch && matchesRange;
+    });
+  }, [reportRangeFilter, reportSearch, reports]);
+
   const hasAnyFlags = useMemo(() => Object.values(epaChecks).some((s) => s.flaggedComments > 0), [epaChecks]);
 
   // NEW: compute the most common reason per EPA (to display “flag means …”)
@@ -775,6 +795,38 @@ export default function AdminAllReportsPage() {
           background: var(--bs-tertiary-bg, rgba(0,0,0,0.04));
           color: var(--bs-body-color);
           white-space: nowrap;
+        }
+        .report-list-shell {
+          border: 1px solid var(--bs-border-color, rgba(255,255,255,0.12));
+          border-radius: 0.85rem;
+          overflow: hidden;
+          background: var(--bs-body-bg, transparent);
+        }
+        .report-list-scroll {
+          max-height: 420px;
+          overflow-y: auto;
+        }
+        .report-row {
+          border: 0;
+          border-bottom: 1px solid var(--bs-border-color, rgba(255,255,255,0.08));
+          background: transparent;
+        }
+        .report-row:last-child {
+          border-bottom: 0;
+        }
+        .report-meta {
+          font-size: 0.85rem;
+          color: var(--bs-secondary-color, #6c757d);
+        }
+        .report-pill {
+          display: inline-flex;
+          align-items: center;
+          padding: 0.15rem 0.55rem;
+          border-radius: 999px;
+          font-size: 0.78rem;
+          font-weight: 600;
+          background: var(--bs-secondary-bg, rgba(255,255,255,0.06));
+          border: 1px solid var(--bs-border-color, rgba(255,255,255,0.1));
         }
       `}</style>
 
@@ -942,12 +994,37 @@ export default function AdminAllReportsPage() {
 
         {selectedStudent && reports.length > 0 && (
           <div className='mb-4 d-print-none'>
-            <h5>Past Reports for {selectedStudent.display_name}</h5>
-            <ul className='list-group'>
-              {reports.map((r) => (
+            <div className='d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3'>
+              <h5 className='mb-0'>Past Reports for {selectedStudent.display_name}</h5>
+              <small className='text-muted'>Newest first</small>
+            </div>
+            <div className='d-flex flex-wrap gap-2 mb-3'>
+              <input
+                type='text'
+                className='form-control'
+                placeholder='Search reports by name'
+                value={reportSearch}
+                onChange={(e) => setReportSearch(e.target.value)}
+                style={{ maxWidth: 280 }}
+              />
+              <div className='btn-group' role='group' aria-label='Report range filter'>
+                {(['all', 3, 6, 12] as const).map((value) => (
+                  <button
+                    key={String(value)}
+                    type='button'
+                    className={`btn btn-outline-secondary ${reportRangeFilter === value ? 'active' : ''}`}
+                    onClick={() => setReportRangeFilter(value)}
+                  >
+                    {value === 'all' ? 'All' : `${value} mo`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className='report-list-shell'>
+              {filteredReports.map((r) => (
                 <li
                   key={r.id}
-                  className={`list-group-item list-group-item-action ${selectedReport?.id === r.id ? 'active' : ''}`}
+                  className={`list-group-item list-group-item-action report-row ${selectedReport?.id === r.id ? 'active' : ''}`}
                   onClick={() => handleReportSelect(r)}
                   style={{ cursor: 'pointer' }}
                 >

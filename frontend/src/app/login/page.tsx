@@ -16,6 +16,11 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [alertColor, setAlertColor] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetResult, setResetResult] = useState<{ alertColor: string; message: string } | null>(null);
 
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
@@ -29,6 +34,10 @@ function LoginForm() {
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user && searchParams?.get('reset') === 'true') {
+        setShowResetModal(true);
+        return;
+      }
       if (session?.user) {
         const redirectTo = searchParams?.get('redirectTo');
         router.push(redirectTo || '/dashboard');
@@ -36,6 +45,21 @@ function LoginForm() {
     };
     checkAuth();
   }, [router, searchParams, supabase.auth]);
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setResetResult(null);
+        setShowResetModal(true);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase.auth]);
 
   useEffect(() => {
     const redirectTo = localStorage.getItem('redirectTo');
@@ -110,7 +134,38 @@ function LoginForm() {
     setForgotLoading(false);
   };
 
-  const passwordIsValid = passwordValidationClass === 'is-valid';
+  const handleResetPassword = async (e: SyntheticEvent) => {
+    e.preventDefault();
+    setResetResult(null);
+
+    if (newPassword.length < 8) {
+      setResetResult({ alertColor: 'danger', message: 'Password must be at least 8 characters long.' });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setResetResult({ alertColor: 'danger', message: 'Passwords do not match.' });
+      return;
+    }
+
+    setResetLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (error) {
+      setResetResult({ alertColor: 'danger', message: error.message });
+      setResetLoading(false);
+      return;
+    }
+
+    setResetResult({ alertColor: 'success', message: 'Password updated. You can now sign in with your new password.' });
+    setResetLoading(false);
+    setNewPassword('');
+    setConfirmPassword('');
+    setTimeout(() => {
+      setShowResetModal(false);
+      router.replace('/login');
+    }, 1200);
+  };
 
   return (
     <>
@@ -171,11 +226,10 @@ function LoginForm() {
                 placeholder='password'
                 autoComplete='current-password'
                 style={{
-                  paddingRight: passwordIsValid ? undefined : '3.2rem',
+                  paddingRight: '3.2rem',
                 }}
                 onChange={() => {
                   setPasswordValidationClass('');
-                  setShowPassword(false);
                   setError(null);
                 }}
               />
@@ -183,8 +237,7 @@ function LoginForm() {
                 Password
               </label>
 
-              {!passwordIsValid && (
-                <button
+              <button
                   type='button'
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
@@ -216,7 +269,6 @@ function LoginForm() {
                     </svg>
                   )}
                 </button>
-              )}
 
               <div className='invalid-feedback'>Password must be at least 8 characters long.</div>
             </div>
@@ -344,6 +396,98 @@ function LoginForm() {
                       </>
                     ) : (
                       'Send Reset Email'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResetModal && (
+        <div
+          className='modal fade show d-block'
+          tabIndex={-1}
+          role='dialog'
+          aria-modal='true'
+          aria-labelledby='resetModalTitle'
+          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+        >
+          <div className='modal-dialog modal-dialog-centered' style={{ maxWidth: '420px' }}>
+            <div className='modal-content'>
+              <div className='modal-header border-0 pb-0'>
+                <h5 className='modal-title' id='resetModalTitle'>
+                  Set a new password
+                </h5>
+              </div>
+
+              <form onSubmit={handleResetPassword}>
+                <div className='modal-body pt-2'>
+                  <p className='text-muted' style={{ fontSize: '0.9rem' }}>
+                    Enter a new password for your account.
+                  </p>
+
+                  <div className='form-floating mb-2'>
+                    <input
+                      id='new-password'
+                      type='password'
+                      className='form-control'
+                      placeholder='New password'
+                      value={newPassword}
+                      required
+                      minLength={8}
+                      onChange={(e) => {
+                        setNewPassword(e.target.value);
+                        setResetResult(null);
+                      }}
+                      autoComplete='new-password'
+                    />
+                    <label htmlFor='new-password'>New password</label>
+                  </div>
+
+                  <div className='form-floating mb-2'>
+                    <input
+                      id='confirm-password'
+                      type='password'
+                      className='form-control'
+                      placeholder='Confirm password'
+                      value={confirmPassword}
+                      required
+                      minLength={8}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        setResetResult(null);
+                      }}
+                      autoComplete='new-password'
+                    />
+                    <label htmlFor='confirm-password'>Confirm password</label>
+                  </div>
+
+                  {resetResult && (
+                    <div
+                      className={`alert alert-${resetResult.alertColor} py-2 px-3 mb-0`}
+                      role='alert'
+                      style={{ fontSize: '0.875rem' }}
+                    >
+                      {resetResult.message}
+                    </div>
+                  )}
+                </div>
+
+                <div className='modal-footer border-0 pt-0'>
+                  <button
+                    type='submit'
+                    className='btn btn-primary d-flex align-items-center gap-2'
+                    disabled={resetLoading || resetResult?.alertColor === 'success'}
+                  >
+                    {resetLoading ? (
+                      <>
+                        <span className='spinner-border spinner-border-sm' role='status' aria-hidden='true' />
+                        Saving...
+                      </>
+                    ) : (
+                      'Update Password'
                     )}
                   </button>
                 </div>

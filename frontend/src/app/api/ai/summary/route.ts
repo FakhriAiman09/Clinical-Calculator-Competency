@@ -6,6 +6,74 @@ const VALID_MODELS = new Set([
   'stepfun/step-3.5-flash:free',
 ]);
 const DEFAULT_MODEL  = 'z-ai/glm-4.5-air:free';
+
+// KF hints for system prompt context, keyed by competency code (e.g. "1.1", "2.3", "professionalism")
+// These are not shown to users, but help the AI understand the clinical competency context when provided.
+//
+const KF_HINTS: Record<string, string> = {
+  '1.1': 'history taking, organized',
+  '1.2': 'patient-centered interview',
+  '1.3': 'clinical reasoning, focused info gathering',
+  '1.4': 'physical exam, clinical relevance',
+
+  '2.1': 'differential diagnosis, synthesizing findings',
+  '2.2': 'updating diagnosis, managing ambiguity',
+  '2.3': 'team communication, working diagnosis',
+
+  '3.1': 'diagnostic tests, screening, cost-effective',
+  '3.2': 'test rationale, pre/post-test probability',
+  '3.3': 'interpreting results, urgency',
+
+  '4.1': 'composing orders, verbal/written/electronic',
+  '4.2': 'orders underpinned by patient understanding',
+  '4.3': 'error recognition, patient safety alerts',
+  '4.4': 'discussing orders with team and patient',
+
+  '5.1': 'clinical documentation, cogent narrative',
+  '5.2': 'documentation requirements, regulations',
+  '5.3': 'problem list, differential, clinical reasoning',
+
+  '6.1': 'oral presentation, verified information',
+  '6.2': 'concise organized oral presentation',
+  '6.3': 'adapting presentation to audience',
+  '6.4': 'patient privacy, autonomy',
+
+  '7.1': 'clinical question formulation, EBM',
+  '7.2': 'medical information technology, evidence access',
+  '7.3': 'appraising evidence, sources',
+  '7.4': 'applying evidence, communicating findings',
+
+  '8.1': 'learner use of electronic handover tools, structured verbal handover',
+  '8.2': 'handover communication, transition of care',
+  '8.3': 'handover, illness severity, situational awareness',
+  '8.4': 'handover feedback, closed-loop communication',
+  '8.5': 'patient confidentiality, handover',
+
+  '9.1': 'team roles, seeking help, healthcare delivery',
+  '9.2': 'team communication, attentive listening',
+  '9.3': 'mutual respect, team climate, integrity',
+
+  '10.1': 'vital signs, patient deterioration, etiology',
+  '10.2': 'illness severity, escalating care',
+  '10.3': 'code response, basic/advanced life support',
+  '10.4': 'deterioration communication, goals of care',
+
+  '11.1': 'informed consent, risks, benefits, alternatives',
+  '11.2': 'patient/family communication, intervention understanding',
+  '11.3': 'patient reassurance, confidence, seeking help',
+
+  '12.1': 'procedural technical skills',
+  '12.2': 'procedure anatomy, indications, complications',
+  '12.3': 'pre/post-procedural patient communication',
+  '12.4': 'patient confidence, procedural ease',
+
+  '13.1': 'error reporting, near miss, safety systems',
+  '13.2': 'system improvement, quality improvement',
+  '13.3': 'daily safety habits, documentation, precautions',
+  '13.4': 'error reflection, individual improvement plan',
+
+  'professionalism': 'professional behavior, ethics, conduct',
+};
 // Automatic fallback: OpenRouter picks whichever free model is available
 const FALLBACK_MODEL = 'openrouter/free';
 
@@ -62,17 +130,14 @@ export async function POST(req: Request) {
     // Use requested model only if it is in the valid list, else fall back to default
     const requestedModel = VALID_MODELS.has(body?.model) ? body.model : DEFAULT_MODEL;
 
-    const system = [
-      'You are a clinical evaluation summarizer.',
-      'You will be given comments written by a rater evaluating a medical student or clinician.',
-      'If the input is not clinical evaluation content, respond with only: "Not clinical evaluation content."',
-      'If the input is clinical evaluation content, write a concise summary in 2-4 plain sentences.',
-      'Do not use bullet points, numbered lists, bold, asterisks, brackets, parentheses, or any markdown formatting.',
-      'Do not add any introduction, explanation, or preamble. Output only the summary sentences or the not-clinical message.',
-      'Do not invent facts. Only summarize what is explicitly stated.',
-    ].join(' ');
+    const kf: string | null = body?.kf ?? null;
+    const hint = kf ? KF_HINTS[kf] : null;
 
-    const userContent = `Summarize these rater comments:\n\n${text}`;
+const system = hint
+  ? `Medical learner rater comment. KF ${kf}: ${hint}. Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; "Not related to ${hint}."; or "Unclear source text." Use KF only for relevance. Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`
+  : `Medical learner rater comment. Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; or "Unclear source text." Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`;
+
+    const userContent = text;
 
     console.log('[AI Summary] Using model:', requestedModel);
     let resp = await callOpenRouter(apiKey, requestedModel, system, userContent);

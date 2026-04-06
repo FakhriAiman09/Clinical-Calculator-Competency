@@ -71,6 +71,43 @@ function compareNumericDotStrings(a: string, b: string): number {
   return 0;
 }
 
+const NOT_CLINICAL_SUMMARY = 'Not clinical evaluation content.';
+const UNCLEAR_SOURCE_SUMMARY = 'Unclear source text.';
+
+function isKFMismatchSummary(summary: string): boolean {
+  return /^Not related to .+\.$/.test(summary.trim());
+}
+
+function getSummaryGuard(summary: string, kf?: string | null) {
+  const trimmed = summary.trim();
+  if (!trimmed) {
+    return { canApply: false, message: '' };
+  }
+
+  if (trimmed === NOT_CLINICAL_SUMMARY) {
+    return {
+      canApply: false,
+      message: 'This result cannot be inserted or replaced.',
+    };
+  }
+
+  if (trimmed === UNCLEAR_SOURCE_SUMMARY) {
+    return {
+      canApply: false,
+      message: 'This result cannot be inserted or replaced.',
+    };
+  }
+
+  if (kf && isKFMismatchSummary(trimmed)) {
+    return {
+      canApply: false,
+      message: 'This result cannot be inserted or replaced.',
+    };
+  }
+
+  return { canApply: true, message: '' };
+}
+
 export default function RaterFormsPage() {
   useRequireRole(['rater', 'dev']);
 
@@ -84,6 +121,9 @@ export default function RaterFormsPage() {
   const [currentEPA, setCurrentEPA] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectionCollapsed, setSelectionCollapsed] = useState<boolean>(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(280);
+  const isResizing = useRef(false);
   const [formRequest, setFormRequest] = useState<FormRequest | null>(null);
   const [responses, setResponses] = useState<Responses>({});
   const [cachedJSON, setCachedJSON] = useState<{
@@ -293,7 +333,11 @@ export default function RaterFormsPage() {
       const res = await fetch('/api/ai/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, model: aiModel }),
+        body: JSON.stringify({
+          text,
+          model: aiModel,
+          kf: kfData.find((k) => k.epa === epaId && k.questionId === questionId)?.kf ?? null,
+        }),
       });
 
       const data = await res.json();
@@ -338,7 +382,7 @@ export default function RaterFormsPage() {
       const res = await fetch('/api/ai/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, model: aiModel }),
+        body: JSON.stringify({ text, model: aiModel, kf: 'professionalism' }),
       });
 
       const data = await res.json();
@@ -367,7 +411,8 @@ export default function RaterFormsPage() {
   const insertSummaryIntoTextarea = (epaId: number, questionId: string) => {
     const key = makeFieldKey(epaId, questionId);
     const summary = (summaryByField[key] ?? '').trim();
-    if (!summary) return;
+    const kf = kfData.find((item) => item.epa === epaId && item.questionId === questionId)?.kf ?? null;
+    if (!getSummaryGuard(summary, kf).canApply) return;
 
     setTextInputs((prev) => {
       const existing = prev[epaId]?.[questionId] ?? '';
@@ -387,7 +432,8 @@ export default function RaterFormsPage() {
   const replaceTextareaWithSummary = (epaId: number, questionId: string) => {
     const key = makeFieldKey(epaId, questionId);
     const summary = (summaryByField[key] ?? '').trim();
-    if (!summary) return;
+    const kf = kfData.find((item) => item.epa === epaId && item.questionId === questionId)?.kf ?? null;
+    if (!getSummaryGuard(summary, kf).canApply) return;
 
     setTextInputs((prev) => ({
       ...prev,
@@ -404,7 +450,7 @@ export default function RaterFormsPage() {
   const insertProfessionalismSummary = () => {
     const key = professionalismFieldKey;
     const summary = (summaryByField[key] ?? '').trim();
-    if (!summary) return;
+    if (!getSummaryGuard(summary, 'professionalism').canApply) return;
 
     setProfessionalism((prev) => (prev ? prev.trimEnd() + '\n\n' : '') + `${summary}\n`);
     setSaveStatus('Saving...');
@@ -413,7 +459,7 @@ export default function RaterFormsPage() {
   const replaceProfessionalismWithSummary = () => {
     const key = professionalismFieldKey;
     const summary = (summaryByField[key] ?? '').trim();
-    if (!summary) return;
+    if (!getSummaryGuard(summary, 'professionalism').canApply) return;
 
     setProfessionalism(`${summary}\n`);
     setSaveStatus('Saving...');
@@ -1007,8 +1053,20 @@ export default function RaterFormsPage() {
         }
       `}</style>
 
-      <div className='container-fluid d-flex'>
-        <div className='col-md-3 bg-body-secondary p-4 border-end'>
+      <div className='container-fluid d-flex' style={{ position: 'relative' }}>
+        {/* Sidebar */}
+        <div
+          style={{
+            width: sidebarOpen ? sidebarWidth : 0,
+            minWidth: 0,
+            overflow: 'hidden',
+            flexShrink: 0,
+            transition: isResizing.current ? 'none' : 'width 0.3s ease',
+            position: 'relative',
+          }}
+          className='bg-body-secondary'
+        >
+        <div style={{ width: sidebarWidth, padding: '1.5rem' }}>
           <h3 className='mb-3'>Selected EPAs</h3>
 
           <ul className='list-group'>
@@ -1068,30 +1126,87 @@ export default function RaterFormsPage() {
             )}
           </ul>
 
-          <div className='col-md-3 bg-body-secondary p-4 border-end position-relative'>
-            <div className='save-status-container'>
-              <div
-                className={`save-status alert alert-info ${saveStatus ? '' : 'opacity-0'}`}
-                ref={(el) => {
-                  if (!el) return;
+          <div className='save-status-container'>
+            <div
+              className={`save-status alert alert-info ${saveStatus ? '' : 'opacity-0'}`}
+              ref={(el) => {
+                if (!el) return;
 
-                  const observer = new IntersectionObserver(
-                    ([entry]) => {
-                      if (entry) entry.target.classList.toggle('sticky', !entry.isIntersecting);
-                    },
-                    { threshold: [0], rootMargin: '-20px 0px 0px 0px' }
-                  );
+                const observer = new IntersectionObserver(
+                  ([entry]) => {
+                    if (entry) entry.target.classList.toggle('sticky', !entry.isIntersecting);
+                  },
+                  { threshold: [0], rootMargin: '-20px 0px 0px 0px' }
+                );
 
-                  observer.observe(el);
-                }}
-              >
-                {saveStatus}
-              </div>
+                observer.observe(el);
+              }}
+            >
+              {saveStatus}
             </div>
           </div>
+        </div>{/* end inner fixed-width div */}
+        </div>{/* end sliding sidebar */}
+
+        {/* Resize handle + toggle button */}
+        <div
+          style={{
+            width: 8,
+            flexShrink: 0,
+            position: 'relative',
+            cursor: sidebarOpen ? 'col-resize' : 'default',
+            background: 'var(--bs-border-color)',
+            transition: 'background 0.15s',
+          }}
+          onMouseDown={(e) => {
+            if (!sidebarOpen) return;
+            isResizing.current = true;
+            const startX = e.clientX;
+            const startWidth = sidebarWidth;
+            const onMove = (ev: MouseEvent) => {
+              const newWidth = Math.max(160, Math.min(500, startWidth + ev.clientX - startX));
+              setSidebarWidth(newWidth);
+            };
+            const onUp = () => {
+              isResizing.current = false;
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          }}
+          onMouseEnter={(e) => { if (sidebarOpen) (e.currentTarget as HTMLDivElement).style.background = 'var(--bs-primary)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bs-border-color)'; }}
+        >
+          {/* Toggle chevron button centred on the handle */}
+          <button
+            onClick={() => setSidebarOpen((v) => !v)}
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 10,
+              width: 20,
+              height: 40,
+              padding: 0,
+              border: 'none',
+              borderRadius: 4,
+              background: 'var(--bs-secondary-bg)',
+              color: 'var(--bs-body-color)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+            }}
+            aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+          >
+            <i className={`bi bi-chevron-${sidebarOpen ? 'left' : 'right'}`} style={{ fontSize: 11 }} />
+          </button>
         </div>
 
-        <div className='col-md-9 p-4'>
+        <div className='p-4' style={{ flex: 1, minWidth: 0 }}>
           {submitSuccess && (
             <div className='alert alert-success mb-3'>Form submitted successfully! Redirecting to dashboard...</div>
           )}
@@ -1183,6 +1298,7 @@ export default function RaterFormsPage() {
                     const summary = summaryByField[fieldKey] || '';
                     const isSummarizing = !!summarizingByField[fieldKey];
                     const summaryErr = summaryErrorByField[fieldKey] || '';
+                    const summaryGuard = getSummaryGuard(summary, kf.kf);
 
                     return (
                       <div key={questionKey} className='mb-4'>
@@ -1252,15 +1368,21 @@ export default function RaterFormsPage() {
                           ) : null}
 
                           {summary ? (
-                            <div className='mt-2 p-2 border rounded bg-body-secondary'>
+                            <div
+                              className='mt-2 p-2 rounded bg-body-secondary'
+                              style={{
+                                border: summaryGuard.canApply ? '1px solid var(--bs-border-color)' : '1px solid #f0ad4e',
+                              }}
+                            >
                               <div className='d-flex justify-content-between align-items-center mb-1'>
-                                <small className='text-muted'>Summary</small>
+                                <small className='text-muted'>{summaryGuard.canApply ? 'Summary' : 'AI Result'}</small>
 
                                 <div className='d-flex gap-2'>
                                   <button
                                     type='button'
                                     className='btn btn-sm btn-outline-secondary'
                                     onClick={() => insertSummaryIntoTextarea(currentEPA, questionKey)}
+                                    disabled={!summaryGuard.canApply}
                                   >
                                     Insert
                                   </button>
@@ -1270,11 +1392,18 @@ export default function RaterFormsPage() {
                                     className='btn btn-sm btn-outline-danger'
                                     onClick={() => replaceTextareaWithSummary(currentEPA, questionKey)}
                                     title='Replace comments with AI summary (deletes original)'
+                                    disabled={!summaryGuard.canApply}
                                   >
                                     Replace
                                   </button>
                                 </div>
                               </div>
+
+                              {!summaryGuard.canApply ? (
+                                <div className='small mb-2' style={{ color: '#b26a00' }}>
+                                  {summaryGuard.message}
+                                </div>
+                              ) : null}
 
                               <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{summary}</div>
                             </div>
@@ -1355,15 +1484,31 @@ export default function RaterFormsPage() {
                   ) : null}
 
                   {summaryByField[professionalismFieldKey] ? (
-                    <div className='mt-2 p-2 border rounded bg-body-secondary'>
+                    <div
+                      className='mt-2 p-2 rounded bg-body-secondary'
+                      style={{
+                        border: (() => {
+                          const professionalismSummary = summaryByField[professionalismFieldKey];
+                          const summaryGuard = getSummaryGuard(professionalismSummary, 'professionalism');
+                          return summaryGuard.canApply ? '1px solid var(--bs-border-color)' : '1px solid #f0ad4e';
+                        })(),
+                      }}
+                    >
+                      {(() => {
+                        const professionalismSummary = summaryByField[professionalismFieldKey];
+                        const summaryGuard = getSummaryGuard(professionalismSummary, 'professionalism');
+
+                        return (
+                          <>
                       <div className='d-flex justify-content-between align-items-center mb-1'>
-                        <small className='text-muted'>Summary</small>
+                        <small className='text-muted'>{summaryGuard.canApply ? 'Summary' : 'AI Result'}</small>
 
                         <div className='d-flex gap-2'>
                           <button
                             type='button'
                             className='btn btn-sm btn-outline-secondary'
                             onClick={insertProfessionalismSummary}
+                            disabled={!summaryGuard.canApply}
                           >
                             Insert
                           </button>
@@ -1373,15 +1518,25 @@ export default function RaterFormsPage() {
                             className='btn btn-sm btn-outline-danger'
                             onClick={replaceProfessionalismWithSummary}
                             title='Replace comments with AI summary (deletes original)'
+                            disabled={!summaryGuard.canApply}
                           >
                             Replace
                           </button>
                         </div>
                       </div>
 
+                      {!summaryGuard.canApply ? (
+                        <div className='small mb-2' style={{ color: '#b26a00' }}>
+                          {summaryGuard.message}
+                        </div>
+                      ) : null}
+
                       <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
                         {summaryByField[professionalismFieldKey]}
                       </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   ) : null}
                 </div>

@@ -9,7 +9,6 @@ import logo from '@/components/ccc-logo-color.svg';
 
 import NavLinks from './NavLinks';
 import ProfileDropdown from './ProfileDropdown';
-import ProfileSettingsModal from './ProfileSettingsModal';
 import DeveloperTicketModal from '@/components/DevTicketsModal';
 
 /**
@@ -17,14 +16,11 @@ import DeveloperTicketModal from '@/components/DevTicketsModal';
  *
  * ▸ Shows logo, nav links (role-aware inside <NavLinks />), and profile dropdown.
  * ▸ Collapses into a hamburger menu at the `lg` breakpoint.
- * ▸ Manages two modal windows:
- *     – ProfileSettingsModal  (edit display name, etc.)
- *     – DeveloperTicketModal  (submit bug / feature requests)
+ * ▸ Manages the DeveloperTicketModal (submit bug / feature requests)
  */
 export default function Header() {
   const { user } = useUser();
 
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const navRef = useRef<HTMLDivElement>(null);
@@ -178,7 +174,6 @@ export default function Header() {
               </button>
 
               <ProfileDropdown
-                onOpenProfile={() => setShowProfileModal(true)}
                 onOpenTicket={() => setShowTicketModal(true)}
               />
             </div>
@@ -196,7 +191,6 @@ export default function Header() {
       </div>
 
       {/* ── Modals ─────────────────────────────────────────────── */}
-      <ProfileSettingsModal show={showProfileModal} onClose={() => setShowProfileModal(false)} />
       <DeveloperTicketModal show={showTicketModal} onClose={() => setShowTicketModal(false)} />
     </header>
   );

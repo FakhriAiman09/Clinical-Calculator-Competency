@@ -8,17 +8,15 @@ import { useUser } from '@/context/UserContext';
  * ProfileDropdown
  *
  * ▸ Shows the signed‑in user's name / email.
- * ▸ Opens either the Profile‑Settings modal or the Developer‑Ticket modal via
- *   callback props (keeps all modal logic in React).
- * ▸ Includes a link to the /dashboard/settings page.
+ * ▸ Opens the Developer‑Ticket modal via callback prop.
+ * ▸ Links to /dashboard/settings for profile and app preferences.
  * ▸ Closes itself when you click outside the menu.
  */
 interface ProfileDropdownProps {
-  readonly onOpenProfile: () => void; // open ProfileSettingsModal
   readonly onOpenTicket: () => void;  // open DeveloperTicketModal
 }
 
-export default function ProfileDropdown({ onOpenProfile, onOpenTicket }: ProfileDropdownProps) {
+export default function ProfileDropdown({ onOpenTicket }: ProfileDropdownProps) {
   const { displayName, email } = useUser();
   const [showMenu, setShowMenu] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -57,14 +55,6 @@ export default function ProfileDropdown({ onOpenProfile, onOpenTicket }: Profile
             <hr className='dropdown-divider' />
           </li>
 
-          {/* open profile settings */}
-          <li>
-            <button className='dropdown-item' onClick={onOpenProfile}>
-              <i className='bi bi-person me-2' />
-              {'Profile Settings'}
-            </button>
-          </li>
-
           {/* settings page */}
           <li>
             <Link
@@ -73,7 +63,7 @@ export default function ProfileDropdown({ onOpenProfile, onOpenTicket }: Profile
               onClick={() => setShowMenu(false)}
             >
               <i className='bi bi-gear me-2' />
-              {' Settings'}
+              Settings
             </Link>
           </li>
 

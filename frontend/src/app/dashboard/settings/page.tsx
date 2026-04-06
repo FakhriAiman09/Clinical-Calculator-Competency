@@ -1,8 +1,10 @@
 'use client';
 
 import { useTheme, Theme } from '@/context/ThemeContext';
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import AIPreferencesSection from '@/components/AIPreferencesSection';
+import { useUser } from '@/context/UserContext';
+import { createClient } from '@/utils/supabase/client';
 
 interface ThemeOption {
   value: Theme;
@@ -41,8 +43,24 @@ const themeOptions: ThemeOption[] = [
  */
 export default function SettingsPage() {
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const { user, displayName, email } = useUser();
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
+  const [editedDisplayName, setEditedDisplayName] = useState(displayName);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [passwordResetSending, setPasswordResetSending] = useState(false);
+  const [passwordResetResult, setPasswordResetResult] = useState<{ tone: 'success' | 'danger'; message: string } | null>(null);
+  const [themeReady, setThemeReady] = useState(false);
+
+  useEffect(() => {
+    setEditedDisplayName(displayName);
+  }, [displayName]);
+
+  useEffect(() => {
+    setThemeReady(true);
+  }, []);
+
+  const isChanged = editedDisplayName !== displayName;
 
   const handleThemeChange = async (t: Theme) => {
     setSaving(true);
@@ -51,6 +69,47 @@ export default function SettingsPage() {
     setSavedToast(true);
     setTimeout(() => setSavedToast(false), 2000);
   };
+
+  const handleProfileSave = useCallback(async () => {
+    if (!user) return;
+    setProfileSaving(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from('profiles').update({ display_name: editedDisplayName }).eq('id', user.id);
+      if (error) throw error;
+      setSavedToast(true);
+      setTimeout(() => setSavedToast(false), 2000);
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to update display name:', err);
+    } finally {
+      setProfileSaving(false);
+    }
+  }, [editedDisplayName, user]);
+
+  const handlePasswordReset = useCallback(async () => {
+    if (!email) return;
+
+    setPasswordResetSending(true);
+    setPasswordResetResult(null);
+
+    try {
+      const supabase = createClient();
+      const redirectTo = `${window.location.origin}/login?reset=true`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw error;
+
+      setPasswordResetResult({
+        tone: 'success',
+        message: 'Password reset email sent. Check your inbox and spam folder.',
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error sending recovery email.';
+      setPasswordResetResult({ tone: 'danger', message });
+    } finally {
+      setPasswordResetSending(false);
+    }
+  }, [email]);
 
   return (
     <div className='container py-5' style={{ maxWidth: 900 }}>
@@ -69,13 +128,73 @@ export default function SettingsPage() {
       <h2 className='fw-bold mb-1'>Settings</h2>
       <p className='text-muted mb-4'>Manage your account preferences.</p>
 
+      {/* ── Profile ─────────────────────────────────────────── */}
+      <div className='card mb-4 shadow-sm'>
+        <div className='card-header d-flex align-items-center gap-2 py-3'>
+          <i className='bi bi-person fs-5'></i>
+          <span className='fw-semibold fs-6'>Profile</span>
+        </div>
+        <div className='card-body py-4'>
+          <div className='mb-3'>
+            <label htmlFor='displayName' className='form-label fw-medium'>Display Name</label>
+            <input
+              type='text'
+              className='form-control'
+              id='displayName'
+              value={editedDisplayName}
+              onChange={(e) => setEditedDisplayName(e.target.value)}
+            />
+          </div>
+          <div className='mb-4'>
+            <label htmlFor='email' className='form-label fw-medium'>Email</label>
+            <input type='email' className='form-control' id='email' value={email} disabled />
+          </div>
+          <button
+            className='btn btn-primary'
+            onClick={handleProfileSave}
+            disabled={!isChanged || profileSaving}
+          >
+            {profileSaving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      </div>
+
       {/* ── Appearance ──────────────────────────────────────── */}
+      <div className='card mb-4 shadow-sm'>
+        <div className='card-header d-flex align-items-center gap-2 py-3'>
+          <i className='bi bi-shield-lock fs-5'></i>
+          <span className='fw-semibold fs-6'>Password</span>
+        </div>
+        <div className='card-body py-4'>
+          <p className='text-muted mb-3'>
+            Send a password reset link to <strong>{email || 'your email address'}</strong>.
+          </p>
+
+          {passwordResetResult ? (
+            <div className={`alert alert-${passwordResetResult.tone} py-2 px-3`} role='alert'>
+              {passwordResetResult.message}
+            </div>
+          ) : null}
+
+          <button
+            className='btn btn-outline-primary'
+            onClick={handlePasswordReset}
+            disabled={!email || passwordResetSending}
+          >
+            {passwordResetSending ? 'Sending...' : 'Send password reset email'}
+          </button>
+        </div>
+      </div>
+
       <div className='card mb-4 shadow-sm'>
         <div className='card-header d-flex align-items-center gap-2 py-3'>
           <i className='bi bi-palette fs-5'></i>
           <span className='fw-semibold fs-6'>Appearance</span>
         </div>
         <div className='card-body py-4'>
+          {!themeReady ? (
+            <p className='text-muted mb-0'>Loading theme preference...</p>
+          ) : (
           <fieldset>
             <legend className='form-label fw-medium mb-3'>Theme</legend>
             <div className='d-flex gap-3 flex-wrap'>
@@ -104,8 +223,9 @@ export default function SettingsPage() {
             })}
             </div>
           </fieldset>
+          )}
 
-          {theme === 'auto' && (
+          {themeReady && theme === 'auto' && (
             <p className='text-muted mt-3 mb-0' style={{ fontSize: '0.85rem' }}>
               <i className='bi bi-info-circle me-1'></i>
               Currently displaying{' '}

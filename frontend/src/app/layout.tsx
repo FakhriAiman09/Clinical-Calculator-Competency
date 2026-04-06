@@ -36,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang='en'>
+    <html lang='en' suppressHydrationWarning>
       {/*
         Anti-flicker script: runs before React hydrates.
         Reads localStorage and sets data-bs-theme immediately so the

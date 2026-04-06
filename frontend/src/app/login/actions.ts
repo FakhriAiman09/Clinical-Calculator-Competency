@@ -115,23 +115,34 @@ export async function forgotPassword(formData: FormData): Promise<{ alertColor: 
       process.env.NEXT_PUBLIC_BASE_URL ||
       '';
 
-    const redirectTo = baseUrl ? `${baseUrl}/login?reset=true` : undefined;
+    if (!baseUrl) {
+      logger.error('[forgotPassword] Missing public app URL environment variable');
+      return {
+        alertColor: 'danger',
+        message: 'Password reset is not configured yet. Missing app URL for recovery redirect.',
+      };
+    }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      ...(redirectTo ? { redirectTo } : {}),
-    });
+    const redirectTo = `${baseUrl}/login?reset=true`;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
 
     if (error) throw error;
 
     return {
       alertColor: 'success',
-      message: 'Password reset email sent! Check your inbox (and spam folder).',
+      message: 'Password reset email sent. Check your inbox and spam folder.',
     };
   } catch (error) {
     if (isAuthErrorLike(error)) {
       logger.error('[forgotPassword] Auth error', { code: error.code, message: error.message });
       return { alertColor: 'danger', message: error.message };
     }
-    return { alertColor: 'warning', message: 'Something went wrong. Please try again.' };
+    const message = error instanceof Error ? error.message : 'Error sending recovery email.';
+    logger.error('[forgotPassword] Unexpected error', { message, error });
+    return {
+      alertColor: 'danger',
+      message: `${message} Check Supabase email/SMTP settings and allowed redirect URLs.`,
+    };
   }
 }
