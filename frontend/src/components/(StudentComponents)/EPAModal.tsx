@@ -46,22 +46,40 @@ const EPAModal: React.FC<EPAModalProps> = ({ selectedEpa, onClose, range }) => {
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() - range);
 
-  const byDate = new Map<string, { description: string; levelIndex: number }[]>();
+  // Group by full timestamp so two assessments on the same day stay separate
+  const byTimestamp = new Map<string, { description: string; levelIndex: number }[]>();
 
   for (const kf of selectedEpa.keyFunctions) {
     for (const h of kf.history) {
       if (h.level === 'none' || !(h.level in devLevelMap)) continue;
       if (new Date(h.date) < cutoff) continue;
-      const dateKey = h.date.slice(0, 10);
-      if (!byDate.has(dateKey)) byDate.set(dateKey, []);
-      byDate.get(dateKey)!.push({
+      if (!byTimestamp.has(h.date)) byTimestamp.set(h.date, []);
+      byTimestamp.get(h.date)!.push({
         description: kf.description,
         levelIndex: devLevelMap[h.level],
       });
     }
   }
 
-  const sortedDates = Array.from(byDate.keys()).sort((a, b) => b.localeCompare(a));
+  const sortedTimestamps = Array.from(byTimestamp.keys()).sort((a, b) => b.localeCompare(a));
+
+  // Track which calendar dates appear more than once so we can show the time
+  const dateCounts = new Map<string, number>();
+  for (const ts of sortedTimestamps) {
+    const day = ts.slice(0, 10);
+    dateCounts.set(day, (dateCounts.get(day) ?? 0) + 1);
+  }
+
+  const formatLabel = (ts: string) => {
+    const d = new Date(ts);
+    const day = ts.slice(0, 10);
+    const base = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    if ((dateCounts.get(day) ?? 1) > 1) {
+      const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      return `${base}, ${time}`;
+    }
+    return base;
+  };
 
   return (
     <>
@@ -83,20 +101,16 @@ const EPAModal: React.FC<EPAModalProps> = ({ selectedEpa, onClose, range }) => {
               <button type='button' className='btn-close' onClick={onClose} aria-label='Close'></button>
             </div>
             <div className='modal-body' style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-              {sortedDates.length === 0 ? (
+              {sortedTimestamps.length === 0 ? (
                 <p className='text-muted text-center mb-0'>No assessments in this time range.</p>
               ) : (
-                sortedDates.map((dateKey) => (
-                  <div key={dateKey} className='mb-3 border rounded'>
+                sortedTimestamps.map((ts) => (
+                  <div key={ts} className='mb-3 border rounded'>
                     <div className='px-3 py-2 fw-semibold small border-bottom' style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
-                      {new Date(dateKey + 'T00:00:00').toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
+                      {formatLabel(ts)}
                     </div>
                     <div className='px-3'>
-                      {byDate.get(dateKey)!.map((item, i, arr) => (
+                      {byTimestamp.get(ts)!.map((item, i, arr) => (
                         <div
                           key={i}
                           className={`d-flex justify-content-between align-items-center py-2${i < arr.length - 1 ? ' border-bottom' : ''}`}
