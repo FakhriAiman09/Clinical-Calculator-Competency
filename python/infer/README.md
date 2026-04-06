@@ -32,6 +32,7 @@ Create a `.env` file:
 SUPABASE_URL=https://<project>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 GOOGLE_GENAI_API_KEY=<google-gemini-api-key>
+LOGTAIL_SOURCE_TOKEN=<better-stack-source-token>   # optional — enables Live Tail
 ```
 
 `listener.py` also accepts the legacy aliases `SUPABASE_KEY` and `GEMINI_API_KEY`.

@@ -22,6 +22,14 @@ from dotenv import load_dotenv
 from google import genai
 import supabase as spb
 
+load_dotenv()
+
+try:
+  from logtail import LogtailHandler as _LogtailHandler
+  _LOGTAIL_AVAILABLE = True
+except ImportError:
+  _LOGTAIL_AVAILABLE = False
+
 from inference import (bert_infer, download_bert_model, download_svm_models,
                        generate_report_summary, load_bert_model,
                        load_svm_models, svm_infer)
@@ -43,7 +51,7 @@ def get_env(*names: str) -> str:
   return ''
 
 def make_logger(name: str, filename: str) -> logging.Logger:
-  """Create a logger that writes to both a file and stdout."""
+  """Create a logger that writes to a file, stdout, and Better Stack (if configured)."""
   logger = logging.getLogger(name)
   logger.setLevel(logging.DEBUG)
   logger.handlers.clear()
@@ -59,6 +67,12 @@ def make_logger(name: str, filename: str) -> logging.Logger:
   ch = logging.StreamHandler()
   ch.setFormatter(formatter)
   logger.addHandler(ch)
+
+  # Better Stack (Logtail) handler — only if token is configured
+  logtail_token = os.environ.get('LOGTAIL_SOURCE_TOKEN', '')
+  if logtail_token and _LOGTAIL_AVAILABLE:
+    lh = _LogtailHandler(source_token=logtail_token)
+    logger.addHandler(lh)
 
   return logger
 
@@ -115,8 +129,7 @@ def wait_for_models(timeout_minutes: int = 60) -> None:
 
 async def main() -> None:
   """Initialize clients, load models, subscribe to realtime events, and run forever."""
-  app_log.info('Loading environment variables...')
-  load_dotenv()
+  app_log.info('Starting inference engine...')
 
   supabase_url: str = get_env('SUPABASE_URL')
   if not supabase_url:
