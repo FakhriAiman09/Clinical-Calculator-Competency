@@ -345,8 +345,17 @@ def handle_new_report(payload, gemini, supabase) -> None:
 
   except Exception as e:
     error_log.exception(f'[{report_id}] Error in handle_new_report: {e}')
+    err_str = str(e)
+    if '503' in err_str or 'UNAVAILABLE' in err_str or 'high demand' in err_str.lower():
+      friendly = 'AI feedback is temporarily unavailable due to high demand. Please regenerate the report in a few minutes.'
+    elif '429' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
+      friendly = 'AI feedback could not be generated because the usage limit was reached. Please try again later.'
+    elif '401' in err_str or 'API_KEY' in err_str or 'UNAUTHENTICATED' in err_str:
+      friendly = 'AI feedback could not be generated due to an authentication error. Please contact support.'
+    else:
+      friendly = 'AI feedback could not be generated. Please regenerate the report or contact support if the problem persists.'
     (supabase.table('student_reports')
-     .update({'llm_feedback': f'Error generating feedback: {str(e)}'})
+     .update({'llm_feedback': friendly})
      .eq('id', report_id)
      .execute())
 

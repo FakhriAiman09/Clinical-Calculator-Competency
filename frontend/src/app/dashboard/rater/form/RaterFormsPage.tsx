@@ -330,13 +330,23 @@ export default function RaterFormsPage() {
     setSummaryErrorByField((prev) => ({ ...prev, [key]: '' }));
 
     try {
+      const kfEntry = kfData.find((k) => k.epa === epaId && k.questionId === questionId);
+      const kf = kfEntry?.kf ?? null;
+      const checkedResponses = responses[epaId]?.[questionId] ?? {};
+      const selectedOptions = kfEntry
+        ? Object.entries(kfEntry.options)
+            .filter(([optKey]) => checkedResponses[optKey] === true)
+            .map(([, label]) => label)
+        : [];
+
       const res = await fetch('/api/ai/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text,
           model: aiModel,
-          kf: kfData.find((k) => k.epa === epaId && k.questionId === questionId)?.kf ?? null,
+          kf,
+          selectedOptions,
         }),
       });
 
@@ -484,8 +494,6 @@ export default function RaterFormsPage() {
           selectedEPAs: newSelectedEPAs,
         };
         localStorage.setItem(`form-progress-${studentId}`, JSON.stringify(formProgress));
-        setSaveStatus('Autosaved at ' + new Date().toLocaleTimeString());
-        setTimeout(() => setSaveStatus(''), 10000);
       },
       1000
     );

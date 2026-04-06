@@ -290,7 +290,9 @@ const EPABox: React.FC<EPABoxProps> = ({
 
         const aDate = new Date(a.date);
         if (aDate >= windowStart && aDate <= reportDate) {
-          const key = new Date(aDate.getFullYear(), aDate.getMonth(), 1).toISOString().slice(0, 10);
+          const year = aDate.getFullYear();
+          const month = String(aDate.getMonth() + 1).padStart(2, '0');
+          const key = `${year}-${month}-01`;
           if (!monthlyMap[key]) monthlyMap[key] = [];
           monthlyMap[key].push(val);
         }

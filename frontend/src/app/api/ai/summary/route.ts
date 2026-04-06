@@ -132,10 +132,15 @@ export async function POST(req: Request) {
 
     const kf: string | null = body?.kf ?? null;
     const hint = kf ? KF_HINTS[kf] : null;
+    const selectedOptions: string[] = Array.isArray(body?.selectedOptions) ? body.selectedOptions : [];
+
+    const optionsContext = selectedOptions.length > 0
+      ? ` The rater selected these checkbox options for this question: ${selectedOptions.map((o) => `"${o}"`).join(', ')}.`
+      : '';
 
 const system = hint
-  ? `Medical learner rater comment. KF ${kf}: ${hint}. Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; "Not related to ${hint}."; or "Unclear source text." Use KF only for relevance. Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`
-  : `Medical learner rater comment. Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; or "Unclear source text." Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`;
+  ? `Medical learner rater comment. KF ${kf}: ${hint}.${optionsContext} Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; "Not related to ${hint}."; or "Unclear source text." Use KF only for relevance. Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`
+  : `Medical learner rater comment.${optionsContext} Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; or "Unclear source text." Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`;
 
     const userContent = text;
 

@@ -31,8 +31,14 @@ const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
 
   if (!data.length) return <div className='text-muted'>No data to display</div>;
 
+  // Parse YYYY-MM-DD strings as local time (not UTC) to avoid timezone month-shift.
+  const parseLocalDate = (s: string) => {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
   const buckets: Record<string, number[]> = {};
-  const firstDate = new Date(Math.min(...data.map((d) => new Date(d.date).getTime())));
+  const firstDate = new Date(Math.min(...data.map((d) => parseLocalDate(d.date).getTime())));
   const now = new Date();
 
   const intervals: { label: string; start: Date }[] = [];
@@ -49,7 +55,7 @@ const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
     const key = start.toISOString();
     buckets[key] = data
       .filter((d) => {
-        const date = new Date(d.date);
+        const date = parseLocalDate(d.date);
         return date >= start && date < end;
       })
       .map((d) => d.value);
