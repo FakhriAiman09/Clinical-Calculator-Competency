@@ -112,7 +112,7 @@ export default function RaterFormsPage() {
   useRequireRole(['rater', 'dev']);
 
   const { user: authUser } = useUser();
-  const { model: aiModel, incrementUsage } = useAIPreferences(authUser?.id);
+  const { model: aiModel } = useAIPreferences(authUser?.id);
 
   const [epas, setEPAs] = useState<EPA[]>([]);
   const [kfData, setKFData] = useState<KeyFunction[]>([]);
@@ -361,7 +361,6 @@ export default function RaterFormsPage() {
         throw new Error(friendlyMsg);
       }
 
-      await incrementUsage();
       setSummaryByField((prev) => ({ ...prev, [key]: (data.summary ?? '').trim() }));
     } catch (err: any) {
       setSummaryErrorByField((prev) => ({
@@ -406,7 +405,6 @@ export default function RaterFormsPage() {
         throw new Error(friendlyMsg);
       }
 
-      await incrementUsage();
       setSummaryByField((prev) => ({ ...prev, [key]: (data.summary ?? '').trim() }));
     } catch (err: any) {
       setSummaryErrorByField((prev) => ({

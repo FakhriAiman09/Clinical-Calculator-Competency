@@ -100,10 +100,11 @@ export default function StudentReportPage() {
 
   const filteredReports = useMemo(() => {
     const search = reportSearch.trim().toLowerCase();
-    const filterLabel = `Last ${timeFilter} months`;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - timeFilter);
     return reports.filter((r) =>
       (!search || r.title.toLowerCase().includes(search)) &&
-      r.time_window === filterLabel
+      new Date(r.created_at) >= cutoff
     );
   }, [reportSearch, timeFilter, reports]);
 
@@ -198,10 +199,8 @@ export default function StudentReportPage() {
                     style={{ cursor: 'pointer' }}
                   >
                     <div className="fw-semibold">{r.title}</div>
-                    <div className={`report-meta mt-1 d-flex gap-2 ${selectedReport?.id === r.id ? 'text-white-50' : ''}`}>
+                    <div className={`report-meta mt-1 ${selectedReport?.id === r.id ? 'text-white-50' : ''}`}>
                       <span>{new Date(r.created_at).toLocaleDateString()}</span>
-                      <span>&middot;</span>
-                      <span>Time range: {r.time_window}</span>
                     </div>
                   </li>
                 ))}
