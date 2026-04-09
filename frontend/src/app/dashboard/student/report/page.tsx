@@ -51,6 +51,7 @@ export default function StudentReportPage() {
   const [loadingReport, setLoadingReport] = useState(false);
   const [kfDescriptions, setKfDescriptions] = useState<Record<string, string[]> | null>(null);
   const [reportSearch, setReportSearch] = useState('');
+  const [timeFilter, setTimeFilter] = useState<3 | 6 | 12>(3);
 
   const fetchReports = useCallback(async (userId: string) => {
     setLoadingReports(true);
@@ -99,8 +100,12 @@ export default function StudentReportPage() {
 
   const filteredReports = useMemo(() => {
     const search = reportSearch.trim().toLowerCase();
-    return reports.filter((r) => !search || r.title.toLowerCase().includes(search));
-  }, [reportSearch, reports]);
+    const filterLabel = `Last ${timeFilter} months`;
+    return reports.filter((r) =>
+      (!search || r.title.toLowerCase().includes(search)) &&
+      r.time_window === filterLabel
+    );
+  }, [reportSearch, timeFilter, reports]);
 
   return (
     <div className="container py-5">
@@ -133,6 +138,7 @@ export default function StudentReportPage() {
       {user?.id && (
         <ReportGenerationForm
           studentId={user.id}
+          timeRange={timeFilter}
           onGenerated={() => fetchReports(user.id)}
         />
       )}
@@ -141,7 +147,7 @@ export default function StudentReportPage() {
       <div className="card shadow-sm p-4 mt-4 mb-3">
         <h4 className="fw-semibold mb-3">Past Reports</h4>
 
-        <div className="d-flex flex-wrap gap-2 mb-3">
+        <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
           <input
             type="text"
             className="form-control"
@@ -150,6 +156,18 @@ export default function StudentReportPage() {
             onChange={(e) => setReportSearch(e.target.value)}
             style={{ maxWidth: 280 }}
           />
+          <div className="btn-group" role="group" aria-label="Time range filter">
+            {([3, 6, 12] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={`btn btn-outline-primary${timeFilter === value ? ' active' : ''}`}
+                onClick={() => setTimeFilter(value)}
+              >
+                Last {value} mo
+              </button>
+            ))}
+          </div>
         </div>
 
         {loadingReports ? (

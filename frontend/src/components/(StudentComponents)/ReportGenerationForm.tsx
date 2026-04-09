@@ -7,10 +7,11 @@ const supabase = createClient();
 
 interface ReportGenerationFormProps {
   studentId: string;
+  timeRange: 3 | 6 | 12;
   onGenerated: () => void;
 }
 
-const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, onGenerated }) => {
+const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, timeRange, onGenerated }) => {
   const [title, setTitle] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [success, setSuccess] = useState<boolean>(false);
@@ -34,7 +35,7 @@ const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, 
     try {
       const { error } = await supabase.rpc('generate_report', {
         student_id_input: studentId,
-        time_range_input: 3,
+        time_range_input: timeRange,
         report_title: title.trim(),
       });
 

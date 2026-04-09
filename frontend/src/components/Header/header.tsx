@@ -136,9 +136,6 @@ export default function Header() {
             <span className='ms-2 fw-bold text-body d-none d-lg-inline' style={{ fontSize: '1.05rem' }}>
               Clinical Competency Calculator
             </span>
-            <span className='ms-2 fw-bold text-body d-none d-sm-inline d-lg-none' style={{ fontSize: '0.95rem' }}>
-              CCC
-            </span>
           </Link>
 
           {/* Nav inline on lg+ */}
