@@ -86,23 +86,30 @@ const FALLBACK_MODEL = 'openrouter/free';
  * @returns The raw fetch Response from OpenRouter.
  */
 async function callOpenRouter(apiKey: string, model: string, system: string, userContent: string) {
-  return fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000',
-      'X-Title':      process.env.OPENROUTER_SITE_NAME || 'CCC-Rater',
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user',   content: userContent },
-      ],
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+  try {
+    return await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000',
+        'X-Title':      process.env.OPENROUTER_SITE_NAME || 'CCC-Rater',
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user',   content: userContent },
+        ],
+      }),
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /**
@@ -138,9 +145,13 @@ export async function POST(req: Request) {
       ? ` The rater selected these checkbox options for this question: ${selectedOptions.map((o) => `"${o}"`).join(', ')}.`
       : '';
 
+const checkboxNote = selectedOptions.length > 0
+  ? ` If the text matches, paraphrases, or is derived from the selected checkbox options, always treat it as valid clinical evaluation content and rewrite it — never flag it as unrelated or non-clinical.`
+  : '';
+
 const system = hint
-  ? `Medical learner rater comment. KF ${kf}: ${hint}.${optionsContext} Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; "Not related to ${hint}."; or "Unclear source text." Use KF only for relevance. Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`
-  : `Medical learner rater comment.${optionsContext} Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; or "Unclear source text." Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`;
+  ? `Medical learner rater comment. KF ${kf}: ${hint}.${optionsContext}${checkboxNote} Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; "Not related to ${hint}."; or "Unclear source text." Use KF only for relevance. Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`
+  : `Medical learner rater comment.${optionsContext}${checkboxNote} Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; or "Unclear source text." Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`;
 
     const userContent = text;
 
@@ -193,6 +204,10 @@ const system = hint
     return NextResponse.json({ summary });
 
   } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      console.error('[AI Summary] Request timed out after 30s');
+      return NextResponse.json({ error: 'timeout', message: 'AI service took too long to respond. Please try again.' }, { status: 504 });
+    }
     console.error('[AI Summary] Unexpected error:', e);
     return NextResponse.json({ error: 'server_error', message: e?.message || 'Unexpected error.' }, { status: 500 });
   }

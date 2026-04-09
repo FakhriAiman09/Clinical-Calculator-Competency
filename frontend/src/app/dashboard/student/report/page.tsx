@@ -25,8 +25,15 @@ interface StudentReport {
 
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
 
+function getTimeWindowMonths(timeWindow: string): 3 | 6 | 12 {
+  const parsed = parseInt(timeWindow, 10);
+  if (parsed === 6 || parsed === 12) return parsed;
+  return 3;
+}
+
 function formatTimeWindowLabel(timeWindow: string): string {
-  return `${parseInt(timeWindow, 10)} months`;
+  const months = getTimeWindowMonths(timeWindow);
+  return `Last ${months} months`;
 }
 
 function getDisplayReportTitle(title: string): string {
@@ -176,7 +183,7 @@ export default function StudentReportPage() {
                     <div className={`report-meta mt-1 d-flex gap-2 ${selectedReport?.id === r.id ? 'text-white-50' : ''}`}>
                       <span>{new Date(r.created_at).toLocaleDateString()}</span>
                       <span>&middot;</span>
-                      <span>Last {r.time_window}</span>
+                      <span>Time range: {r.time_window}</span>
                     </div>
                   </li>
                 ))}
@@ -202,7 +209,7 @@ export default function StudentReportPage() {
             <div>
               <h3 className="m-0">{selectedReport.title}</h3>
               <small className="text-muted">
-                {selectedReport.time_window} &middot; Generated{' '}
+                Time range: {selectedReport.time_window} &middot; Generated{' '}
                 {new Date(selectedReport.created_at).toLocaleDateString()}
               </small>
             </div>
@@ -243,7 +250,7 @@ export default function StudentReportPage() {
             <EPABox
               key={`epabox-${epaId}-${user.id}-${selectedReport.id}`}
               epaId={epaId}
-              timeRange={parseInt(selectedReport.time_window) as 3 | 6 | 12}
+              timeRange={getTimeWindowMonths(selectedReport.time_window)}
               kfDescriptions={kfDescriptions}
               studentId={user.id}
               reportId={selectedReport.id}
