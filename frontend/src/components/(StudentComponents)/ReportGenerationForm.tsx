@@ -12,7 +12,6 @@ interface ReportGenerationFormProps {
 
 const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, onGenerated }) => {
   const [title, setTitle] = useState<string>('');
-  const [timeRange, setTimeRange] = useState<3 | 6 | 12>(3);
   const [loading, setLoading] = useState<boolean>(false);
   const [success, setSuccess] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -35,7 +34,7 @@ const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, 
     try {
       const { error } = await supabase.rpc('generate_report', {
         student_id_input: studentId,
-        time_range_input: timeRange,
+        time_range_input: 3,
         report_title: title.trim(),
       });
 
@@ -78,23 +77,6 @@ const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, 
             required
             disabled={loading}
           />
-        </div>
-
-        <div className='mb-3'>
-          <label className='form-label d-block'>Time Range</label>
-          <div className='btn-group' role='group' aria-label='Time range options'>
-            {[3, 6, 12].map((value) => (
-              <button
-                key={value}
-                type='button'
-                className={`btn btn-outline-primary${timeRange === value ? ' active' : ''}`}
-                onClick={() => setTimeRange(value as 3 | 6 | 12)}
-                disabled={loading}
-              >
-                Last {value} mo
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className='d-flex justify-content-between align-items-center mt-4'>
