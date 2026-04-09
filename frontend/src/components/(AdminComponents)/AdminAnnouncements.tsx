@@ -285,7 +285,7 @@ export default function AdminAnnouncements() {
           </div>
 
           {/* Save + Clear */}
-          <div className='d-flex justify-content-between gap-3'>
+          <div className='d-flex justify-content-between gap-3 flex-column flex-sm-row'>
             <button className='btn btn-primary flex-fill' onClick={handleSave} disabled={saving}>
               {saving ? 'Saving…' : editingId ? 'Update Announcement' : 'Save Announcement'}
             </button>
@@ -316,7 +316,7 @@ export default function AdminAnnouncements() {
         ) : (
           <ul className='list-group'>
             {announcements.map((a) => (
-              <li key={a.id} className='list-group-item d-flex justify-content-between align-items-start'>
+              <li key={a.id} className='list-group-item d-flex justify-content-between align-items-start announcement-list-item'>
                 <div>
                   <div className='fw-bold'>
                     {a.announcement_type.toUpperCase()} | {new Date(a.start_date).toLocaleString()} →{' '}
@@ -327,8 +327,8 @@ export default function AdminAnnouncements() {
                     {a.message.length > 100 && '…'}
                   </div>
                 </div>
-                <div className='ms-3'>
-                  <button className='btn btn-sm btn-outline-primary me-2' onClick={() => startEdit(a)}>
+                <div className='ms-sm-3 announcement-list-actions'>
+                  <button className='btn btn-sm btn-outline-primary' onClick={() => startEdit(a)}>
                     <i className='bi bi-pencil'></i>
                   </button>
                   <button

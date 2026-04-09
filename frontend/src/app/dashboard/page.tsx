@@ -114,7 +114,7 @@ const Dashboard = () => {
   };
 
   return (
-    <main className='container mx-auto p-4'>
+    <main className='dashboard-shell'>
       {/* Persistent alert banner that will remain until a display name is set */}
       {mustSetDisplayName && (
         <div className='alert alert-warning d-flex justify-content-between align-items-center'>

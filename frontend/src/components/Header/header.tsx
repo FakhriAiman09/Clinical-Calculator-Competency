@@ -133,10 +133,12 @@ export default function Header() {
           {/* Logo */}
           <Link href='/dashboard' className='header-logo-link d-flex align-items-center flex-shrink-0'>
             <Image src={logo} alt='Logo' width={38} height={38} priority className='logo-img' />
-            <span className='ms-2 fw-bold text-body d-none d-sm-inline' style={{ fontSize: '1.05rem' }}>
+            <span className='ms-2 fw-bold text-body d-none d-lg-inline' style={{ fontSize: '1.05rem' }}>
               Clinical Competency Calculator
             </span>
-            <span className='ms-2 fw-bold text-body d-sm-none' style={{ fontSize: '1.05rem' }}></span>
+            <span className='ms-2 fw-bold text-body d-none d-sm-inline d-lg-none' style={{ fontSize: '0.95rem' }}>
+              CCC
+            </span>
           </Link>
 
           {/* Nav inline on lg+ */}

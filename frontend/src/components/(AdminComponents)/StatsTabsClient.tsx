@@ -52,9 +52,9 @@ export default function StatsTabsClient() {
   return (
     <div className='p-3 rounded bg-body-secondary'>
       <div className='card shadow-sm p-3 border-0 bg-body'>
-        <div className='card-header d-flex justify-content-between align-items-center bg-body border-bottom'>
+        <div className='card-header d-flex justify-content-between align-items-center flex-wrap gap-2 bg-body border-bottom'>
           <h5 className='m-0 text-body'>System Statistics</h5>
-          <div className='d-flex align-items-center gap-2'>
+          <div className='d-flex align-items-center gap-2 flex-wrap'>
             <div className='dropdown'>
               <button
                 className='btn btn-outline-secondary btn-sm dropdown-toggle'
@@ -93,7 +93,7 @@ export default function StatsTabsClient() {
 
         <div className='card-body'>
           {activeTab === 'Overview' && (
-            <div className='d-flex flex-wrap gap-3'>
+            <div className='stats-overview-grid'>
               <StatCard label='Submitted Forms' value={stats.totalSubmittedForms} />
               <StatCard label='Active Requests' value={stats.activeFormRequests} />
               <StatCard label='Delinquent Requests' value={stats.delinquentFormRequests} />
@@ -205,12 +205,11 @@ export default function StatsTabsClient() {
           )}
 
           {activeTab === 'EPA Distribution' && (
-            <div className='d-flex flex-wrap gap-3'>
+            <div className='epa-distribution-grid'>
               {Object.entries(stats.monthlyEPADistribution).map(([epa, data]) => (
                 <div
                   key={epa}
-                  className='border rounded shadow-sm bg-body-secondary p-3 flex-grow-1'
-                  style={{ minWidth: '250px', maxWidth: '320px' }}
+                  className='border rounded shadow-sm bg-body-secondary p-3 min-w-0'
                 >
                   <h6 className='mb-3 text-center'>EPA {epa}</h6>
                   <svg
@@ -278,7 +277,7 @@ export default function StatsTabsClient() {
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className='border rounded p-3 text-center flex-grow-1' style={{ minWidth: '150px' }}>
+    <div className='border rounded p-3 text-center min-w-0'>
       <div className='fw-bold fs-5 text-body'>{value}</div>
       <div className='text-muted small'>{label}</div>
     </div>
