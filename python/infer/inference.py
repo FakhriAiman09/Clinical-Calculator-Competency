@@ -8,6 +8,7 @@ AI-written report summaries from averaged key-function results.
 import os
 import pickle
 import re
+import time
 
 import supabase as spb
 import tensorflow as tf
@@ -30,13 +31,18 @@ def bert_infer(model: tf.keras.Model, data: dict[str, list[str]]) -> dict[str, i
     A mapping of key-function IDs to predicted development levels.
   """
   print('Running inference on BERT model...')
+  _t0 = time.time()
 
   def get_class(sentences: list[str]) -> int:
     prediction = model.predict(sentences).tolist()
     summed_prediction = [sum(x) for x in zip(*prediction)]
     return summed_prediction.index(max(summed_prediction))
 
-  return {k: get_class(v) for k, v in data.items()}
+  result = {k: get_class(v) for k, v in data.items()}
+  _elapsed = time.time() - _t0
+  _total_texts = sum(len(v) for v in data.values())
+  print(f'[TIMING] BERT inference: {_elapsed:.3f}s ({_total_texts} texts across {len(data)} key functions)', flush=True)
+  return result
 
 
 # ==================================================================================================
@@ -54,12 +60,16 @@ def svm_infer(models: dict[str, svm.SVC], data: dict[str, list[bool]]) -> dict[s
     A mapping of key-function IDs to predicted development levels.
   """
   print('Running inference on SVM models...')
+  _t0 = time.time()
 
   def get_class(kf, response: list[bool]) -> int:
     model_key = 'mcq_kf' + re.sub(r'\.', '_', kf)
     return models[model_key].predict([response])[0]
 
-  return {k: get_class(k, v) for k, v in data.items()}
+  result = {k: get_class(k, v) for k, v in data.items()}
+  _elapsed = time.time() - _t0
+  print(f'[TIMING] SVM inference: {_elapsed:.3f}s ({len(data)} key functions)', flush=True)
+  return result
 
 
 # ==================================================================================================
@@ -89,9 +99,10 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   """
 
   import json
-  import time
+  _gemini_start = time.time()
   for attempt in range(3):
     try:
+      _attempt_start = time.time()
       response: GenerateContentResponse = gemini.models.generate_content(
         model='gemini-2.5-flash',
         contents=query,
@@ -99,6 +110,7 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
           response_mime_type='application/json',
         ),
       )
+      print(f'[TIMING] Gemini API call (attempt {attempt+1}): {time.time()-_attempt_start:.3f}s', flush=True)
       if response.text:
         text = response.text.strip()
         # Strip any residual markdown fences
@@ -111,6 +123,7 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
           text = match.group(0)
         try:
           parsed = json.loads(text)
+          print(f'[TIMING] Gemini total (attempt {attempt+1} success): {time.time()-_gemini_start:.3f}s', flush=True)
           return json.dumps(parsed)
         except json.JSONDecodeError:
           print(f'Gemini returned invalid JSON on attempt {attempt+1}, retrying...', flush=True)
@@ -126,6 +139,7 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
         time.sleep(wait)
       else:
         raise
+  print(f'[TIMING] Gemini total (3 failed attempts): {time.time()-_gemini_start:.3f}s', flush=True)
   return 'Error generating feedback: Gemini did not return valid JSON after 3 attempts.'
 
 

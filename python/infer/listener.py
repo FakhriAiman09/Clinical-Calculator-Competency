@@ -234,13 +234,17 @@ def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
     bert_inputs = {k: v['text'] for d in ds for k, v in d.items()}
     svm_inputs = {k: [vv for kk, vv in v.items() if kk != 'text'] for d in ds for k, v in d.items()}
 
+    _t_pipeline = time.time()
+
     infer_log.info(f'[{response_id}] Running BERT inference...')
+    _t_bert = time.time()
     bert_res = bert_infer(bert_model, bert_inputs)
-    infer_log.info(f'[{response_id}] BERT results: {bert_res}')
+    infer_log.info(f'[{response_id}] BERT results: {bert_res} [{time.time()-_t_bert:.3f}s]')
 
     infer_log.info(f'[{response_id}] Running SVM inference...')
+    _t_svm = time.time()
     svms_res = svm_infer(svm_models, svm_inputs)
-    infer_log.info(f'[{response_id}] SVM results: {svms_res}')
+    infer_log.info(f'[{response_id}] SVM results: {svms_res} [{time.time()-_t_svm:.3f}s]')
 
     def weighted_average(bert: float, svm: float) -> float:
       """Combine BERT and SVM outputs using the project weighting rule."""
@@ -249,10 +253,11 @@ def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
     res = {k: weighted_average(bert=v, svm=svms_res[k]) for k, v in bert_res.items()}
     infer_log.info(f'[{response_id}] Final weighted results: {res}')
 
+    _t_db = time.time()
     (supabase.table('form_results')
      .insert({'response_id': response_id, 'results': res})
      .execute())
-    infer_log.info(f'[{response_id}] Results written to form_results successfully.')
+    infer_log.info(f'[{response_id}] Results written to form_results. DB write: {time.time()-_t_db:.3f}s | Total pipeline: {time.time()-_t_pipeline:.3f}s')
 
   except Exception as e:
     error_log.exception(f'Error in handle_new_response: {e}')
@@ -271,13 +276,17 @@ def handle_updated_response(payload, bert_model, svm_models, supabase) -> None:
     bert_inputs = {k: v['text'] for d in ds for k, v in d.items()}
     svm_inputs = {k: [vv for kk, vv in v.items() if kk != 'text'] for d in ds for k, v in d.items()}
 
+    _t_pipeline = time.time()
+
     infer_log.info(f'[{response_id}] Running BERT inference (update)...')
+    _t_bert = time.time()
     bert_res = bert_infer(bert_model, bert_inputs)
-    infer_log.info(f'[{response_id}] BERT results: {bert_res}')
+    infer_log.info(f'[{response_id}] BERT results: {bert_res} [{time.time()-_t_bert:.3f}s]')
 
     infer_log.info(f'[{response_id}] Running SVM inference (update)...')
+    _t_svm = time.time()
     svms_res = svm_infer(svm_models, svm_inputs)
-    infer_log.info(f'[{response_id}] SVM results: {svms_res}')
+    infer_log.info(f'[{response_id}] SVM results: {svms_res} [{time.time()-_t_svm:.3f}s]')
 
     def weighted_average(bert: float, svm: float) -> float:
       return bert * 0.25 + svm * 0.75
@@ -286,10 +295,11 @@ def handle_updated_response(payload, bert_model, svm_models, supabase) -> None:
     infer_log.info(f'[{response_id}] Updated weighted results: {res}')
 
     # UPSERT so the existing form_results row is replaced, not duplicated
+    _t_db = time.time()
     (supabase.table('form_results')
      .upsert({'response_id': response_id, 'results': res}, on_conflict='response_id')
      .execute())
-    infer_log.info(f'[{response_id}] form_results upserted successfully.')
+    infer_log.info(f'[{response_id}] form_results upserted. DB write: {time.time()-_t_db:.3f}s | Total pipeline: {time.time()-_t_pipeline:.3f}s')
 
   except Exception as e:
     error_log.exception(f'Error in handle_updated_response: {e}')
@@ -345,7 +355,9 @@ def handle_new_report(payload, gemini, supabase) -> None:
       return
 
     app_log.info(f'[{report_id}] Calling Gemini...')
+    _t_gemini = time.time()
     summary = generate_report_summary(data, gemini)
+    app_log.info(f'[{report_id}] Gemini total: {time.time()-_t_gemini:.3f}s')
     if summary.startswith('Error generating feedback:'):
       error_log.error(f'[{report_id}] {summary}')
       stored = json.dumps({'_error': 'AI feedback could not be generated. Please regenerate the report.'})
