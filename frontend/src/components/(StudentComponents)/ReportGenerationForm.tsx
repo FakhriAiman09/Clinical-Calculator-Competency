@@ -60,7 +60,7 @@ const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, 
   };
 
   return (
-    <div className='card shadow-sm p-4 mt-5'>
+    <div className='card shadow-sm p-4'>
       <h4 className='mb-3 fw-semibold'>Generate New Report</h4>
 
       <form onSubmit={generateReport}>

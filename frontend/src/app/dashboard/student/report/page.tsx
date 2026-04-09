@@ -122,7 +122,7 @@ export default function StudentReportPage() {
         }
       `}</style>
 
-      {/* Generate New Report form — matches the design in the screenshot */}
+      {/* Generate New Report */}
       {user?.id && (
         <ReportGenerationForm
           studentId={user.id}
@@ -131,7 +131,7 @@ export default function StudentReportPage() {
       )}
 
       {/* Past Reports list */}
-      <div className="mt-4 mb-3">
+      <div className="card shadow-sm p-4 mt-4 mb-3">
         <h4 className="fw-semibold mb-3">Past Reports</h4>
 
         <div className="d-flex flex-wrap gap-2 mb-3">
@@ -152,11 +152,11 @@ export default function StudentReportPage() {
             </div>
           </div>
         ) : reports.length === 0 ? (
-          <div className="alert alert-info">
+          <div className="alert alert-info mb-0">
             No reports have been generated yet. Use the form above to generate your first report.
           </div>
         ) : filteredReports.length === 0 ? (
-          <div className="alert alert-secondary">
+          <div className="alert alert-secondary mb-0">
             No reports match the current filters.
           </div>
         ) : (
@@ -173,8 +173,10 @@ export default function StudentReportPage() {
                     style={{ cursor: 'pointer' }}
                   >
                     <div className="fw-semibold">{r.title}</div>
-                    <div className={`report-meta mt-1 ${selectedReport?.id === r.id ? 'text-white-50' : ''}`}>
-                      {new Date(r.created_at).toLocaleDateString()}
+                    <div className={`report-meta mt-1 d-flex gap-2 ${selectedReport?.id === r.id ? 'text-white-50' : ''}`}>
+                      <span>{new Date(r.created_at).toLocaleDateString()}</span>
+                      <span>&middot;</span>
+                      <span>Last {r.time_window}</span>
                     </div>
                   </li>
                 ))}
