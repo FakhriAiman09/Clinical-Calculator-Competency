@@ -3,21 +3,6 @@ import Script from 'next/script';
 
 const endpoints = [
   {
-    method: 'GET',
-    path: '/api/ai/models',
-    purpose: 'Fetch the live OpenRouter model catalog for the settings dashboard.',
-  },
-  {
-    method: 'POST',
-    path: '/api/ai/chat',
-    purpose: 'Send a secure OpenRouter chat request and log usage analytics.',
-  },
-  {
-    method: 'GET',
-    path: '/api/ai/stats',
-    purpose: 'Aggregate logged AI usage, latency, cost, and latest rate-limit data.',
-  },
-  {
     method: 'POST',
     path: '/api/ai/summary',
     purpose: 'Summarize clinical rater comments with OpenRouter.',
