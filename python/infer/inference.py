@@ -137,6 +137,10 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
         wait = 60 * (attempt + 1)
         print(f'Gemini rate limited, retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
         time.sleep(wait)
+      elif '503' in err or 'UNAVAILABLE' in err or 'high demand' in err.lower():
+        wait = 10 * (attempt + 1)
+        print(f'Gemini unavailable (503), retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
+        time.sleep(wait)
       else:
         raise
   print(f'[TIMING] Gemini total (3 failed attempts): {time.time()-_gemini_start:.3f}s', flush=True)

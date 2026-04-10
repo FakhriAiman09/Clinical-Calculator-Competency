@@ -1,127 +1,95 @@
 import { NextResponse } from 'next/server';
-
-// Keep this in sync with FREE_AI_MODELS in src/utils/ai-models.ts
-const VALID_MODELS = new Set([
-  'z-ai/glm-4.5-air:free',
-  'stepfun/step-3.5-flash:free',
-]);
-const DEFAULT_MODEL  = 'z-ai/glm-4.5-air:free';
+import { createClient } from '@/utils/supabase/server';
+import {
+  callOpenRouterChat,
+  estimateCostUsd,
+  fetchOpenRouterModels,
+  pickDefaultModelId,
+} from '@/lib/openrouter';
 
 // KF hints for system prompt context, keyed by competency code (e.g. "1.1", "2.3", "professionalism")
 // These are not shown to users, but help the AI understand the clinical competency context when provided.
-//
 const KF_HINTS: Record<string, string> = {
   '1.1': 'history taking, organized',
   '1.2': 'patient-centered interview',
   '1.3': 'clinical reasoning, focused info gathering',
   '1.4': 'physical exam, clinical relevance',
-
   '2.1': 'differential diagnosis, synthesizing findings',
   '2.2': 'updating diagnosis, managing ambiguity',
   '2.3': 'team communication, working diagnosis',
-
   '3.1': 'diagnostic tests, screening, cost-effective',
   '3.2': 'test rationale, pre/post-test probability',
   '3.3': 'interpreting results, urgency',
-
   '4.1': 'composing orders, verbal/written/electronic',
   '4.2': 'orders underpinned by patient understanding',
   '4.3': 'error recognition, patient safety alerts',
   '4.4': 'discussing orders with team and patient',
-
   '5.1': 'clinical documentation, cogent narrative',
   '5.2': 'documentation requirements, regulations',
   '5.3': 'problem list, differential, clinical reasoning',
-
   '6.1': 'oral presentation, verified information',
   '6.2': 'concise organized oral presentation',
   '6.3': 'adapting presentation to audience',
   '6.4': 'patient privacy, autonomy',
-
   '7.1': 'clinical question formulation, EBM',
   '7.2': 'medical information technology, evidence access',
   '7.3': 'appraising evidence, sources',
   '7.4': 'applying evidence, communicating findings',
-
   '8.1': 'learner use of electronic handover tools, structured verbal handover',
   '8.2': 'handover communication, transition of care',
   '8.3': 'handover, illness severity, situational awareness',
   '8.4': 'handover feedback, closed-loop communication',
   '8.5': 'patient confidentiality, handover',
-
   '9.1': 'team roles, seeking help, healthcare delivery',
   '9.2': 'team communication, attentive listening',
   '9.3': 'mutual respect, team climate, integrity',
-
   '10.1': 'vital signs, patient deterioration, etiology',
   '10.2': 'illness severity, escalating care',
   '10.3': 'code response, basic/advanced life support',
   '10.4': 'deterioration communication, goals of care',
-
   '11.1': 'informed consent, risks, benefits, alternatives',
   '11.2': 'patient/family communication, intervention understanding',
   '11.3': 'patient reassurance, confidence, seeking help',
-
   '12.1': 'procedural technical skills',
   '12.2': 'procedure anatomy, indications, complications',
   '12.3': 'pre/post-procedural patient communication',
   '12.4': 'patient confidence, procedural ease',
-
   '13.1': 'error reporting, near miss, safety systems',
   '13.2': 'system improvement, quality improvement',
   '13.3': 'daily safety habits, documentation, precautions',
   '13.4': 'error reflection, individual improvement plan',
-
-  'professionalism': 'professional behavior, ethics, conduct',
+  professionalism: 'professional behavior, ethics, conduct',
 };
-// Automatic fallback: OpenRouter picks whichever free model is available
-const FALLBACK_MODEL = 'openrouter/free';
 
-/**
- * Sends a chat completion request to the OpenRouter API.
- * @param {string} apiKey - OpenRouter API key.
- * @param {string} model - Model ID to use (e.g. 'z-ai/glm-4.5-air:free').
- * @param {string} system - System prompt defining assistant behavior.
- * @param {string} userContent - User message content.
- * @returns The raw fetch Response from OpenRouter.
- */
-async function callOpenRouter(apiKey: string, model: string, system: string, userContent: string) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30_000);
-  try {
-    return await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000',
-        'X-Title':      process.env.OPENROUTER_SITE_NAME || 'CCC-Rater',
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user',   content: userContent },
-        ],
-      }),
-    });
-  } finally {
-    clearTimeout(timeoutId);
+type SummaryBody = {
+  text?: string;
+  model?: string;
+  kf?: string | null;
+  selectedOptions?: string[];
+};
+
+function buildSystemPrompt(kf: string | null, selectedOptions: string[]) {
+  const hint = kf ? KF_HINTS[kf] : null;
+  const optionsContext =
+    selectedOptions.length > 0
+      ? ` The rater selected these checkbox options for this question: ${selectedOptions.map((item) => `"${item}"`).join(', ')}.`
+      : '';
+
+  const checkboxNote =
+    selectedOptions.length > 0
+      ? ' If the text matches, paraphrases, or is derived from the selected checkbox options, always treat it as valid clinical evaluation content and rewrite it, never flag it as unrelated or non-clinical.'
+      : '';
+
+  if (hint) {
+    return `Medical learner rater comment. KF ${kf}: ${hint}.${optionsContext}${checkboxNote} Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; "Not related to ${hint}."; or "Unclear source text." Use KF only for relevance. Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`;
   }
+
+  return `Medical learner rater comment.${optionsContext}${checkboxNote} Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; or "Unclear source text." Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`;
 }
 
-/**
- * POST /api/ai/summary
- * Generates a concise AI summary of rater comments using OpenRouter.
- * Falls back to 'openrouter/free' if the requested model has no available endpoints.
- * @param {Request} req - JSON body: `{ text: string, model?: string }`.
- * @returns JSON `{ summary: string }` on success, or an error object with status code.
- */
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as SummaryBody;
     const text = body?.text;
 
     if (!text || typeof text !== 'string') {
@@ -130,85 +98,136 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      console.error('[AI Summary] OPENROUTER_API_KEY is not set');
-      return NextResponse.json({ error: 'missing_key', message: 'API key not configured.' }, { status: 500 });
-    }
-
-    // Use requested model only if it is in the valid list, else fall back to default
-    const requestedModel = VALID_MODELS.has(body?.model) ? body.model : DEFAULT_MODEL;
-
-    const kf: string | null = body?.kf ?? null;
-    const hint = kf ? KF_HINTS[kf] : null;
-    const selectedOptions: string[] = Array.isArray(body?.selectedOptions) ? body.selectedOptions : [];
-
-    const optionsContext = selectedOptions.length > 0
-      ? ` The rater selected these checkbox options for this question: ${selectedOptions.map((o) => `"${o}"`).join(', ')}.`
-      : '';
-
-const checkboxNote = selectedOptions.length > 0
-  ? ` If the text matches, paraphrases, or is derived from the selected checkbox options, always treat it as valid clinical evaluation content and rewrite it — never flag it as unrelated or non-clinical.`
-  : '';
-
-const system = hint
-  ? `Medical learner rater comment. KF ${kf}: ${hint}.${optionsContext}${checkboxNote} Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; "Not related to ${hint}."; or "Unclear source text." Use KF only for relevance. Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`
-  : `Medical learner rater comment.${optionsContext}${checkboxNote} Grammatical errors, shorthand, and sentence fragments still count if the meaning is clear and they describe learner performance. Return exactly one: plain sentences rewriting only for clarity and clinical wording, with no new facts; "Not clinical evaluation content."; or "Unclear source text." Use "Unclear source text." only if the meaning cannot be understood well enough to rewrite. If unsure, do not guess.`;
-
-    const userContent = text;
-
-    console.log('[AI Summary] Using model:', requestedModel);
-    let resp = await callOpenRouter(apiKey, requestedModel, system, userContent);
-    let rawText = await resp.text();
-    console.log('[AI Summary] Status:', resp.status, '| Response:', rawText.slice(0, 300));
-
-    // If the chosen model has no endpoints, transparently retry with openrouter/free
-    if (!resp.ok) {
-      try {
-        const errBody = JSON.parse(rawText);
-        const errMsg: string = errBody?.error?.message ?? '';
-        const errCode: string = errBody?.error?.code ?? errBody?.error?.type ?? '';
-        if (errMsg.toLowerCase().includes('no endpoints') || errCode === 'model_not_found') {
-          console.warn('[AI Summary] Model unavailable, retrying with fallback:', FALLBACK_MODEL);
-          resp    = await callOpenRouter(apiKey, FALLBACK_MODEL, system, userContent);
-          rawText = await resp.text();
-          console.log('[AI Summary] Fallback status:', resp.status, '| Response:', rawText.slice(0, 300));
-        }
-      } catch { /* not JSON, continue to normal error handling */ }
-    }
-
-    if (resp.status === 429) {
       return NextResponse.json(
-        { error: 'rate_limited', message: 'Daily request limit reached. Resets at midnight UTC.' },
+        { error: 'missing_key', message: 'API key not configured.' },
+        { status: 500 }
+      );
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const [models, preference] = await Promise.all([
+      fetchOpenRouterModels(apiKey),
+      user ? supabase.from('user_preferences').select('ai_model').eq('id', user.id).single() : Promise.resolve({ data: null, error: null }),
+    ]);
+
+    const selectedModelId =
+      (typeof body.model === 'string' && body.model) ||
+      preference.data?.ai_model ||
+      pickDefaultModelId(models);
+
+    if (!selectedModelId) {
+      return NextResponse.json(
+        { error: 'no_models_available', message: 'No OpenRouter models are currently available.' },
+        { status: 503 }
+      );
+    }
+
+    const kf = typeof body.kf === 'string' ? body.kf : null;
+    const selectedOptions = Array.isArray(body.selectedOptions) ? body.selectedOptions.map(String) : [];
+    const systemPrompt = buildSystemPrompt(kf, selectedOptions);
+    const model = models.find((item) => item.id === selectedModelId) ?? null;
+
+    const result = await callOpenRouterChat({
+      apiKey,
+      model: selectedModelId,
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: text },
+      ],
+    });
+
+    const summary = String(result.payload?.choices?.[0]?.message?.content ?? '').trim();
+    const errorCode =
+      typeof result.payload?.error?.code === 'string'
+        ? result.payload.error.code
+        : typeof result.payload?.error?.type === 'string'
+        ? result.payload.error.type
+        : null;
+    const estimatedCostUsd = model ? estimateCostUsd(result.usage, model.pricing) : null;
+
+    if (user) {
+      await supabase.from('ai_request_logs').insert({
+        user_id: user.id,
+        request_kind: 'summary',
+        request_path: '/api/ai/summary',
+        provider: 'openrouter',
+        model_id: selectedModelId,
+        prompt_tokens: result.usage.promptTokens,
+        completion_tokens: result.usage.completionTokens,
+        total_tokens: result.usage.totalTokens,
+        latency_ms: result.latencyMs,
+        estimated_cost_usd: estimatedCostUsd,
+        requests_limit: result.rateLimits.requestsLimit,
+        requests_remaining: result.rateLimits.requestsRemaining,
+        requests_reset_at: result.rateLimits.requestsResetAt,
+        tokens_limit: result.rateLimits.tokensLimit,
+        tokens_remaining: result.rateLimits.tokensRemaining,
+        tokens_reset_at: result.rateLimits.tokensResetAt,
+        status_code: result.response.status,
+        error_code: errorCode,
+        request_metadata: {
+          kf,
+          selectedOptions,
+          textLength: text.length,
+          rateLimitHeaders: result.rateLimits.raw,
+        },
+      });
+    }
+
+    if (result.response.status === 429) {
+      return NextResponse.json(
+        {
+          error: 'rate_limited',
+          message: 'OpenRouter rate limited the request.',
+          rateLimits: result.rateLimits,
+        },
         { status: 429 }
       );
     }
 
-    if (!resp.ok) {
-      let message = `AI service error (${resp.status}). Please try again.`;
-      try {
-        const err = JSON.parse(rawText);
-        const code = err?.error?.code ?? err?.error?.type ?? '';
-        if (code === 'context_length_exceeded') message = 'Text is too long for this model. Try a shorter selection.';
-        else if (code === 'model_not_found')     message = 'Selected model unavailable. Try switching in Settings.';
-        else if (err?.error?.message)            message = err.error.message;
-      } catch { /* not JSON */ }
-      return NextResponse.json({ error: 'openrouter_error', message }, { status: resp.status });
-    }
+    if (!result.response.ok) {
+      const upstreamMessage =
+        typeof result.payload?.error?.message === 'string'
+          ? result.payload.error.message
+          : `AI service error (${result.response.status}). Please try again.`;
 
-    const data = JSON.parse(rawText);
-    const summary = (data?.choices?.[0]?.message?.content ?? '').trim();
+      return NextResponse.json(
+        { error: 'openrouter_error', message: upstreamMessage, rateLimits: result.rateLimits },
+        { status: result.response.status }
+      );
+    }
 
     if (!summary) {
-      return NextResponse.json({ error: 'empty_response', message: 'AI returned empty response. Please try again.' }, { status: 502 });
+      return NextResponse.json(
+        { error: 'empty_response', message: 'AI returned empty response. Please try again.' },
+        { status: 502 }
+      );
     }
 
-    return NextResponse.json({ summary });
+    return NextResponse.json({
+      summary,
+      modelId: selectedModelId,
+      usage: result.usage,
+      latencyMs: result.latencyMs,
+      estimatedCostUsd,
+      rateLimits: result.rateLimits,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error && error.name === 'AbortError'
+        ? 'AI service took too long to respond. Please try again.'
+        : error instanceof Error
+        ? error.message
+        : 'Unexpected error.';
 
-  } catch (e: any) {
-    if (e?.name === 'AbortError') {
-      console.error('[AI Summary] Request timed out after 30s');
-      return NextResponse.json({ error: 'timeout', message: 'AI service took too long to respond. Please try again.' }, { status: 504 });
-    }
-    console.error('[AI Summary] Unexpected error:', e);
-    return NextResponse.json({ error: 'server_error', message: e?.message || 'Unexpected error.' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'server_error', message },
+      { status: 500 }
+    );
   }
 }

@@ -78,6 +78,78 @@ export type Database = {
         };
         Relationships: [];
       };
+      ai_request_logs: {
+        Row: {
+          id: string;
+          user_id: string;
+          request_kind: string;
+          request_path: string;
+          provider: string;
+          model_id: string;
+          prompt_tokens: number | null;
+          completion_tokens: number | null;
+          total_tokens: number | null;
+          latency_ms: number;
+          estimated_cost_usd: number | null;
+          requests_limit: number | null;
+          requests_remaining: number | null;
+          requests_reset_at: string | null;
+          tokens_limit: number | null;
+          tokens_remaining: number | null;
+          tokens_reset_at: string | null;
+          status_code: number;
+          error_code: string | null;
+          request_metadata: Json | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          request_kind?: string;
+          request_path: string;
+          provider?: string;
+          model_id: string;
+          prompt_tokens?: number | null;
+          completion_tokens?: number | null;
+          total_tokens?: number | null;
+          latency_ms: number;
+          estimated_cost_usd?: number | null;
+          requests_limit?: number | null;
+          requests_remaining?: number | null;
+          requests_reset_at?: string | null;
+          tokens_limit?: number | null;
+          tokens_remaining?: number | null;
+          tokens_reset_at?: string | null;
+          status_code: number;
+          error_code?: string | null;
+          request_metadata?: Json | null;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          request_kind?: string;
+          request_path?: string;
+          provider?: string;
+          model_id?: string;
+          prompt_tokens?: number | null;
+          completion_tokens?: number | null;
+          total_tokens?: number | null;
+          latency_ms?: number;
+          estimated_cost_usd?: number | null;
+          requests_limit?: number | null;
+          requests_remaining?: number | null;
+          requests_reset_at?: string | null;
+          tokens_limit?: number | null;
+          tokens_remaining?: number | null;
+          tokens_reset_at?: string | null;
+          status_code?: number;
+          error_code?: string | null;
+          request_metadata?: Json | null;
+          created_at?: string | null;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           display_name: string | null;

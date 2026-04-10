@@ -2,83 +2,48 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { DEFAULT_MODEL_ID, FREE_AI_MODELS } from '@/utils/ai-models';
 
 const supabase = createClient();
-export const FREE_LIMIT = 50;
-
-function todayUTC(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /**
- * Hook that manages a user's AI model preference and daily usage count.
- * Loads from and persists to the `user_preferences` table in Supabase.
- * Resets the usage count automatically when the stored date is not today.
- * @param {string | undefined} userId - The authenticated user's Supabase ID.
- * @returns `{ model, usageCount, remaining, isLoading, saveModel, incrementUsage }`
+ * Hook that manages the authenticated user's preferred AI model selection.
+ * Usage analytics are tracked in `ai_request_logs` and fetched from API routes.
  */
 export function useAIPreferences(userId: string | undefined) {
-  const [model, setModel]           = useState<string>(DEFAULT_MODEL_ID);
-  const [usageCount, setUsageCount] = useState<number>(0);
-  const [usageDate, setUsageDate]   = useState<string>(todayUTC());
-  const [isLoading, setIsLoading]   = useState(true);
+  const [model, setModel] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // If stored date isn't today, treat count as 0 (daily reset)
-  const effectiveCount = usageDate === todayUTC() ? usageCount : 0;
-  const remaining      = Math.max(0, FREE_LIMIT - effectiveCount);
-
-  // ── Load from user_preferences ────────────────────────────────────────────
   useEffect(() => {
-    if (!userId) { setIsLoading(false); return; }
+    if (!userId) {
+      setModel('');
+      setIsLoading(false);
+      return;
+    }
 
     (async () => {
       const { data, error } = await supabase
         .from('user_preferences')
-        .select('ai_model, ai_usage_count, ai_usage_date')
+        .select('ai_model')
         .eq('id', userId)
         .single();
 
       if (!error && data) {
-        setModel(
-          data.ai_model && FREE_AI_MODELS.some((m) => m.id === data.ai_model)
-            ? data.ai_model
-            : DEFAULT_MODEL_ID
-        );
-        setUsageCount(data.ai_usage_count ?? 0);
-        setUsageDate(data.ai_usage_date ?? todayUTC());
+        setModel(data.ai_model ?? '');
       }
+
       setIsLoading(false);
     })();
   }, [userId]);
 
-  // ── Save preferred model ──────────────────────────────────────────────────
   const saveModel = useCallback(async (newModel: string) => {
     if (!userId) return;
+
     setModel(newModel);
+
     await supabase
       .from('user_preferences')
       .upsert({ id: userId, ai_model: newModel }, { onConflict: 'id' });
   }, [userId]);
 
-  // ── Increment usage after a successful AI request ─────────────────────────
-  const incrementUsage = useCallback(async () => {
-    if (!userId) return;
-
-    const today    = todayUTC();
-    const isNewDay = usageDate !== today;
-    const newCount = isNewDay ? 1 : effectiveCount + 1;
-
-    setUsageCount(newCount);
-    setUsageDate(today);
-
-    await supabase
-      .from('user_preferences')
-      .upsert(
-        { id: userId, ai_usage_count: newCount, ai_usage_date: today },
-        { onConflict: 'id' }
-      );
-  }, [userId, effectiveCount, usageDate]);
-
-  return { model, usageCount: effectiveCount, remaining, isLoading, saveModel, incrementUsage };
+  return { model, isLoading, saveModel };
 }

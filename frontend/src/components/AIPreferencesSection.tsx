@@ -1,339 +1,626 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useUser } from '@/context/UserContext';
-import { useAIPreferences, FREE_LIMIT } from '@/utils/useAIPreferences';
-import {
-  FREE_AI_MODELS,
-  getTierLabel,
-  getTierColor,
-  formatContext,
-  formatLatency,
-  AIModelOption as AIModel,
-} from '@/utils/ai-models';
+import { useAIPreferences } from '@/utils/useAIPreferences';
 
-
-// Bootstrap CSS variables - work in both light and dark mode
-const TIER_HEX: Record<string, { bg: string; text: string; border: string }> = {
-  primary:  { bg: 'rgba(var(--bs-primary-rgb),0.12)',   text: 'var(--bs-primary)',   border: 'rgba(var(--bs-primary-rgb),0.3)'   },
-  warning:  { bg: 'rgba(255,193,7,0.15)',               text: '#b8860b',             border: 'rgba(255,193,7,0.4)'               },
-  info:     { bg: 'rgba(var(--bs-info-rgb),0.12)',      text: 'var(--bs-info)',      border: 'rgba(var(--bs-info-rgb),0.3)'      },
-  success:  { bg: 'rgba(var(--bs-success-rgb),0.12)',   text: 'var(--bs-success)',   border: 'rgba(var(--bs-success-rgb),0.3)'   },
-  secondary:{ bg: 'rgba(var(--bs-secondary-rgb),0.12)', text: 'var(--bs-secondary)', border: 'rgba(var(--bs-secondary-rgb),0.3)' },
-  danger:   { bg: 'rgba(var(--bs-danger-rgb),0.12)',    text: 'var(--bs-danger)',    border: 'rgba(var(--bs-danger-rgb),0.3)'    },
+type DashboardModel = {
+  id: string;
+  name: string;
+  description: string | null;
+  contextWindow: number | null;
+  maxCompletionTokens: number | null;
+  provider: string;
+  pricing: {
+    prompt: number | null;
+    completion: number | null;
+    request: number | null;
+    image: number | null;
+    webSearch: number | null;
+  };
+  architecture: {
+    inputModalities: string[];
+    outputModalities: string[];
+    tokenizer: string | null;
+    instructType: string | null;
+  };
+  capabilities: string[];
 };
 
-// ─── Usage Counter ────────────────────────────────────────────────────────────
+type ModelsResponse = {
+  fetchedAt: string;
+  selectedModelId: string | null;
+  models: DashboardModel[];
+};
 
-function UsageCounter({ remaining, isLoading }: { remaining: number; isLoading: boolean }) {
-  const pct     = Math.round((remaining / FREE_LIMIT) * 100);
-  const isEmpty = remaining === 0;
-  const isLow   = remaining <= 10 && remaining > 0;
+type StatsBucket = {
+  label: string;
+  requests: number;
+  tokens: number;
+  avgLatencyMs: number | null;
+  costUsd: number;
+};
 
-  const color = isEmpty ? 'danger' : isLow ? 'warning' : 'success';
-  const c     = TIER_HEX[color];
+type StatsResponse = {
+  fetchedAt: string;
+  windowHours: number;
+  totals: {
+    totalRequests: number;
+    totalTokens: number;
+    avgLatencyMs: number | null;
+    estimatedCostUsd: number;
+  };
+  rateLimits: {
+    requestsLimit: number | null;
+    requestsRemaining: number | null;
+    requestsResetAt: string | null;
+    tokensLimit: number | null;
+    tokensRemaining: number | null;
+    tokensResetAt: string | null;
+    observedAt: string;
+  } | null;
+  series: StatsBucket[];
+  recentRequests: Array<{
+    id: string;
+    model_id: string;
+    total_tokens: number | null;
+    latency_ms: number | null;
+    estimated_cost_usd: number | null;
+    created_at: string;
+    status_code: number;
+  }>;
+};
+
+type ChatResponse = {
+  modelId: string;
+  output: string;
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  latencyMs: number;
+  estimatedCostUsd: number | null;
+  rateLimits: StatsResponse['rateLimits'];
+  createdAt: string;
+};
+
+const POLL_INTERVAL_MS = 5000;
+
+function formatInteger(value: number | null | undefined): string {
+  if (value == null) return 'N/A';
+  return new Intl.NumberFormat().format(value);
+}
+
+function formatLatency(value: number | null | undefined): string {
+  if (value == null) return 'N/A';
+  if (value >= 1000) return `${(value / 1000).toFixed(2)} s`;
+  return `${Math.round(value)} ms`;
+}
+
+function formatUsd(value: number | null | undefined): string {
+  if (value == null) return 'N/A';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: value < 0.01 ? 4 : 2,
+    maximumFractionDigits: value < 0.01 ? 6 : 2,
+  }).format(value);
+}
+
+function formatUsdPerMillion(value: number | null | undefined): string {
+  if (value == null) return 'N/A';
+  return `${formatUsd(value * 1_000_000)} / 1M`;
+}
+
+function formatContextWindow(value: number | null | undefined): string {
+  if (value == null) return 'N/A';
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1000) return `${Math.round(value / 1000)}K`;
+  return `${value}`;
+}
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return 'N/A';
+  return new Date(value).toLocaleString();
+}
+
+function buildPolylinePoints(values: number[], width: number, height: number): string {
+  if (values.length === 0) return '';
+  if (values.length === 1) return `0,${height / 2}`;
+
+  const max = Math.max(...values, 1);
+  return values
+    .map((value, index) => {
+      const x = (index / (values.length - 1)) * width;
+      const y = height - (value / max) * height;
+      return `${x},${y}`;
+    })
+    .join(' ');
+}
+
+function Sparkline({
+  values,
+  stroke,
+}: {
+  values: number[];
+  stroke: string;
+}) {
+  if (values.length === 0) {
+    return <div className='text-muted small'>No usage yet for this window.</div>;
+  }
+
+  const width = 320;
+  const height = 90;
+  const points = buildPolylinePoints(values, width, height);
 
   return (
-    <div
-      style={{
-        borderRadius: 10,
-        border: `1px solid ${c.border}`,
-        background: c.bg,
-        padding: '10px 14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        marginBottom: 20,
-      }}
-    >
-      <i
-        className={`bi ${isEmpty ? 'bi-slash-circle' : isLow ? 'bi-exclamation-triangle' : 'bi-lightning-charge'}`}
-        style={{ fontSize: '1.2rem', color: c.text, flexShrink: 0 }}
+    <svg viewBox={`0 0 ${width} ${height}`} width='100%' height='90' role='img' aria-label='usage chart'>
+      <polyline
+        fill='none'
+        stroke={stroke}
+        strokeWidth='3'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+        points={points}
       />
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: c.text }}>
-          {isLoading ? 'Loading usage…' : isEmpty ? 'Daily limit reached' : `${remaining} of ${FREE_LIMIT} requests remaining today`}
-        </div>
-        <div style={{ fontSize: '0.72rem' }} className="text-muted">
-          {isEmpty
-            ? 'Resets at midnight UTC. Add ≥$10 credits to OpenRouter for 1,000/day.'
-            : isLow
-            ? 'Running low — resets at midnight UTC.'
-            : 'Free tier · resets daily at midnight UTC'}
-        </div>
-        {/* Progress bar */}
-        {!isLoading && (
-          <div
-            style={{ marginTop: 6, height: 4, borderRadius: 4, background: 'rgba(128,128,128,0.2)', overflow: 'hidden' }}
-          >
-            <div
-              style={{
-                height: '100%',
-                width: `${pct}%`,
-                borderRadius: 4,
-                background: c.text,
-                transition: 'width 0.4s ease',
-              }}
-            />
-          </div>
-        )}
-      </div>
-    </div>
+    </svg>
   );
 }
 
-// ─── Stat Chip ────────────────────────────────────────────────────────────────
-
-function StatChip({ icon, label, value, color }: {
-  icon: string; label: string; value: string; color: string;
+function StatCard({
+  label,
+  value,
+  detail,
+  icon,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: string;
 }) {
-  const c = TIER_HEX[color] ?? TIER_HEX.secondary;
   return (
-    <div
-      style={{ minWidth: 80, flex: 1, background: c.bg, borderRadius: 10, padding: '8px 4px' }}
-      className="d-flex flex-column align-items-center justify-content-center"
-    >
-      <i className={`bi ${icon} mb-1`} style={{ fontSize: '1.1rem', color: c.text }} />
-      <span className="fw-semibold" style={{ fontSize: '0.82rem' }}>{value}</span>
-      <span className="text-muted" style={{ fontSize: '0.68rem' }}>{label}</span>
-    </div>
-  );
-}
-
-// ─── Model Card ───────────────────────────────────────────────────────────────
-
-function ModelCard({ model, selected, onSelect }: {
-  model: AIModel; selected: boolean; onSelect: (id: string) => void;
-}) {
-  const bsColor = getTierColor(model.tier);
-  const c       = TIER_HEX[bsColor] ?? TIER_HEX.secondary;
-
-  return (
-    <div
-      onClick={() => onSelect(model.id)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onSelect(model.id)}
-      className={`card h-100 position-relative ${selected ? 'border-primary shadow-sm' : ''}`}
-      style={{
-        cursor: 'pointer',
-        transition: 'box-shadow 0.18s ease, border-color 0.18s ease',
-        borderWidth: selected ? 2 : 1,
-        outline: selected ? '2px solid var(--bs-primary)' : 'none',
-        outlineOffset: 2,
-      }}
-    >
-      {selected && (
-        <div style={{
-          position: 'absolute', top: 12, right: 12, width: 24, height: 24,
-          borderRadius: '50%', background: 'var(--bs-primary)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2,
-        }}>
-          <i className="bi bi-check text-white" style={{ fontSize: '1rem', lineHeight: 1 }} />
-        </div>
-      )}
-
-      {model.badge && (
-        <div style={{ position: 'absolute', top: -11, left: 16, zIndex: 3 }}>
-          <span className="badge px-2 py-1" style={{
-            fontSize: '0.7rem',
-            background: 'var(--bs-body-color)',
-            color: 'var(--bs-body-bg)',
-          }}>
-            {model.badge}
-          </span>
-        </div>
-      )}
-
-      <div className="card-body p-4">
-        {/* Header */}
-        <div className="d-flex align-items-center gap-3 mb-3">
-          <div style={{
-            width: 48, height: 48, background: c.bg, borderRadius: 10,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            fontWeight: 700, fontSize: model.providerLogo.length > 1 ? '0.85rem' : '1.3rem',
-            color: c.text, letterSpacing: '-0.03em', userSelect: 'none',
-          }}>
-            {model.providerLogo}
+    <div className='col-12 col-md-6 col-xl-3'>
+      <div className='card h-100 border-0 shadow-sm'>
+        <div className='card-body'>
+          <div className='d-flex justify-content-between align-items-start mb-3'>
+            <span className='text-muted small text-uppercase fw-semibold'>{label}</span>
+            <i className={`bi ${icon} text-primary`} />
           </div>
-          <div>
-            <div className="fw-bold" style={{ fontSize: '1.05rem' }}>{model.name}</div>
-            <div className="d-flex align-items-center gap-2">
-              <span className="text-muted" style={{ fontSize: '0.8rem' }}>{model.provider}</span>
-              <span style={{
-                fontSize: '0.65rem', fontWeight: 500, padding: '2px 8px', borderRadius: 6,
-                background: c.bg, color: c.text, border: `1px solid ${c.border}`,
-              }}>
-                {getTierLabel(model.tier)}
-              </span>
-            </div>
-          </div>
+          <div className='fw-bold fs-4 mb-1'>{value}</div>
+          <div className='text-muted small'>{detail}</div>
         </div>
-
-        <p className="text-muted mb-3" style={{ fontSize: '0.82rem', lineHeight: 1.5 }}>
-          {model.description}
-        </p>
-
-        <div className="d-flex gap-2 mb-3">
-          <StatChip icon="bi-clock"           label="Latency"  value={formatLatency(model.latencyMs)}      color="info"      />
-          <StatChip icon="bi-speedometer2"    label="Speed"    value={`${model.tokensPerSec} t/s`}         color="success"   />
-          <StatChip icon="bi-textarea-resize" label="Context"  value={formatContext(model.contextWindow)}  color="secondary" />
-        </div>
-
-        <div className="mb-3">
-          <div className="text-muted mb-1" style={{
-            fontSize: '0.72rem', textTransform: 'uppercase',
-            letterSpacing: '0.05em', fontWeight: 600,
-          }}>
-            Strengths
-          </div>
-          <div className="d-flex flex-wrap gap-1">
-            {model.strengths.map((s) => (
-              <span key={s} style={{
-                fontSize: '0.72rem', fontWeight: 400, padding: '2px 8px', borderRadius: 6,
-                background: 'rgba(var(--bs-secondary-rgb),0.12)', color: 'var(--bs-secondary)',
-                border: '1px solid rgba(var(--bs-secondary-rgb),0.3)',
-              }}>
-                {s}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div style={{
-          borderRadius: 8, padding: '8px 12px', fontSize: '0.78rem',
-          background: c.bg, border: `1px solid ${c.border}`,
-        }}>
-          <span className="text-muted">Best for: </span>
-          <span style={{ fontWeight: 600, color: c.text }}>{model.bestFor}</span>
-        </div>
-      </div>
-
-      <div className="card-footer bg-transparent pt-0 pb-3 px-4 border-0">
-        <button
-          onClick={(e) => { e.stopPropagation(); onSelect(model.id); }}
-          className={`btn w-100 ${selected ? 'btn-primary' : 'btn-outline-primary'}`}
-          style={{ fontSize: '0.85rem' }}
-        >
-          {selected
-            ? <><i className="bi bi-check-circle-fill me-2" />Selected</>
-            : <><i className="bi bi-circle me-2" />Select this model</>}
-        </button>
       </div>
     </div>
   );
 }
-
-// ─── Header Badge ─────────────────────────────────────────────────────────────
-
-function HeaderBadge({ icon, label, color }: { icon: string; label: string; color: string }) {
-  const c = TIER_HEX[color] ?? TIER_HEX.secondary;
-  return (
-    <span style={{
-      fontSize: '0.7rem', padding: '3px 10px', borderRadius: 20,
-      background: c.bg, color: c.text, border: `1px solid ${c.border}`,
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-    }}>
-      <i className={`bi ${icon}`} />{label}
-    </span>
-  );
-}
-
-// ─── Main Section ─────────────────────────────────────────────────────────────
 
 export default function AIPreferencesSection() {
   const { user } = useUser();
-  const { model, remaining, isLoading, saveModel } = useAIPreferences(user?.id);
+  const { model: savedModelId, isLoading: preferenceLoading, saveModel } = useAIPreferences(user?.id);
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [saved, setSaved]           = useState(false);
-  const [saving, setSaving]         = useState(false);
+  const [modelsResponse, setModelsResponse] = useState<ModelsResponse | null>(null);
+  const [statsResponse, setStatsResponse] = useState<StatsResponse | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState('');
+  const [loadingModels, setLoadingModels] = useState(true);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [savingModel, setSavingModel] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [dashboardError, setDashboardError] = useState('');
+  const [chatPrompt, setChatPrompt] = useState('Give me a one-sentence summary of why latency and rate limits matter in an AI dashboard.');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatResult, setChatResult] = useState<ChatResponse | null>(null);
+  const [chatError, setChatError] = useState('');
 
-  // Use saved model from Supabase once loaded, or local selection
-  const activeId = selectedId ?? model;
-  const hasChanges = selectedId !== null && selectedId !== model;
+  const fetchDashboardData = useCallback(async (showRefreshing = false) => {
+    if (!user?.id) return;
 
-  const handleSelect = useCallback((id: string) => {
-    setSelectedId(id);
-  }, []);
+    if (showRefreshing) setRefreshing(true);
+    setDashboardError('');
+
+    try {
+      const [modelsRes, statsRes] = await Promise.all([
+        fetch('/api/ai/models', { cache: 'no-store' }),
+        fetch('/api/ai/stats?window=24h', { cache: 'no-store' }),
+      ]);
+
+      const [modelsJson, statsJson] = await Promise.all([modelsRes.json(), statsRes.json()]);
+
+      if (!modelsRes.ok) {
+        throw new Error(modelsJson?.message || 'Failed to load OpenRouter models.');
+      }
+
+      if (!statsRes.ok) {
+        throw new Error(statsJson?.message || 'Failed to load AI dashboard stats.');
+      }
+
+      setModelsResponse(modelsJson as ModelsResponse);
+      setStatsResponse(statsJson as StatsResponse);
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : 'Failed to load AI dashboard.');
+    } finally {
+      setLoadingModels(false);
+      setLoadingStats(false);
+      if (showRefreshing) setRefreshing(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchDashboardData();
+  }, [fetchDashboardData, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const intervalId = window.setInterval(() => {
+      fetchDashboardData();
+    }, POLL_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [fetchDashboardData, user?.id]);
+
+  useEffect(() => {
+    if (selectedModelId) return;
+
+    const modelId =
+      savedModelId ||
+      modelsResponse?.selectedModelId ||
+      modelsResponse?.models[0]?.id ||
+      '';
+
+    if (modelId) {
+      setSelectedModelId(modelId);
+    }
+  }, [modelsResponse, savedModelId, selectedModelId]);
+
+  const selectedModel = useMemo(() => {
+    return modelsResponse?.models.find((item) => item.id === selectedModelId) ?? null;
+  }, [modelsResponse, selectedModelId]);
+
+  const hasChanges = Boolean(selectedModelId) && selectedModelId !== savedModelId;
 
   const handleSave = useCallback(async () => {
-    if (!selectedId) return;
-    setSaving(true);
-    await saveModel(selectedId);
-    setSaving(false);
-    setSelectedId(null);
+    if (!selectedModelId) return;
+
+    setSavingModel(true);
+    await saveModel(selectedModelId);
+    setSavingModel(false);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  }, [selectedId, saveModel]);
+    window.setTimeout(() => setSaved(false), 2000);
+    fetchDashboardData(true);
+  }, [fetchDashboardData, saveModel, selectedModelId]);
+
+  const handleSendTestRequest = useCallback(async () => {
+    if (!selectedModelId || !chatPrompt.trim()) return;
+
+    setChatLoading(true);
+    setChatError('');
+
+    try {
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: selectedModelId,
+          messages: [{ role: 'user', content: chatPrompt.trim() }],
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.message || 'OpenRouter test request failed.');
+      }
+
+      setChatResult(payload as ChatResponse);
+      fetchDashboardData(true);
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : 'Failed to send OpenRouter request.');
+    } finally {
+      setChatLoading(false);
+    }
+  }, [chatPrompt, fetchDashboardData, selectedModelId]);
+
+  const requestSeries = statsResponse?.series.map((item) => item.requests) ?? [];
+  const tokenSeries = statsResponse?.series.map((item) => item.tokens) ?? [];
+  const latencySeries = statsResponse?.series.map((item) => item.avgLatencyMs ?? 0) ?? [];
+  const costSeries = statsResponse?.series.map((item) => item.costUsd) ?? [];
 
   return (
-    <div className="card mb-4 shadow-sm">
-      <div className="card-header d-flex align-items-center justify-content-between py-3">
-        <div className="d-flex align-items-center gap-2">
-          <i className="bi bi-robot fs-5" />
-          <span className="fw-semibold fs-6">AI Summarizer</span>
+    <div className='card mb-4 shadow-sm'>
+      <div className='card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-3'>
+        <div className='d-flex align-items-center gap-2'>
+          <i className='bi bi-cpu fs-5' />
+          <span className='fw-semibold fs-6'>AI Preferences</span>
+        </div>
+        <div className='d-flex align-items-center gap-2'>
+          <span className='badge text-bg-light border'>Auto-refresh {POLL_INTERVAL_MS / 1000}s</span>
+          <button
+            type='button'
+            className='btn btn-sm btn-outline-secondary'
+            onClick={() => fetchDashboardData(true)}
+            disabled={refreshing}
+          >
+            {refreshing ? 'Refreshing...' : 'Refresh now'}
+          </button>
         </div>
       </div>
 
-      <div className="card-body px-4 pt-4 pb-3">
+      <div className='card-body px-4 py-4'>
+        {(loadingModels || loadingStats || preferenceLoading) && (
+          <div className='text-muted mb-3'>Loading live OpenRouter dashboard...</div>
+        )}
 
-        {/* Usage counter */}
-        <UsageCounter remaining={remaining} isLoading={isLoading} />
+        {dashboardError ? (
+          <div className='alert alert-danger'>{dashboardError}</div>
+        ) : null}
 
-        {/* Model cards */}
-        <div className="row g-3 mb-4">
-          {FREE_AI_MODELS.map((m) => (
-            <div className="col-12 col-md-6" key={m.id}>
-              <ModelCard model={m} selected={activeId === m.id} onSelect={handleSelect} />
+        <div className='row g-3 mb-4'>
+          <StatCard
+            label='Available models'
+            value={formatInteger(modelsResponse?.models.length)}
+            detail={`Fetched ${formatDateTime(modelsResponse?.fetchedAt)}`}
+            icon='bi-collection'
+          />
+          <StatCard
+            label='Total requests'
+            value={formatInteger(statsResponse?.totals.totalRequests)}
+            detail='All logged OpenRouter calls'
+            icon='bi-arrow-repeat'
+          />
+          <StatCard
+            label='Total tokens'
+            value={formatInteger(statsResponse?.totals.totalTokens)}
+            detail='Prompt + completion tokens'
+            icon='bi-braces-asterisk'
+          />
+          <StatCard
+            label='Average latency'
+            value={formatLatency(statsResponse?.totals.avgLatencyMs)}
+            detail='Across all logged requests'
+            icon='bi-stopwatch'
+          />
+          <StatCard
+            label='Estimated cost'
+            value={formatUsd(statsResponse?.totals.estimatedCostUsd)}
+            detail='Computed from live model pricing'
+            icon='bi-cash-stack'
+          />
+          <StatCard
+            label='Requests remaining'
+            value={formatInteger(statsResponse?.rateLimits?.requestsRemaining)}
+            detail={
+              statsResponse?.rateLimits?.requestsResetAt
+                ? `Resets ${formatDateTime(statsResponse.rateLimits.requestsResetAt)}`
+                : 'Latest observed OpenRouter limit'
+            }
+            icon='bi-speedometer2'
+          />
+          <StatCard
+            label='Token budget remaining'
+            value={formatInteger(statsResponse?.rateLimits?.tokensRemaining)}
+            detail='Most recent rate limit snapshot'
+            icon='bi-hourglass-split'
+          />
+          <StatCard
+            label='Tracked window'
+            value={`${statsResponse?.windowHours ?? 24}h`}
+            detail='Charts use recent traffic only'
+            icon='bi-graph-up-arrow'
+          />
+        </div>
+
+        <div className='row g-4 mb-4'>
+          <div className='col-12 col-lg-6'>
+            <label htmlFor='ai-model-selector' className='form-label fw-semibold'>
+              Preferred OpenRouter model
+            </label>
+            <select
+              id='ai-model-selector'
+              className='form-select'
+              value={selectedModelId}
+              onChange={(e) => setSelectedModelId(e.target.value)}
+              disabled={!modelsResponse?.models.length}
+            >
+              <option value=''>Select a model</option>
+              {(modelsResponse?.models ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} ({item.provider})
+                </option>
+              ))}
+            </select>
+            <div className='form-text'>
+              The saved model is used by the in-app AI summarizer and the live test request tool below.
             </div>
-          ))}
-        </div>
-
-        {/* Stat legend */}
-        <div className="d-flex gap-4 flex-wrap mb-3">
-          {[
-            { icon: 'bi-clock',           label: 'Time to first token', color: 'info'      },
-            { icon: 'bi-speedometer2',    label: 'Output tokens/sec',   color: 'success'   },
-            { icon: 'bi-textarea-resize', label: 'Max context window',  color: 'secondary' },
-          ].map((item) => (
-            <div key={item.label} className="d-flex align-items-center gap-1" style={{ fontSize: '0.75rem' }}>
-              <i className={`bi ${item.icon}`} style={{ color: `var(--bs-${item.color})` }} />
-              <span className="text-muted">{item.label}</span>
+          </div>
+          <div className='col-12 col-lg-6 d-flex align-items-end justify-content-lg-end'>
+            <div className='d-flex align-items-center gap-3'>
+              {saved ? <span className='text-success small'>Preference saved.</span> : null}
+              <button
+                type='button'
+                className='btn btn-primary'
+                disabled={!hasChanges || savingModel}
+                onClick={handleSave}
+              >
+                {savingModel ? 'Saving...' : 'Save preference'}
+              </button>
             </div>
-          ))}
+          </div>
         </div>
 
-        {/* Rate limit note */}
-        <div
-          className="rounded-3 px-3 py-2 border mb-4"
-          style={{ background: 'var(--bs-tertiary-bg, var(--bs-secondary-bg, rgba(128,128,128,0.08)))', fontSize: '0.78rem' }}
-        >
-          <i className="bi bi-info-circle me-2 text-muted" />
-          <span className="text-muted">
-            Free models are rate-limited by OpenRouter:{' '}
-            <strong>50 requests/day</strong> on a free account, or{' '}
-            <strong>1,000/day</strong> after any credit purchase. Resets daily at midnight UTC.
-          </span>
+        {selectedModel ? (
+          <div className='card border-0 bg-body-tertiary mb-4'>
+            <div className='card-body'>
+              <div className='d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3'>
+                <div>
+                  <h5 className='mb-1'>{selectedModel.name}</h5>
+                  <div className='text-muted small'>
+                    {selectedModel.provider} · Context {formatContextWindow(selectedModel.contextWindow)} · Max output{' '}
+                    {formatContextWindow(selectedModel.maxCompletionTokens)}
+                  </div>
+                </div>
+                <div className='text-end small text-muted'>
+                  <div>Prompt: {formatUsdPerMillion(selectedModel.pricing.prompt)}</div>
+                  <div>Completion: {formatUsdPerMillion(selectedModel.pricing.completion)}</div>
+                  <div>Request: {formatUsd(selectedModel.pricing.request)}</div>
+                </div>
+              </div>
+
+              {selectedModel.description ? (
+                <p className='text-muted mb-3'>{selectedModel.description}</p>
+              ) : null}
+
+              <div className='d-flex flex-wrap gap-2'>
+                {selectedModel.capabilities.length > 0 ? (
+                  selectedModel.capabilities.map((item) => (
+                    <span key={item} className='badge text-bg-light border'>
+                      {item}
+                    </span>
+                  ))
+                ) : (
+                  <span className='text-muted small'>No model capabilities were returned by OpenRouter.</span>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className='row g-4 mb-4'>
+          <div className='col-12 col-lg-6'>
+            <div className='card h-100 border-0 bg-body-tertiary'>
+              <div className='card-body'>
+                <div className='fw-semibold mb-2'>Requests over time</div>
+                <Sparkline values={requestSeries} stroke='var(--bs-primary)' />
+                <div className='mt-3 small text-muted'>
+                  Tokens in the same window: {formatInteger(tokenSeries.reduce((sum, value) => sum + value, 0))}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className='col-12 col-lg-6'>
+            <div className='card h-100 border-0 bg-body-tertiary'>
+              <div className='card-body'>
+                <div className='fw-semibold mb-2'>Latency over time</div>
+                <Sparkline values={latencySeries} stroke='var(--bs-success)' />
+                <div className='mt-3 small text-muted'>
+                  Window cost estimate: {formatUsd(costSeries.reduce((sum, value) => sum + value, 0))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Save row */}
-        <div className="d-flex justify-content-end align-items-center gap-3">
-          {saved && (
-            <span className="text-success d-flex align-items-center gap-1" style={{ fontSize: '0.85rem' }}>
-              <i className="bi bi-check-circle-fill" />
-              Preference saved!
-            </span>
-          )}
-          <button
-            className="btn btn-primary px-4"
-            onClick={handleSave}
-            disabled={!hasChanges || saving}
-          >
-            {saving
-              ? <><span className="spinner-border spinner-border-sm me-2" />Saving…</>
-              : <><i className="bi bi-floppy me-2" />Save preference</>}
-          </button>
+        <div className='row g-4 mb-4'>
+          <div className='col-12 col-lg-7'>
+            <div className='card border-0 bg-body-tertiary h-100'>
+              <div className='card-body'>
+                <div className='fw-semibold mb-3'>Live OpenRouter test request</div>
+                <textarea
+                  className='form-control mb-3'
+                  rows={5}
+                  value={chatPrompt}
+                  onChange={(e) => setChatPrompt(e.target.value)}
+                  placeholder='Enter a prompt to test the selected model.'
+                />
+                <div className='d-flex flex-wrap align-items-center gap-2 mb-3'>
+                  <button
+                    type='button'
+                    className='btn btn-outline-primary'
+                    onClick={handleSendTestRequest}
+                    disabled={!selectedModelId || chatLoading || !chatPrompt.trim()}
+                  >
+                    {chatLoading ? 'Sending...' : 'Send test request'}
+                  </button>
+                  <span className='text-muted small'>
+                    This uses the secure backend route and logs usage for analytics.
+                  </span>
+                </div>
+
+                {chatError ? <div className='alert alert-danger py-2'>{chatError}</div> : null}
+
+                {chatResult ? (
+                  <div className='border rounded p-3 bg-body'>
+                    <div className='d-flex flex-wrap gap-3 small text-muted mb-2'>
+                      <span>Model: {chatResult.modelId}</span>
+                      <span>Latency: {formatLatency(chatResult.latencyMs)}</span>
+                      <span>Tokens: {formatInteger(chatResult.usage.totalTokens)}</span>
+                      <span>Cost: {formatUsd(chatResult.estimatedCostUsd)}</span>
+                    </div>
+                    <div style={{ whiteSpace: 'pre-wrap' }}>{chatResult.output}</div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div className='col-12 col-lg-5'>
+            <div className='card border-0 bg-body-tertiary h-100'>
+              <div className='card-body'>
+                <div className='fw-semibold mb-3'>Latest rate limit snapshot</div>
+                {statsResponse?.rateLimits ? (
+                  <div className='small'>
+                    <div className='mb-2'>
+                      Requests: {formatInteger(statsResponse.rateLimits.requestsRemaining)} remaining /{' '}
+                      {formatInteger(statsResponse.rateLimits.requestsLimit)} limit
+                    </div>
+                    <div className='mb-2'>
+                      Tokens: {formatInteger(statsResponse.rateLimits.tokensRemaining)} remaining /{' '}
+                      {formatInteger(statsResponse.rateLimits.tokensLimit)} limit
+                    </div>
+                    <div className='mb-2'>
+                      Request reset: {formatDateTime(statsResponse.rateLimits.requestsResetAt)}
+                    </div>
+                    <div className='mb-2'>
+                      Token reset: {formatDateTime(statsResponse.rateLimits.tokensResetAt)}
+                    </div>
+                    <div className='text-muted'>
+                      Observed at {formatDateTime(statsResponse.rateLimits.observedAt)}
+                    </div>
+                  </div>
+                ) : (
+                  <div className='text-muted small'>No rate limit headers have been captured yet.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className='card border-0 bg-body-tertiary'>
+          <div className='card-body'>
+            <div className='fw-semibold mb-3'>Recent logged requests</div>
+            {statsResponse?.recentRequests.length ? (
+              <div className='table-responsive'>
+                <table className='table table-sm align-middle mb-0'>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Model</th>
+                      <th>Status</th>
+                      <th>Tokens</th>
+                      <th>Latency</th>
+                      <th>Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statsResponse.recentRequests.map((item) => (
+                      <tr key={item.id}>
+                        <td>{new Date(item.created_at).toLocaleString()}</td>
+                        <td className='text-break'>{item.model_id}</td>
+                        <td>{item.status_code}</td>
+                        <td>{formatInteger(item.total_tokens)}</td>
+                        <td>{formatLatency(item.latency_ms)}</td>
+                        <td>{formatUsd(item.estimated_cost_usd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className='text-muted small'>No OpenRouter requests have been logged yet.</div>
+            )}
+          </div>
         </div>
       </div>
     </div>
