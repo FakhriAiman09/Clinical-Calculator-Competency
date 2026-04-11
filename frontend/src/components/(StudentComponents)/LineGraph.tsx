@@ -4,10 +4,6 @@ import React from 'react';
 
 interface LineGraphProps {
   data: { date: string; value: number }[];
-  /** ISO date string — start of the x-axis window (inclusive). */
-  windowStart: string;
-  /** ISO date string — end of the x-axis window (inclusive). */
-  windowEnd: string;
 }
 
 // ── FIX 2 (part 2): Replace every `currentColor` with explicit hex values.
@@ -25,7 +21,7 @@ const GRID_COLOR   = '#cccccc';   // dashed grid lines
 const LINE_COLOR   = '#007bff';   // trend line + filled dots
 const LATEST_RING  = '#28a745';   // green ring on last data point
 
-const LineGraph: React.FC<LineGraphProps> = ({ data, windowStart, windowEnd }) => {
+const LineGraph: React.FC<LineGraphProps> = ({ data }) => {
   const width         = 600;
   const height        = 200;
   const labelPadding  = 105;
@@ -41,17 +37,22 @@ const LineGraph: React.FC<LineGraphProps> = ({ data, windowStart, windowEnd }) =
     return new Date(y, m - 1, d);
   };
 
-  // Build month intervals spanning the full window, not just data range.
-  const winStart = new Date(windowStart);
-  const winEnd   = new Date(windowEnd);
-  const startMonth = new Date(winStart.getFullYear(), winStart.getMonth(), 1);
-  const endMonth   = new Date(winEnd.getFullYear(),   winEnd.getMonth(),   1);
+  // Build month intervals: Jan of the latest data year → latest data month (max 12 months).
+  const latestDataDate = data.reduce((max, d) => {
+    const dt = parseLocalDate(d.date);
+    return dt > max ? dt : max;
+  }, parseLocalDate(data[0].date));
+  const endMonth   = new Date(latestDataDate.getFullYear(), latestDataDate.getMonth(), 1);
+  const janOfEndYear = new Date(latestDataDate.getFullYear(), 0, 1);
+  // Cap to at most 12 months back from endMonth.
+  const twelveMonthsBack = new Date(endMonth.getFullYear(), endMonth.getMonth() - 11, 1);
+  const startMonth = janOfEndYear > twelveMonthsBack ? janOfEndYear : twelveMonthsBack;
 
   const buckets: Record<string, number[]> = {};
   const intervals: { label: string; start: Date }[] = [];
   const current = new Date(startMonth);
   while (current <= endMonth) {
-    const label = `${current.toLocaleString('default', { month: 'short' })} '${String(current.getFullYear()).slice(-2)}`;
+    const label = current.toLocaleString('default', { month: 'short', year: '2-digit' });
     intervals.push({ label, start: new Date(current) });
     current.setMonth(current.getMonth() + 1);
   }

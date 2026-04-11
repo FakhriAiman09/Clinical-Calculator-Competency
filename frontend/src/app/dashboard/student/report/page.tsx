@@ -52,6 +52,7 @@ export default function StudentReportPage() {
   const [kfDescriptions, setKfDescriptions] = useState<Record<string, string[]> | null>(null);
   const [reportSearch, setReportSearch] = useState('');
   const [timeFilter, setTimeFilter] = useState<3 | 6 | 12>(3);
+  const [retryingAll, setRetryingAll] = useState(false);
 
   const fetchReports = useCallback(async (userId: string) => {
     setLoadingReports(true);
@@ -88,6 +89,16 @@ export default function StudentReportPage() {
       }
     });
   }, []);
+
+  const handleRetryAll = async () => {
+    if (!selectedReport) return;
+    setRetryingAll(true);
+    await supabase
+      .from('student_reports')
+      .update({ llm_feedback: 'Generating...' })
+      .eq('id', selectedReport.id);
+    setRetryingAll(false);
+  };
 
   const handleReportSelect = (r: StudentReport) => {
     setLoadingReport(true);
@@ -139,7 +150,6 @@ export default function StudentReportPage() {
       {user?.id && (
         <ReportGenerationForm
           studentId={user.id}
-          timeRange={timeFilter}
           onGenerated={() => fetchReports(user.id)}
         />
       )}
@@ -162,7 +172,7 @@ export default function StudentReportPage() {
               <button
                 key={value}
                 type="button"
-                className={`btn btn-outline-primary${timeFilter === value ? ' active' : ''}`}
+                className={`btn btn-outline-secondary${timeFilter === value ? ' active' : ''}`}
                 onClick={() => setTimeFilter(value)}
               >
                 Last {value} mo
@@ -198,10 +208,7 @@ export default function StudentReportPage() {
                     onClick={() => handleReportSelect(r)}
                     style={{ cursor: 'pointer' }}
                   >
-                    <div className="fw-semibold">{r.title}</div>
-                    <div className={`report-meta mt-1 ${selectedReport?.id === r.id ? 'text-white-50' : ''}`}>
-                      <span>{new Date(r.created_at).toLocaleDateString()}</span>
-                    </div>
+                    <span>{r.title} – {new Date(r.created_at).toLocaleDateString()}</span>
                   </li>
                 ))}
               </ul>
@@ -230,12 +237,27 @@ export default function StudentReportPage() {
                 {new Date(selectedReport.created_at).toLocaleDateString()}
               </small>
             </div>
-            <DownloadPDFButton
-              studentId={user.id}
-              reportId={selectedReport.id}
-              reportTitle={selectedReport.title}
-              returnUrl="/dashboard/student/report"
-            />
+            <div className="d-flex align-items-center gap-2">
+              <button
+                className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                onClick={handleRetryAll}
+                disabled={retryingAll}
+                title="Retry AI summaries for all EPAs at once"
+              >
+                {retryingAll ? (
+                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                ) : (
+                  <i className="bi bi-arrow-clockwise" aria-hidden="true" />
+                )}
+                {retryingAll ? 'Requesting…' : 'Retry All Summaries'}
+              </button>
+              <DownloadPDFButton
+                studentId={user.id}
+                reportId={selectedReport.id}
+                reportTitle={selectedReport.title}
+                returnUrl="/dashboard/student/report"
+              />
+            </div>
           </div>
 
           <hr className="d-print-none" />

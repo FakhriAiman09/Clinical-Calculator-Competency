@@ -57,7 +57,7 @@ interface CommentEntry {
 
 interface EPABoxProps {
   epaId: number;
-  timeRange: 3 | 6 | 12;
+  timeRange: number;
   kfDescriptions?: Record<string, string[]> | null;
   studentId: string;
   /** The ID of the specific report being displayed. */
@@ -78,11 +78,20 @@ function extractRelevantFeedback(
 ): string | null {
   if (!llmFeedback) return null;
 
+  const formatEntries = (entries: [string, string][]) =>
+    entries
+      .filter(([, val]) => val)
+      .sort(([a], [b]) => {
+        const [, ka] = a.split('.'); const [, kb] = b.split('.');
+        return parseInt(ka) - parseInt(kb);
+      })
+      .map(([key, val]) => `**Key Function ${key}**\n\n${val}`)
+      .join('\n\n---\n\n');
+
   if (typeof llmFeedback === 'object') {
     const feedbackObj = llmFeedback as Record<string, string>;
     const relevantEntries = Object.entries(feedbackObj).filter(([key]) => parseInt(key.split('.')[0]) === epaId);
-    const merged = relevantEntries.map(([, val]) => val).filter(Boolean).join('\n\n');
-    return merged || null;
+    return formatEntries(relevantEntries) || null;
   }
 
   if (typeof llmFeedback === 'string') {
@@ -90,8 +99,7 @@ function extractRelevantFeedback(
       const feedbackObj = JSON.parse(llmFeedback) as Record<string, string>;
       if ('_error' in feedbackObj) return `_error:${feedbackObj['_error']}`;
       const relevantEntries = Object.entries(feedbackObj).filter(([key]) => parseInt(key.split('.')[0]) === epaId);
-      const merged = relevantEntries.map(([, val]) => val).filter(Boolean).join('\n\n');
-      return merged || null;
+      return formatEntries(relevantEntries) || null;
     } catch {
       return null;
     }
@@ -147,6 +155,12 @@ const EPABox: React.FC<EPABoxProps> = ({
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [comments, setComments] = useState<CommentEntry[]>([]);
   const [llmFeedback, setLlmFeedback] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  // Holds the raw llm_feedback string from DB before regeneration, so Stop can restore it.
+  const rawLlmFeedbackRef = useRef<string | null>(null);
+  // When true, the polling effect must not overwrite llmFeedback (Stop was clicked).
+  const stoppedRef = useRef(false);
   const [lifetimeAverage, setLifetimeAverage] = useState<number | null>(null);
   const [lineGraphData, setLineGraphData] = useState<{ date: string; value: number }[]>([]);
   const [kfAverages, setKfAverages] = useState<Record<string, number>>({});
@@ -162,10 +176,6 @@ const EPABox: React.FC<EPABoxProps> = ({
 
   // daysSinceLast is always relative to today so it remains meaningful.
   const today = new Date();
-
-  // Graph x-axis: full time window from cutoff to now (includes new assessments after report).
-  const graphWindowStart = cutoff.toISOString();
-  const graphWindowEnd   = new Date(Math.max(reportDate.getTime(), today.getTime())).toISOString();
 
   const fetchTitle = useCallback(async () => {
     const { data } = await supabase.from('epa_kf_descriptions').select('epa_descriptions').single();
@@ -207,6 +217,8 @@ const EPABox: React.FC<EPABoxProps> = ({
     for (const row of resultData ?? []) {
       const formResponse = row.form_responses;
       if (formResponse?.form_requests?.student_id !== studentId) continue;
+      // Exclude assessments submitted after the report was generated.
+      if (new Date(row.created_at) > new Date(reportCreatedAt)) continue;
 
       const date = row.created_at;
       const setting = formResponse.form_requests?.clinical_settings || null;
@@ -277,6 +289,14 @@ const EPABox: React.FC<EPABoxProps> = ({
         epaKfScores.length > 0 ? Math.floor(epaKfScores.reduce((a, b) => a + b, 0) / epaKfScores.length) : null
       );
 
+      const rawFeedback = typeof targetReport.llm_feedback === 'string'
+        ? targetReport.llm_feedback
+        : targetReport.llm_feedback ? JSON.stringify(targetReport.llm_feedback) : null;
+      // Only save a completed feedback value — never 'Generating...' or null,
+      // as those cannot be meaningfully restored by the Stop button.
+      if (rawFeedback && rawFeedback !== 'Generating...') {
+        rawLlmFeedbackRef.current = rawFeedback;
+      }
       setLlmFeedback(extractRelevantFeedback(targetReport.llm_feedback, epaId));
     }
 
@@ -334,22 +354,72 @@ const EPABox: React.FC<EPABoxProps> = ({
     if (llmFeedback && llmFeedback !== 'Generating...') return;
 
     const poll = async () => {
+      if (stoppedRef.current) return;
+
       const { data } = await supabase
         .from('student_reports')
         .select('llm_feedback')
         .eq('id', reportId)
         .single();
 
+      if (stoppedRef.current) return;
       if (!data?.llm_feedback) return;
       if (data.llm_feedback === 'Generating...') return;
 
       const extracted = extractRelevantFeedback(data.llm_feedback, epaId);
-      if (extracted) setLlmFeedback(extracted);
+      if (extracted) {
+        const raw = typeof data.llm_feedback === 'string'
+          ? data.llm_feedback
+          : JSON.stringify(data.llm_feedback);
+        if (raw && raw !== 'Generating...') {
+          rawLlmFeedbackRef.current = raw;
+        }
+        setLlmFeedback(extracted);
+      }
     };
 
     const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
   }, [expanded, llmFeedback, reportId, epaId]);
+
+  // Trigger Gemini to regenerate AI feedback using the frozen kf_avg_data stored
+  // at report creation time — today's new assessments are NOT included.
+  const handleRegenerate = async () => {
+    stoppedRef.current = false;
+    setRegenerating(true);
+    setLlmFeedback(null);
+    const { error } = await supabase
+      .from('student_reports')
+      .update({ llm_feedback: 'Generating...' })
+      .eq('id', reportId);
+    if (error) {
+      setLlmFeedback('_error:Failed to trigger regeneration. Please try again.');
+    }
+    setRegenerating(false);
+  };
+
+  const handleStop = async () => {
+    // Set stoppedRef immediately so any in-flight poll callback is ignored.
+    stoppedRef.current = true;
+    setStopping(true);
+
+    const cancelled = JSON.stringify({ _error: 'Generation was stopped. Click Regenerate to try again.' });
+    const prevRaw = rawLlmFeedbackRef.current;
+
+    // Decide what to write back to DB: previous real feedback if available, else cancelled marker.
+    const restoreValue = (prevRaw && prevRaw !== 'Generating...') ? prevRaw : cancelled;
+    await supabase.from('student_reports').update({ llm_feedback: restoreValue }).eq('id', reportId);
+
+    // Always show something — never leave UI in the spinner after Stop.
+    if (prevRaw && prevRaw !== 'Generating...') {
+      const extracted = extractRelevantFeedback(prevRaw, epaId);
+      setLlmFeedback(extracted ?? '_error:Generation was stopped. Click Regenerate to try again.');
+    } else {
+      setLlmFeedback('_error:Generation was stopped. Click Regenerate to try again.');
+    }
+
+    setStopping(false);
+  };
 
   const filtered = assessments.filter((a) => {
     const aDate = new Date(a.date);
@@ -417,7 +487,7 @@ const EPABox: React.FC<EPABoxProps> = ({
         <div className='row mb-4'>
           <div className='col-md-6'>
             <h6 className='fw-bold border-bottom pb-1'>Performance Over Time</h6>
-            <LineGraph data={lineGraphData} windowStart={graphWindowStart} windowEnd={graphWindowEnd} />
+            <LineGraph data={lineGraphData} />
           </div>
           <div className='col-md-6'>
             <h6 className='fw-bold border-bottom pb-1'>EPA Stats</h6>
@@ -492,14 +562,47 @@ const EPABox: React.FC<EPABoxProps> = ({
         </div>
 
         <div className='mb-4'>
-          <h6 className='fw-bold border-bottom pb-1'>AI Summary &amp; Recommendations</h6>
+          <div className='d-flex align-items-center justify-content-between border-bottom pb-1 mb-2'>
+            <h6 className='fw-bold mb-0'>AI Summary &amp; Recommendations</h6>
+            {llmFeedback === null ? (
+              <button
+                className='btn btn-sm btn-outline-danger d-flex align-items-center gap-1 d-print-none'
+                onClick={handleStop}
+                disabled={stopping}
+                title='Stop generation and restore previous feedback'
+              >
+                {stopping ? (
+                  <span className='spinner-border spinner-border-sm' role='status' aria-hidden='true' />
+                ) : (
+                  <i className='bi bi-stop-circle' aria-hidden='true' />
+                )}
+                {stopping ? 'Stopping…' : 'Stop'}
+              </button>
+            ) : (
+              <button
+                className='btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 d-print-none'
+                onClick={handleRegenerate}
+                disabled={regenerating}
+                title='Retry AI summary using the scores saved at report creation time'
+              >
+                {regenerating ? (
+                  <span className='spinner-border spinner-border-sm' role='status' aria-hidden='true' />
+                ) : (
+                  <i className='bi bi-arrow-clockwise' aria-hidden='true' />
+                )}
+                {regenerating ? 'Requesting…' : 'Retry'}
+              </button>
+            )}
+          </div>
           <div className='border rounded p-3 bg-body-secondary scrollable-box markdown-preview'>
             {llmFeedback ? (
               llmFeedback.startsWith('_error:') ? (
-                <p className='text-warning mb-0'>
-                  <i className='bi bi-exclamation-triangle me-2' />
-                  {llmFeedback.slice('_error:'.length)}
-                </p>
+                <div>
+                  <p className='text-warning mb-2'>
+                    <i className='bi bi-exclamation-triangle me-2' />
+                    {llmFeedback.slice('_error:'.length)}
+                  </p>
+                </div>
               ) : (
                 <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                   {llmFeedback}
@@ -507,7 +610,8 @@ const EPABox: React.FC<EPABoxProps> = ({
               )
             ) : (
               <p className='text-muted mb-0'>
-                <em>Generating Feedback...</em>
+                <span className='spinner-border spinner-border-sm me-2' role='status' aria-hidden='true' />
+                <em>Generating Feedback…</em>
               </p>
             )}
           </div>

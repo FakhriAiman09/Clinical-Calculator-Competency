@@ -92,59 +92,88 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   query = f"""
   You are a clinical clerkship evaluator. A student was assessed on AAMC Core EPAs (13 EPAs, each with key functions). Development levels: 0=remedial, 1=early-developing, 2=developing, 3=entrustable.
 
-  Student scores by key function:
+  Student scores by key function (averages across rotation):
   {datastr}
 
-  Write a brief performance summary per key function with one actionable suggestion each. Return a JSON object with KF IDs as keys and Markdown strings as values.
+  For each key function, write a structured response with exactly two sections:
+  1. **Performance:** 1-2 sentences explaining the student's performance level and how they have progressed throughout the rotation based on the score.
+  2. **Actionable Items:** 1-2 specific, practical steps the student can take to improve in this area, grounded in the score data.
+
+  Return a JSON object where keys are the KF IDs (e.g. "1.1", "1.2") and values are Markdown strings using this exact format:
+  **Performance:** <text>
+
+  **Actionable Items:** <text>
   """
 
   import json
   _gemini_start = time.time()
-  for attempt in range(3):
-    try:
-      _attempt_start = time.time()
-      response: GenerateContentResponse = gemini.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=query,
-        config=genai_types.GenerateContentConfig(
-          response_mime_type='application/json',
-        ),
-      )
-      print(f'[TIMING] Gemini API call (attempt {attempt+1}): {time.time()-_attempt_start:.3f}s', flush=True)
-      if response.text:
-        text = response.text.strip()
-        # Strip any residual markdown fences
-        if text.startswith('```'):
-          text = re.sub(r'^```[a-zA-Z]*\n?', '', text)
-          text = re.sub(r'\n?```$', '', text.strip()).strip()
-        # Extract outermost JSON object even if there is surrounding text
-        match = re.search(r'\{.*\}', text, re.DOTALL)
-        if match:
-          text = match.group(0)
-        try:
-          parsed = json.loads(text)
-          print(f'[TIMING] Gemini total (attempt {attempt+1} success): {time.time()-_gemini_start:.3f}s', flush=True)
-          return json.dumps(parsed)
-        except json.JSONDecodeError:
-          print(f'Gemini returned invalid JSON on attempt {attempt+1}, retrying...', flush=True)
+  # Try models in order; move to the next if the current one is consistently unavailable (503).
+  models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+  last_error = 'unknown error'
+
+  for model in models_to_try:
+    print(f'Trying Gemini model: {model}', flush=True)
+    try_next_model = False
+    for attempt in range(3):
+      try:
+        _attempt_start = time.time()
+        response: GenerateContentResponse = gemini.models.generate_content(
+          model=model,
+          contents=query,
+          config=genai_types.GenerateContentConfig(
+            response_mime_type='application/json',
+          ),
+        )
+        print(f'[TIMING] Gemini API call ({model}, attempt {attempt+1}): {time.time()-_attempt_start:.3f}s', flush=True)
+        if response.text:
+          text = response.text.strip()
+          # Strip any residual markdown fences
+          if text.startswith('```'):
+            text = re.sub(r'^```[a-zA-Z]*\n?', '', text)
+            text = re.sub(r'\n?```$', '', text.strip()).strip()
+          # Extract outermost JSON object even if there is surrounding text
+          match = re.search(r'\{.*\}', text, re.DOTALL)
+          if match:
+            text = match.group(0)
+          try:
+            parsed = json.loads(text)
+            print(f'[TIMING] Gemini total ({model}, attempt {attempt+1} success): {time.time()-_gemini_start:.3f}s', flush=True)
+            return json.dumps(parsed)
+          except json.JSONDecodeError:
+            last_error = f'invalid JSON from {model} attempt {attempt+1}'
+            print(f'Gemini returned invalid JSON on {model} attempt {attempt+1}, retrying...', flush=True)
+            continue
+        else:
+          last_error = f'empty response from {model} attempt {attempt+1}'
+          print(f'Gemini returned empty response on {model} attempt {attempt+1}, retrying...', flush=True)
           continue
-      else:
-        print(f'Gemini returned empty response on attempt {attempt+1}, retrying...', flush=True)
-        continue
-    except Exception as e:
-      err = str(e)
-      if '429' in err or 'RESOURCE_EXHAUSTED' in err:
-        wait = 60 * (attempt + 1)
-        print(f'Gemini rate limited, retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
-        time.sleep(wait)
-      elif '503' in err or 'UNAVAILABLE' in err or 'high demand' in err.lower():
-        wait = 10 * (attempt + 1)
-        print(f'Gemini unavailable (503), retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
-        time.sleep(wait)
-      else:
-        raise
-  print(f'[TIMING] Gemini total (3 failed attempts): {time.time()-_gemini_start:.3f}s', flush=True)
-  return 'Error generating feedback: Gemini did not return valid JSON after 3 attempts.'
+      except Exception as e:
+        err = str(e)
+        if '429' in err or 'RESOURCE_EXHAUSTED' in err:
+          # Short wait then fall back — rate limit won't clear fast enough to justify long retries
+          wait = 15 * (attempt + 1)  # 15, 30, 45s
+          last_error = f'rate limited on {model}'
+          print(f'Gemini rate limited ({model}), retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
+          time.sleep(wait)
+          if attempt == 2:
+            try_next_model = True
+        elif '503' in err or 'UNAVAILABLE' in err or 'high demand' in err.lower():
+          wait = 3 * (attempt + 1)  # 3, 6, 9s — model is overloaded, move on quickly
+          last_error = f'503 unavailable on {model}'
+          print(f'Gemini unavailable (503) on {model}, retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
+          time.sleep(wait)
+          if attempt == 2:
+            try_next_model = True
+        else:
+          raise
+    if try_next_model:
+      print(f'{model} failed after 3 attempts, falling back to next model...', flush=True)
+      continue
+    # Non-transient failure (bad JSON / empty) — no point trying another model
+    break
+
+  print(f'[TIMING] Gemini total (all attempts failed): {time.time()-_gemini_start:.3f}s', flush=True)
+  return f'Error generating feedback: {last_error}.'
 
 
 # ==================================================================================================

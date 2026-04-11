@@ -14,6 +14,7 @@ export default function StatsTabsClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [reminderSending, setReminderSending] = useState<Record<string, boolean>>({});
   const [reminderStatus, setReminderStatus] = useState<Record<string, 'sent' | 'error'>>({});
+  const [selectedEpa, setSelectedEpa] = useState<{ epa: string; data: { month: string; count: number }[] } | null>(null);
 
   const loadStats = async () => {
     setLoading(true);
@@ -210,6 +211,9 @@ export default function StatsTabsClient() {
                 <div
                   key={epa}
                   className='border rounded shadow-sm bg-body-secondary p-3 min-w-0'
+                  style={{ cursor: 'pointer' }}
+                  title='Click to enlarge'
+                  onClick={() => setSelectedEpa({ epa, data })}
                 >
                   <h6 className='mb-3 text-center'>EPA {epa}</h6>
                   <svg
@@ -271,6 +275,86 @@ export default function StatsTabsClient() {
           )}
         </div>
       </div>
+
+      {/* EPA Graph Modal */}
+      {selectedEpa && (
+        <div
+          className='modal d-block'
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setSelectedEpa(null)}
+        >
+          <div
+            className='modal-dialog modal-lg modal-dialog-centered'
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className='modal-content'>
+              <div className='modal-header'>
+                <h5 className='modal-title'>EPA {selectedEpa.epa} — Monthly Distribution</h5>
+                <button
+                  type='button'
+                  className='btn-close'
+                  onClick={() => setSelectedEpa(null)}
+                />
+              </div>
+              <div className='modal-body p-4'>
+                <div className='d-flex justify-content-center overflow-auto'>
+                  <svg
+                    width={selectedEpa.data.length * 80 + 60}
+                    height={280}
+                    viewBox={`0 0 ${selectedEpa.data.length * 80 + 60} 280`}
+                    preserveAspectRatio='xMinYMin meet'
+                  >
+                    {/* Axes */}
+                    <line x1='40' y1='10' x2='40' y2='220' stroke='#ccc' />
+                    <line x1='40' y1='220' x2={40 + selectedEpa.data.length * 80} y2='220' stroke='#ccc' />
+
+                    {/* Y-axis labels */}
+                    {[0, 5, 10, 15, 20].map((v) => (
+                      <g key={`y-${v}`}>
+                        <line x1='35' y1={220 - v * 8} x2={40 + selectedEpa.data.length * 80} y2={220 - v * 8} stroke='#f1f3f5' />
+                        <text x='5' y={224 - v * 8} fontSize='11' fill='#999'>{v}</text>
+                      </g>
+                    ))}
+
+                    {/* Points + labels */}
+                    {selectedEpa.data.map((d, i) => {
+                      const x = 40 + i * 80;
+                      const y = 220 - d.count * 8;
+                      const monthLabel = new Date(`${d.month}-01`).toLocaleString('default', { month: 'short', year: '2-digit' });
+                      return (
+                        <g key={`pt-${d.month}`}>
+                          <line x1={x} y1={10} x2={x} y2={220} stroke='#eee' />
+                          <text x={x} y={245} fontSize='11' textAnchor='middle' fill='#666'>{monthLabel}</text>
+                          <text x={x} y={y - 8} fontSize='11' textAnchor='middle' fill='#198754' fontWeight='600'>{d.count}</text>
+                        </g>
+                      );
+                    })}
+
+                    {/* Line */}
+                    <polyline
+                      fill='none'
+                      stroke='#198754'
+                      strokeWidth='2.5'
+                      points={selectedEpa.data.map((d, i) => `${40 + i * 80},${220 - d.count * 8}`).join(' ')}
+                    />
+
+                    {/* Dots */}
+                    {selectedEpa.data.map((d, i) => (
+                      <circle
+                        key={`dot-${d.month}`}
+                        cx={40 + i * 80}
+                        cy={220 - d.count * 8}
+                        r='5'
+                        fill='#198754'
+                      />
+                    ))}
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

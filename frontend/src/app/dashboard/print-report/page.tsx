@@ -189,7 +189,9 @@ function PrintReportContent() {
     setReady(false);
 
     const timeRange = parseInt(report.time_window);
-    const cutoff = new Date();
+    // Use report creation date as reference so old reports show the correct time window,
+    // not a window ending today.
+    const cutoff = new Date(report.created_at);
     cutoff.setMonth(cutoff.getMonth() - timeRange);
 
     const { data: resultRows } = await supabase
@@ -289,16 +291,20 @@ function PrintReportContent() {
           ? Math.floor(allScores.reduce((a, b) => a + b, 0) / allScores.length)
           : null;
 
-      const rawFeedback = feedbackObj
+      const rawFeedback = feedbackObj && !('_error' in feedbackObj)
         ? Object.entries(feedbackObj)
-            .filter(([key]) => parseInt(key.split('.')[0]) === epaId)
-            .map(([, val]) => val)
-            .filter(Boolean)
-            .join('\n\n')
+            .filter(([key]) => parseInt(key.split('.')[0]) === epaId && feedbackObj![key])
+            .sort(([a], [b]) => parseInt(a.split('.')[1]) - parseInt(b.split('.')[1]))
+            .map(([key, val]) => `**Key Function ${key}**\n\n${val}`)
+            .join('\n\n---\n\n')
         : null;
       const relevantFeedback = rawFeedback ? annotateScores(rawFeedback) : null;
 
-      const recentAssessments = assessments.filter((a) => new Date(a.date) >= cutoff);
+      const reportCreatedAt = new Date(report.created_at);
+      const recentAssessments = assessments.filter((a) => {
+        const d = new Date(a.date);
+        return d >= cutoff && d <= reportCreatedAt;
+      });
 
       return {
         epaId,
@@ -1354,7 +1360,6 @@ const styles = `
     .stats-row,
     .stat-box,
     .content-block,
-    .ai-block,
     .comment-item,
     .rpt-table,
     .cover-meta-grid,
@@ -1375,10 +1380,21 @@ const styles = `
     .epa-banner { break-after: avoid !important; page-break-after: avoid !important; }
     .stats-row { break-after: avoid !important; page-break-after: avoid !important; }
 
-    /* Keep ai-block from being orphaned at top of a new page */
+    /* AI block: allow it to start on a new page if it doesn't fit */
     .ai-block {
-      break-before: avoid !important;
-      page-break-before: avoid !important;
+      break-before: auto !important;
+      page-break-before: auto !important;
+      break-inside: auto !important;
+      page-break-inside: auto !important;
+    }
+    /* Keep the AI block header together with the first line of content */
+    .ai-block-header {
+      break-after: avoid !important;
+      page-break-after: avoid !important;
+    }
+    /* Each KF entry can break across pages freely */
+    .ai-content p, .ai-content strong {
+      break-inside: auto !important;
     }
 
     thead { display: table-header-group; }

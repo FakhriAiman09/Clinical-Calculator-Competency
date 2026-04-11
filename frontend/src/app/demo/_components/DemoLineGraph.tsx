@@ -4,8 +4,6 @@ import React from 'react';
 
 interface DemoLineGraphProps {
   data: { date: string; value: number }[];
-  windowStart: string;
-  windowEnd: string;
 }
 
 const LABEL_COLOR = '#555555';
@@ -13,7 +11,7 @@ const GRID_COLOR = '#cccccc';
 const LINE_COLOR = '#007bff';
 const LATEST_RING = '#28a745';
 
-const DemoLineGraph: React.FC<DemoLineGraphProps> = ({ data, windowStart, windowEnd }) => {
+const DemoLineGraph: React.FC<DemoLineGraphProps> = ({ data }) => {
   const width = 600;
   const height = 200;
   const labelPadding = 105;
@@ -28,16 +26,20 @@ const DemoLineGraph: React.FC<DemoLineGraphProps> = ({ data, windowStart, window
     return new Date(y, m - 1, d);
   };
 
-  const winStart = new Date(windowStart);
-  const winEnd = new Date(windowEnd);
-  const startMonth = new Date(winStart.getFullYear(), winStart.getMonth(), 1);
-  const endMonth = new Date(winEnd.getFullYear(), winEnd.getMonth(), 1);
+  const latestDataDate = data.reduce((max, d) => {
+    const dt = parseLocalDate(d.date);
+    return dt > max ? dt : max;
+  }, parseLocalDate(data[0].date));
+  const endMonth = new Date(latestDataDate.getFullYear(), latestDataDate.getMonth(), 1);
+  const janOfEndYear = new Date(latestDataDate.getFullYear(), 0, 1);
+  const twelveMonthsBack = new Date(endMonth.getFullYear(), endMonth.getMonth() - 11, 1);
+  const startMonth = janOfEndYear > twelveMonthsBack ? janOfEndYear : twelveMonthsBack;
 
   const buckets: Record<string, number[]> = {};
   const intervals: { label: string; start: Date }[] = [];
   const current = new Date(startMonth);
   while (current <= endMonth) {
-    const label = `${current.toLocaleString('default', { month: 'short' })} '${String(current.getFullYear()).slice(-2)}`;
+    const label = current.toLocaleString('default', { month: 'short', year: '2-digit' });
     intervals.push({ label, start: new Date(current) });
     current.setMonth(current.getMonth() + 1);
   }

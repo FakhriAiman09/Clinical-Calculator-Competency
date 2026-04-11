@@ -295,7 +295,7 @@ export default function AdminAllReportsPage() {
   const [selectedReport, setSelectedReport] = useState<StudentReport | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
   const [kfDescriptions, setKfDescriptions] = useState<Record<string, string[]> | null>(null);
-  const [timeRange, setTimeRange] = useState<3 | 6 | 12>(3);
+
   const [title, setTitle] = useState<string>('');
   const [formResults, setFormResults] = useState<FormResult[]>([]);
   const [editingEPA, setEditingEPA] = useState<number | null>(null);
@@ -304,6 +304,7 @@ export default function AdminAllReportsPage() {
   const [comments, setComments] = useState<string[]>([]);
   const [formFlagsByResponse, setFormFlagsByResponse] = useState<Record<string, FormFlagSummary>>({});
   const [reportSearch, setReportSearch] = useState('');
+  const [timeFilter, setTimeFilter] = useState<3 | 6 | 12>(3);
 
   // Comment-quality checks per EPA
   const [epaChecks, setEpaChecks] = useState<Record<number, EPACheckSummary>>({});
@@ -573,7 +574,7 @@ export default function AdminAllReportsPage() {
     if (!selectedStudent) return;
     await supabase.rpc('generate_report', {
       student_id_input: selectedStudent.id,
-      time_range_input: timeRange,
+      time_range_input: 1200, // all data from beginning
       report_title: title.trim() || 'Admin Generated',
     });
     setTitle('');
@@ -779,9 +780,9 @@ export default function AdminAllReportsPage() {
     }, 500);
   };
 
-  /** Run checks across all EPAs (for selected student) */
+  /** Run checks scoped to the currently selected report's time window */
   const runCommentQualityChecks = useCallback(async () => {
-    if (!selectedStudent) return;
+    if (!selectedStudent || !selectedReport) return;
 
     setRunningChecks(true);
 
@@ -834,11 +835,15 @@ export default function AdminAllReportsPage() {
         return;
       }
 
-      // 3) Collect comments per EPA
+      // Scope to only assessments on or before this report's creation date
+      const reportCreatedAt = new Date(selectedReport.created_at);
+
+      // 3) Collect comments per EPA (scoped to report date)
       const perEPAComments: Record<number, string[]> = {};
       REPORT_EPAS.forEach((epa) => (perEPAComments[epa] = []));
 
       for (const row of resultData ?? []) {
+        if (new Date(row.created_at) > reportCreatedAt) continue;
         const fr = row.form_responses;
         if (fr?.form_requests?.student_id !== selectedStudent.id) continue;
 
@@ -880,12 +885,17 @@ export default function AdminAllReportsPage() {
     } finally {
       setRunningChecks(false);
     }
-  }, [selectedStudent]);
+  }, [selectedStudent, selectedReport]);
 
   const filteredReports = useMemo(() => {
     const search = reportSearch.trim().toLowerCase();
-    return reports.filter((r) => !search || getDisplayReportTitle(r.title).toLowerCase().includes(search));
-  }, [reportSearch, reports]);
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - timeFilter);
+    return reports.filter((r) =>
+      (!search || getDisplayReportTitle(r.title).toLowerCase().includes(search)) &&
+      new Date(r.created_at) >= cutoff
+    );
+  }, [reportSearch, timeFilter, reports]);
 
   const hasAnyFlags = useMemo(() => Object.values(epaChecks).some((s) => s.flaggedComments > 0), [epaChecks]);
 
@@ -1049,21 +1059,6 @@ export default function AdminAllReportsPage() {
           </div>
 
           <div className='d-flex gap-3 align-items-end mb-4 d-print-none'>
-            <div>
-              <label className='form-label'>Time Range</label>
-              <select
-                className='form-select'
-                value={timeRange}
-                onChange={(e) => setTimeRange(parseInt(e.target.value) as 3 | 6 | 12)}
-              >
-                {[3, 6, 12].map((m) => (
-                  <option key={m} value={m}>
-                    {m} months
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <div className='flex-grow-1 d-print-none'>
               <label className='form-label'>Report Title</label>
               <input type='text' className='form-control' value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -1083,8 +1078,8 @@ export default function AdminAllReportsPage() {
             <div>
               <div className='fw-semibold'>Comment Quality Checks</div>
               <div className='mini-muted'>
-                Flags show why comments might be low quality (example: “Comment too short”, “Generic/unhelpful”, etc.).
-                {lastCheckAt ? ` Last run: ${lastCheckAt}` : ''}
+                Checks comments in the selected report. Flags show why comments might be low quality (example: “Comment too short”, “Generic/unhelpful”, etc.).
+                {lastCheckAt ? ` Last run: ${lastCheckAt}` : ' Select a report first.'}
               </div>
             </div>
 
@@ -1097,8 +1092,8 @@ export default function AdminAllReportsPage() {
               <button
                 className='btn btn-outline-secondary'
                 onClick={runCommentQualityChecks}
-                disabled={!selectedStudent || runningChecks}
-                title='Run quality checks across all EPAs for this student'
+                disabled={!selectedStudent || !selectedReport || runningChecks}
+                title='Run quality checks for comments in the selected report'
               >
                 {runningChecks ? 'Running...' : 'Run Checks'}
               </button>
@@ -1180,7 +1175,7 @@ export default function AdminAllReportsPage() {
         {selectedStudent && reports.length > 0 && (
           <div className='mb-4 d-print-none'>
             <h5 className='mb-3'>Past Reports for {selectedStudent.display_name}</h5>
-            <div className='d-flex flex-wrap gap-2 mb-3'>
+            <div className='d-flex flex-wrap align-items-center gap-2 mb-3'>
               <input
                 type='text'
                 className='form-control'
@@ -1189,6 +1184,18 @@ export default function AdminAllReportsPage() {
                 onChange={(e) => setReportSearch(e.target.value)}
                 style={{ maxWidth: 280 }}
               />
+              <div className='btn-group' role='group' aria-label='Time range filter'>
+                {([3, 6, 12] as const).map((value) => (
+                  <button
+                    key={value}
+                    type='button'
+                    className={`btn btn-outline-secondary${timeFilter === value ? ' active' : ''}`}
+                    onClick={() => setTimeFilter(value)}
+                  >
+                    Last {value} mo
+                  </button>
+                ))}
+              </div>
             </div>
             <ul className='list-group report-list-shell report-list-scroll'>
               {filteredReports.map((r) => (
@@ -1198,7 +1205,7 @@ export default function AdminAllReportsPage() {
                   onClick={() => handleReportSelect(r)}
                   style={{ cursor: 'pointer' }}
                 >
-                  {r.title} ({r.time_window}) – {new Date(r.created_at).toLocaleDateString()}
+                  {r.title} – {new Date(r.created_at).toLocaleDateString()}
                 </li>
               ))}
             </ul>

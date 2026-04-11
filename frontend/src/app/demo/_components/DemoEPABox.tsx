@@ -157,11 +157,7 @@ const DemoEPABox: React.FC<DemoEPABoxProps> = ({
               {graphData.length > 1 && (
                 <div className='mb-3'>
                   <small className='text-muted d-block mb-1'>Assessment trend</small>
-                  <LineGraph
-                    data={graphData}
-                    windowStart={cutoff.toISOString()}
-                    windowEnd={reportDate.toISOString()}
-                  />
+                  <LineGraph data={graphData} />
                 </div>
               )}
 

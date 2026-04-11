@@ -271,25 +271,10 @@ const FormRequests = () => {
               />
             </div>
 
-            {/* Goals */}
-            <div className='mb-3'>
-              <label htmlFor='goals' className='form-label'>
-                What I&apos;d like feedback on (optional)
-              </label>
-              <textarea
-                id='goals'
-                className='form-control'
-                rows={3}
-                value={goals}
-                onChange={(e) => setGoals(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-
-            {/* Notes */}
+            {/* Notes — shown as "Relevant Activity" on the rater side */}
             <div className='mb-3'>
               <label htmlFor='details' className='form-label'>
-                Additional Notes *
+                Relevant Activity *
               </label>
               <textarea
                 id='details'
@@ -297,6 +282,21 @@ const FormRequests = () => {
                 rows={3}
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+
+            {/* Goals — shown as "Stated Goals" on the rater side */}
+            <div className='mb-3'>
+              <label htmlFor='goals' className='form-label'>
+                Stated Goals (optional)
+              </label>
+              <textarea
+                id='goals'
+                className='form-control'
+                rows={3}
+                value={goals}
+                onChange={(e) => setGoals(e.target.value)}
                 disabled={loading}
               />
             </div>

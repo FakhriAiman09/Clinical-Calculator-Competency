@@ -43,7 +43,7 @@ const themeOptions: ThemeOption[] = [
  */
 export default function SettingsPage() {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const { user, displayName, email } = useUser();
+  const { user, displayName, email, userRoleRater, userRoleDev } = useUser();
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
   const [editedDisplayName, setEditedDisplayName] = useState(displayName);
@@ -235,8 +235,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* ── AI Preferences ──────────────────────────────────── */}
-      <AIPreferencesSection />
+      {/* ── AI Preferences — rater and dev only ─────────────── */}
+      {(userRoleRater || userRoleDev) && <AIPreferencesSection />}
     </div>
   );
 }
