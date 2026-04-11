@@ -1,7 +1,7 @@
 """Supabase Realtime listener for inference and report generation.
 
 This service subscribes to inserts on ``form_responses`` and
-``student_reports``. New form responses are scored with the BERT and SVM
+``student_reports``. New form responses are scored with the DeBERTa and SVM
 models, and new student reports are enriched with Gemini-generated feedback.
 
 Required environment variables:
@@ -17,7 +17,6 @@ import os
 from pathlib import Path
 import time
 
-import tensorflow_text as text
 from dotenv import load_dotenv
 from google import genai
 import supabase as spb
@@ -30,11 +29,11 @@ try:
 except ImportError:
   _LOGTAIL_AVAILABLE = False
 
-from inference import (bert_infer, download_bert_model, download_svm_models,
-                       generate_report_summary, load_bert_model,
+from inference import (deberta_infer, download_deberta_model, download_svm_models,
+                       generate_report_summary, load_deberta_model,
                        load_svm_models, svm_infer)
 
-BERT_MODEL_PATH = Path(os.environ.get('BERT_MODEL_PATH', Path(__file__).resolve().parent / 'models' / 'bert'))
+DEBERTA_MODEL_PATH = Path(os.environ.get('DEBERTA_MODEL_PATH', Path(__file__).resolve().parent / 'models' / 'deberta'))
 SVM_MODELS_PATH = Path(os.environ.get('SVM_MODELS_PATH', Path(__file__).resolve().parent / 'svm-models'))
 LOGS_PATH = Path(os.environ.get('INFER_LOGS_PATH', Path(__file__).resolve().parent / 'logs'))
 
@@ -90,28 +89,28 @@ def wait_for_models(timeout_minutes: int = 60) -> None:
   Checks every 30 seconds, times out after timeout_minutes.
   """
   deadline = time.time() + timeout_minutes * 60
-  bert_ready = False
+  deberta_ready = False
   svm_ready = False
 
   app_log.info(f'Waiting for model files (timeout: {timeout_minutes} min)...')
 
   while time.time() < deadline:
-    bert_ready = (
-      BERT_MODEL_PATH.exists() and
-      (BERT_MODEL_PATH / 'saved_model.pb').exists()
+    deberta_ready = (
+      DEBERTA_MODEL_PATH.exists() and
+      (DEBERTA_MODEL_PATH / 'model.safetensors').exists()
     )
     svm_ready = (
       SVM_MODELS_PATH.exists() and
       any(f.endswith('.pkl') for f in os.listdir(SVM_MODELS_PATH))
     ) if SVM_MODELS_PATH.exists() else False
 
-    if bert_ready and svm_ready:
+    if deberta_ready and svm_ready:
       app_log.info('Model files found!')
       return
 
     status = []
-    if not bert_ready:
-      status.append('BERT model missing')
+    if not deberta_ready:
+      status.append('DeBERTa model missing')
     if not svm_ready:
       status.append('SVM models missing')
     app_log.warning(f'Still waiting: {", ".join(status)} — retrying in 30s...')
@@ -119,7 +118,7 @@ def wait_for_models(timeout_minutes: int = 60) -> None:
 
   msg = (
     f'Model files not found after {timeout_minutes} minutes. '
-    f'Please copy models into the volume at {BERT_MODEL_PATH} and {SVM_MODELS_PATH}.'
+    f'Please copy models into the volume at {DEBERTA_MODEL_PATH} and {SVM_MODELS_PATH}.'
   )
   error_log.error(msg)
   raise TimeoutError(msg)
@@ -152,9 +151,9 @@ async def main() -> None:
   supabase: spb.Client = spb.create_client(supabase_url, supabase_key)
   asupabase: spb.AClient = await spb.acreate_client(supabase_url, supabase_key)
 
-  if not (BERT_MODEL_PATH / 'saved_model.pb').exists():
-    app_log.info('BERT model not found locally. Downloading from Supabase Storage...')
-    download_bert_model(supabase, str(BERT_MODEL_PATH))
+  if not (DEBERTA_MODEL_PATH / 'model.safetensors').exists():
+    app_log.info('DeBERTa model not found locally. Downloading from Kaggle...')
+    download_deberta_model(str(DEBERTA_MODEL_PATH))
 
   if not SVM_MODELS_PATH.exists() or not any(f.endswith('.pkl') for f in os.listdir(SVM_MODELS_PATH)):
     app_log.info('SVM models not found locally. Downloading from Supabase Storage...')
@@ -166,9 +165,9 @@ async def main() -> None:
   svm_models = load_svm_models(str(SVM_MODELS_PATH))
   app_log.info('All SVM models loaded successfully.')
 
-  app_log.info('Loading BERT model...')
-  bert_model = load_bert_model(str(BERT_MODEL_PATH))
-  app_log.info('BERT model loaded successfully.')
+  app_log.info('Loading DeBERTa model...')
+  deberta_model = load_deberta_model(str(DEBERTA_MODEL_PATH))
+  app_log.info('DeBERTa model loaded successfully.')
 
   app_log.info('Connecting to Supabase Realtime server...')
   await asupabase.realtime.connect()
@@ -180,7 +179,7 @@ async def main() -> None:
          .on_postgres_changes('INSERT',
                               schema='public', table='form_responses',
                               callback=lambda payload:
-                              handle_new_response(payload, bert_model, svm_models, supabase))
+                              handle_new_response(payload, deberta_model, svm_models, supabase))
          .subscribe())
   app_log.info('Subscribed to form_responses_insert.')
 
@@ -190,7 +189,7 @@ async def main() -> None:
          .on_postgres_changes('UPDATE',
                               schema='public', table='form_responses',
                               callback=lambda payload:
-                              handle_updated_response(payload, bert_model, svm_models, supabase))
+                              handle_updated_response(payload, deberta_model, svm_models, supabase))
          .subscribe())
   app_log.info('Subscribed to form_responses_update.')
 
@@ -221,7 +220,7 @@ async def main() -> None:
 
 # ── Event handlers ─────────────────────────────────────────────────────────────
 
-def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
+def handle_new_response(payload, deberta_model, svm_models, supabase) -> None:
   """Process a new form response and persist weighted model predictions."""
   try:
     record = payload['data']['record']
@@ -231,26 +230,26 @@ def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
     response = record['response']['response']
 
     ds = [kf for kf in response.values()]
-    bert_inputs = {k: v['text'] for d in ds for k, v in d.items()}
+    deberta_inputs = {k: v['text'] for d in ds for k, v in d.items()}
     svm_inputs = {k: [vv for kk, vv in v.items() if kk != 'text'] for d in ds for k, v in d.items()}
 
     _t_pipeline = time.time()
 
-    infer_log.info(f'[{response_id}] Running BERT inference...')
-    _t_bert = time.time()
-    bert_res = bert_infer(bert_model, bert_inputs)
-    infer_log.info(f'[{response_id}] BERT results: {bert_res} [{time.time()-_t_bert:.3f}s]')
+    infer_log.info(f'[{response_id}] Running DeBERTa inference...')
+    _t_deberta = time.time()
+    deberta_res = deberta_infer(deberta_model, deberta_inputs)
+    infer_log.info(f'[{response_id}] DeBERTa results: {deberta_res} [{time.time()-_t_deberta:.3f}s]')
 
     infer_log.info(f'[{response_id}] Running SVM inference...')
     _t_svm = time.time()
     svms_res = svm_infer(svm_models, svm_inputs)
     infer_log.info(f'[{response_id}] SVM results: {svms_res} [{time.time()-_t_svm:.3f}s]')
 
-    def weighted_average(bert: float, svm: float) -> float:
-      """Combine BERT and SVM outputs using the project weighting rule."""
-      return bert * 0.25 + svm * 0.75
+    def weighted_average(deberta: float, svm: float) -> float:
+      """Combine DeBERTa and SVM outputs using the project weighting rule."""
+      return deberta * 0.25 + svm * 0.75
 
-    res = {k: weighted_average(bert=v, svm=svms_res[k]) for k, v in bert_res.items()}
+    res = {k: weighted_average(deberta=v, svm=svms_res[k]) for k, v in deberta_res.items()}
     infer_log.info(f'[{response_id}] Final weighted results: {res}')
 
     _t_db = time.time()
@@ -263,7 +262,7 @@ def handle_new_response(payload, bert_model, svm_models, supabase) -> None:
     error_log.exception(f'Error in handle_new_response: {e}')
 
 
-def handle_updated_response(payload, bert_model, svm_models, supabase) -> None:
+def handle_updated_response(payload, deberta_model, svm_models, supabase) -> None:
   """Re-score an edited form response and upsert the result into form_results."""
   try:
     record = payload['data']['record']
@@ -273,25 +272,25 @@ def handle_updated_response(payload, bert_model, svm_models, supabase) -> None:
     response = record['response']['response']
 
     ds = [kf for kf in response.values()]
-    bert_inputs = {k: v['text'] for d in ds for k, v in d.items()}
+    deberta_inputs = {k: v['text'] for d in ds for k, v in d.items()}
     svm_inputs = {k: [vv for kk, vv in v.items() if kk != 'text'] for d in ds for k, v in d.items()}
 
     _t_pipeline = time.time()
 
-    infer_log.info(f'[{response_id}] Running BERT inference (update)...')
-    _t_bert = time.time()
-    bert_res = bert_infer(bert_model, bert_inputs)
-    infer_log.info(f'[{response_id}] BERT results: {bert_res} [{time.time()-_t_bert:.3f}s]')
+    infer_log.info(f'[{response_id}] Running DeBERTa inference (update)...')
+    _t_deberta = time.time()
+    deberta_res = deberta_infer(deberta_model, deberta_inputs)
+    infer_log.info(f'[{response_id}] DeBERTa results: {deberta_res} [{time.time()-_t_deberta:.3f}s]')
 
     infer_log.info(f'[{response_id}] Running SVM inference (update)...')
     _t_svm = time.time()
     svms_res = svm_infer(svm_models, svm_inputs)
     infer_log.info(f'[{response_id}] SVM results: {svms_res} [{time.time()-_t_svm:.3f}s]')
 
-    def weighted_average(bert: float, svm: float) -> float:
-      return bert * 0.25 + svm * 0.75
+    def weighted_average(deberta: float, svm: float) -> float:
+      return deberta * 0.25 + svm * 0.75
 
-    res = {k: weighted_average(bert=v, svm=svms_res[k]) for k, v in bert_res.items()}
+    res = {k: weighted_average(deberta=v, svm=svms_res[k]) for k, v in deberta_res.items()}
     infer_log.info(f'[{response_id}] Updated weighted results: {res}')
 
     # UPSERT so the existing form_results row is replaced, not duplicated

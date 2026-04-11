@@ -1,47 +1,64 @@
 """Inference helpers for the Clinical Competency Calculator.
 
-This module loads trained BERT and SVM models, performs inference for incoming
+This module loads a trained DeBERTa-v3-small model, performs inference for incoming
 assessment data, downloads model artifacts from Supabase Storage, and generates
 AI-written report summaries from averaged key-function results.
 """
 
+import json
 import os
 import pickle
 import re
+import shutil
+import subprocess
+import sys
+import tempfile
 import time
 
 import supabase as spb
-import tensorflow as tf
-import tensorflow_text as text
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from google import genai
 from google.genai import types as genai_types
 from google.genai.types import GenerateContentResponse
 from sklearn import svm
 
 
-def bert_infer(model: tf.keras.Model, data: dict[str, list[str]]) -> dict[str, int]:
+def deberta_infer(
+    model_bundle: tuple,
+    data: dict[str, list[str]],
+) -> dict[str, int]:
   """
-  Predict development levels for free-text responses with a loaded BERT model.
+  Predict development levels for free-text responses with a loaded DeBERTa model.
 
   Args:
-    model: Loaded TensorFlow BERT model.
+    model_bundle: Tuple of (tokenizer, model) loaded from disk.
     data: Mapping of key-function IDs to lists of free-text responses.
 
   Returns:
     A mapping of key-function IDs to predicted development levels.
   """
-  print('Running inference on BERT model...')
+  print('Running inference on DeBERTa model...')
   _t0 = time.time()
+  tokenizer, model = model_bundle
 
   def get_class(sentences: list[str]) -> int:
-    prediction = model.predict(sentences).tolist()
-    summed_prediction = [sum(x) for x in zip(*prediction)]
-    return summed_prediction.index(max(summed_prediction))
+    enc = tokenizer(
+        sentences,
+        return_tensors='pt',
+        truncation=True,
+        max_length=160,
+        padding=True,
+    )
+    with torch.no_grad():
+      logits = model(**enc).logits  # (n_texts, 4)
+    summed_logits = logits.sum(dim=0)  # aggregate across texts
+    return int(summed_logits.argmax())
 
   result = {k: get_class(v) for k, v in data.items()}
   _elapsed = time.time() - _t0
   _total_texts = sum(len(v) for v in data.values())
-  print(f'[TIMING] BERT inference: {_elapsed:.3f}s ({_total_texts} texts across {len(data)} key functions)', flush=True)
+  print(f'[TIMING] DeBERTa inference: {_elapsed:.3f}s ({_total_texts} texts across {len(data)} key functions)', flush=True)
   return result
 
 
@@ -105,7 +122,6 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   **Actionable Items:** <text>
   """
 
-  import json
   _gemini_start = time.time()
   # Try models in order; move to the next if the current one is consistently unavailable (503).
   models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
@@ -150,15 +166,14 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
       except Exception as e:
         err = str(e)
         if '429' in err or 'RESOURCE_EXHAUSTED' in err:
-          # Short wait then fall back — rate limit won't clear fast enough to justify long retries
-          wait = 15 * (attempt + 1)  # 15, 30, 45s
+          wait = 15 * (attempt + 1)
           last_error = f'rate limited on {model}'
           print(f'Gemini rate limited ({model}), retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
           time.sleep(wait)
           if attempt == 2:
             try_next_model = True
         elif '503' in err or 'UNAVAILABLE' in err or 'high demand' in err.lower():
-          wait = 3 * (attempt + 1)  # 3, 6, 9s — model is overloaded, move on quickly
+          wait = 3 * (attempt + 1)
           last_error = f'503 unavailable on {model}'
           print(f'Gemini unavailable (503) on {model}, retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
           time.sleep(wait)
@@ -169,7 +184,6 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
     if try_next_model:
       print(f'{model} failed after 3 attempts, falling back to next model...', flush=True)
       continue
-    # Non-transient failure (bad JSON / empty) — no point trying another model
     break
 
   print(f'[TIMING] Gemini total (all attempts failed): {time.time()-_gemini_start:.3f}s', flush=True)
@@ -179,15 +193,15 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
 # ==================================================================================================
 
 
-def load_bert_model(model_path: str):
+def load_deberta_model(model_path: str) -> tuple:
   """
-  Load a SavedModel-format BERT model from disk.
+  Load a DeBERTa-v3-small model and tokenizer from disk.
 
   Args:
-    model_path: Filesystem path to the exported TensorFlow model.
+    model_path: Filesystem path to the saved HuggingFace model directory.
 
   Returns:
-    The loaded TensorFlow model instance.
+    A tuple of (tokenizer, model) ready for inference.
 
   Raises:
     FileNotFoundError: If the provided model path does not exist.
@@ -195,61 +209,39 @@ def load_bert_model(model_path: str):
   if not os.path.exists(model_path):
     raise FileNotFoundError(f"The model path '{model_path}' does not exist.")
 
-  print(f'Loading BERT model from {model_path}...', end=' ')
-  model = tf.keras.models.load_model(model_path, compile=False)
-  print('BERT model loaded successfully.')
-  return model
+  print(f'Loading DeBERTa model from {model_path}...', end=' ')
+  tokenizer = AutoTokenizer.from_pretrained(model_path)
+  model = AutoModelForSequenceClassification.from_pretrained(model_path).float().eval()
+  print('DeBERTa model loaded successfully.')
+  return tokenizer, model
 
 
 # ==================================================================================================
 
 
-def download_bert_model(supabase: spb.Client, local_path: str = 'models/bert') -> None:
+def download_deberta_model(local_path: str = 'models/deberta') -> None:
   """
-  Download the exported BERT model from Supabase Storage to local disk.
+  Download the DeBERTa model from the Kaggle kernel output to local disk.
+
+  Requires the KAGGLE_API_TOKEN environment variable to be set.
 
   Args:
-    supabase: Authenticated Supabase client.
     local_path: Local directory that will receive the model files.
-
-  Expected bucket structure:
-    bert-model/
-      saved_model.pb
-      variables/
-        variables.index
-        variables.data-00000-of-00001
   """
+  print('Downloading DeBERTa model from Kaggle...')
 
-  bucket_name = 'bert-model'
-  bucket = supabase.storage.from_(bucket_name)
+  with tempfile.TemporaryDirectory() as tmp:
+    subprocess.run(
+      [sys.executable, '-m', 'kaggle', 'kernels', 'output',
+       'cccalc/deberta-v3-small-refined', '-p', tmp],
+      check=True,
+    )
+    model_src = os.path.join(tmp, 'model')
+    os.makedirs(local_path, exist_ok=True)
+    for fname in os.listdir(model_src):
+      shutil.copy2(os.path.join(model_src, fname), local_path)
 
-  print(f"Downloading BERT model from Supabase bucket '{bucket_name}'...")
-
-  def download_folder(prefix: str, local_dir: str) -> None:
-    """Recursively list and download every file beneath a storage prefix."""
-    os.makedirs(local_dir, exist_ok=True)
-    items = bucket.list(prefix) if prefix else bucket.list()
-
-    for item in items:
-      name = item['name']
-      # Supabase Storage returns folders as items with metadata id == None
-      if item.get('id') is None:
-        # It's a folder — recurse
-        sub_prefix = f"{prefix}/{name}" if prefix else name
-        sub_local = os.path.join(local_dir, name)
-        download_folder(sub_prefix, sub_local)
-      else:
-        # It's a file — download it
-        remote_path = f"{prefix}/{name}" if prefix else name
-        local_file = os.path.join(local_dir, name)
-        print(f'  Downloading {remote_path}...', end=' ')
-        data = bucket.download(remote_path)
-        with open(local_file, 'wb') as f:
-          f.write(data)
-        print('done.')
-
-  download_folder('', local_path)
-  print('BERT model downloaded successfully.')
+  print('DeBERTa model downloaded successfully.')
 
 
 # ==================================================================================================

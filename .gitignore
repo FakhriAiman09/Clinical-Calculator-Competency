@@ -76,5 +76,21 @@ server/socketio/node_modules/
 server/express/node_modules/
 **/node_modules
 
+# Python cache
+__pycache__/
+*.pyc
+
+# ML model files (downloaded at runtime — not stored in repo)
+*.safetensors
+*.bin
+*.pb
+python/infer/models/
+models/
+kaggle_output/
+figures/
+
+# Kaggle credentials
+.kaggle/
+
 .claude
 Assignment 2

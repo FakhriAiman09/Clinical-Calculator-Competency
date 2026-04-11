@@ -1,2 +1,2 @@
-*.safetensors filter=lfs diff=lfs merge=lfs -text
-*.bin filter=lfs diff=lfs merge=lfs -text
+# ML model files are excluded from the repo (.gitignore) and downloaded at runtime.
+# LFS tracking removed — no large binaries are committed.

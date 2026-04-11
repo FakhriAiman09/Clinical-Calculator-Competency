@@ -25,9 +25,9 @@ Clinical-Calculator-Competency/
 ├── frontend/           # Next.js 16 web application (React 19, TypeScript)
 ├── server/             # WebSocket server (Socket.IO) and data format specs
 ├── python/
-│   ├── bert/           # BERT model training pipeline
+│   ├── bert/           # Original BERT model training pipeline (superseded by DeBERTa)
 │   ├── svm/            # SVM model training pipeline
-│   └── infer/          # Real-time inference engine & Supabase listener
+│   └── infer/          # Real-time inference engine & Supabase listener (DeBERTa + SVM)
 ├── mcq-sample-collect/ # Tool for collecting MCQ training data
 ├── supabase/           # Database migrations and configuration
 ├── sphinx/             # Sphinx documentation generator
@@ -40,7 +40,7 @@ Clinical-Calculator-Competency/
 1. **Rater submits feedback** — structured form with open-text and multiple-choice responses
 2. **Supabase Realtime triggers** the Python inference listener on new submissions
 3. **Dual classification:**
-   - BERT (25%) — classifies free-text open-ended responses
+   - DeBERTa-v3-small (25%) — classifies free-text open-ended responses
    - SVM (75%) — classifies multiple-choice responses
 4. **Weighted average score** is stored in `form_results`
 5. **Google Gemini** generates a markdown-formatted narrative summary per student report
@@ -73,10 +73,11 @@ Clinical-Calculator-Competency/
 ### Prerequisites
 
 - Node.js 18+
-- Python 3.11 for the inference listener (`python/infer`)
+- Python 3.11+ for the inference listener (`python/infer`)
 - A Supabase project with the required tables and storage buckets
 - Google Gemini API key
 - OpenRouter API key
+- Kaggle API token (for automatic DeBERTa model download on first run)
 
 ### Frontend
 
@@ -136,6 +137,8 @@ Compose files are available for the frontend (`frontend/compose.yaml`) and infer
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
 | `GOOGLE_GENAI_API_KEY` | Google Gemini API key |
+| `KAGGLE_API_TOKEN` | Kaggle API token — used to download the DeBERTa model on first boot |
+| `LOGTAIL_SOURCE_TOKEN` | Better Stack source token (optional) |
 
 `python/infer/listener.py` also accepts `SUPABASE_KEY` and `GEMINI_API_KEY` as legacy aliases.
 
@@ -214,6 +217,8 @@ GitHub Actions workflows in `.github/workflows/`:
 
 | Area | Change |
 |------|--------|
+| Inference engine | Replaced TensorFlow BERT with DeBERTa-v3-small (PyTorch/HuggingFace) — 71.2% validation accuracy |
+| Inference engine | Model downloaded at runtime from Kaggle (`cccalc/deberta-v3-small-refined`) — no large files in repo |
 | Rater form | Autosave runs silently — "Autosaved at…" status message removed from UI |
 | AI comment assistant | Selected checkbox options are now sent to the AI alongside the comment text, giving it full context |
 | Performance graph | Fixed UTC timezone shift that misassigned April assessments to March |
