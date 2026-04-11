@@ -235,6 +235,7 @@ def download_deberta_model(local_path: str = 'models/deberta') -> None:
       [sys.executable, '-m', 'kaggle', 'kernels', 'output',
        'cccalc/deberta-v3-small-refined', '-p', tmp],
       check=True,
+      env=os.environ.copy(),
     )
     model_src = os.path.join(tmp, 'model')
     os.makedirs(local_path, exist_ok=True)
