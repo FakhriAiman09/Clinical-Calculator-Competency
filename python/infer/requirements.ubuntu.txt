@@ -65,6 +65,7 @@ StrEnum==0.4.15
 supabase==2.15.0
 supafunc==0.9.4
 threadpoolctl==3.6.0
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch>=2.0
 tqdm==4.67.1
 transformers>=4.40
