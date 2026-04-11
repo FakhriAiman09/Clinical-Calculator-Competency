@@ -231,8 +231,9 @@ def download_deberta_model(local_path: str = 'models/deberta') -> None:
   print('Downloading DeBERTa model from Kaggle...')
 
   with tempfile.TemporaryDirectory() as tmp:
+    kaggle_cmd = shutil.which('kaggle') or 'kaggle'
     subprocess.run(
-      [sys.executable, '-m', 'kaggle', 'kernels', 'output',
+      [kaggle_cmd, 'kernels', 'output',
        'cccalc/deberta-v3-small-refined', '-p', tmp],
       check=True,
       env=os.environ.copy(),
