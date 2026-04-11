@@ -21,8 +21,8 @@ ENV HOME=/home/appuser
 
 RUN python -m pip install --upgrade pip
 
-COPY requirements.txt .
-RUN python -m pip install -r requirements.txt
+COPY requirements.ubuntu.txt .
+RUN python -m pip install -r requirements.ubuntu.txt
 
 COPY --chown=appuser:appuser . .
 
