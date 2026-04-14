@@ -92,21 +92,13 @@ def svm_infer(models: dict[str, svm.SVC], data: dict[str, list[bool]]) -> dict[s
 # ==================================================================================================
 
 
-def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str:
-  """
-  Generate a JSON summary of student performance from key-function averages.
+_GEMINI_MODELS = ('gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash')
+_RATE_LIMIT_SIGNALS = ('429', 'RESOURCE_EXHAUSTED')
+_UNAVAILABLE_SIGNALS = ('503', 'UNAVAILABLE')
 
-  Args:
-    data: Mapping of key-function IDs to average scores.
-    gemini: Authenticated Gemini client used to generate the summary.
 
-  Returns:
-    A JSON-formatted string suitable for storage in PostgreSQL ``jsonb``.
-  """
-
-  datastr = '\n'.join(f'{k}: {v}' for k, v in data.items())
-
-  query = f"""
+def _build_report_query(datastr: str) -> str:
+  return f"""
   You are a clinical clerkship evaluator. A student was assessed on AAMC Core EPAs (13 EPAs, each with key functions). Development levels: 0=remedial, 1=early-developing, 2=developing, 3=entrustable.
 
   Student scores by key function (averages across rotation):
@@ -122,72 +114,89 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   **Actionable Items:** <text>
   """
 
-  _gemini_start = time.time()
-  # Try models in order; move to the next if the current one is consistently unavailable (503).
-  models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
-  last_error = 'unknown error'
 
-  for model in models_to_try:
+def _parse_gemini_text(raw: str) -> str | None:
+  """Strip markdown fences, extract the outermost JSON object, and validate it."""
+  text = raw.strip()
+  if text.startswith('```'):
+    text = re.sub(r'^```[a-zA-Z]*\n?', '', text)
+    text = re.sub(r'\n?```$', '', text.strip()).strip()
+  match = re.search(r'\{.*\}', text, re.DOTALL)
+  if match:
+    text = match.group(0)
+  try:
+    return json.dumps(json.loads(text))
+  except json.JSONDecodeError:
+    return None
+
+
+def _handle_gemini_error(e: Exception, model: str, attempt: int) -> None:
+  """Sleep-and-retry for rate-limit / 503 errors; re-raise everything else."""
+  err = str(e)
+  if any(sig in err for sig in _RATE_LIMIT_SIGNALS):
+    wait = 15 * (attempt + 1)
+    print(f'Gemini rate limited ({model}), retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
+    time.sleep(wait)
+    return
+  if any(sig in err for sig in _UNAVAILABLE_SIGNALS) or 'high demand' in err.lower():
+    wait = 3 * (attempt + 1)
+    print(f'Gemini unavailable (503) on {model}, retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
+    time.sleep(wait)
+    return
+  raise e
+
+
+def _try_gemini_model(
+  gemini: genai.Client,
+  model: str,
+  query: str,
+  config: genai_types.GenerateContentConfig,
+) -> str | None:
+  """Attempt up to 3 calls on a single model. Returns a JSON string or None on failure."""
+  for attempt in range(3):
+    try:
+      _t = time.time()
+      response: GenerateContentResponse = gemini.models.generate_content(
+        model=model, contents=query, config=config,
+      )
+      print(f'[TIMING] Gemini API call ({model}, attempt {attempt+1}): {time.time()-_t:.3f}s', flush=True)
+      if not response.text:
+        print(f'Gemini returned empty response on {model} attempt {attempt+1}, retrying...', flush=True)
+        continue
+      result = _parse_gemini_text(response.text)
+      if result is not None:
+        return result
+      print(f'Gemini returned invalid JSON on {model} attempt {attempt+1}, retrying...', flush=True)
+    except Exception as e:
+      _handle_gemini_error(e, model, attempt)
+  return None
+
+
+def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str:
+  """
+  Generate a JSON summary of student performance from key-function averages.
+
+  Args:
+    data: Mapping of key-function IDs to average scores.
+    gemini: Authenticated Gemini client used to generate the summary.
+
+  Returns:
+    A JSON-formatted string suitable for storage in PostgreSQL ``jsonb``.
+  """
+  query = _build_report_query('\n'.join(f'{k}: {v}' for k, v in data.items()))
+  config = genai_types.GenerateContentConfig(response_mime_type='application/json')
+
+  _t0 = time.time()
+  for model in _GEMINI_MODELS:
     print(f'Trying Gemini model: {model}', flush=True)
-    try_next_model = False
-    for attempt in range(3):
-      try:
-        _attempt_start = time.time()
-        response: GenerateContentResponse = gemini.models.generate_content(
-          model=model,
-          contents=query,
-          config=genai_types.GenerateContentConfig(
-            response_mime_type='application/json',
-          ),
-        )
-        print(f'[TIMING] Gemini API call ({model}, attempt {attempt+1}): {time.time()-_attempt_start:.3f}s', flush=True)
-        if response.text:
-          text = response.text.strip()
-          # Strip any residual markdown fences
-          if text.startswith('```'):
-            text = re.sub(r'^```[a-zA-Z]*\n?', '', text)
-            text = re.sub(r'\n?```$', '', text.strip()).strip()
-          # Extract outermost JSON object even if there is surrounding text
-          match = re.search(r'\{.*\}', text, re.DOTALL)
-          if match:
-            text = match.group(0)
-          try:
-            parsed = json.loads(text)
-            print(f'[TIMING] Gemini total ({model}, attempt {attempt+1} success): {time.time()-_gemini_start:.3f}s', flush=True)
-            return json.dumps(parsed)
-          except json.JSONDecodeError:
-            last_error = f'invalid JSON from {model} attempt {attempt+1}'
-            print(f'Gemini returned invalid JSON on {model} attempt {attempt+1}, retrying...', flush=True)
-            continue
-        else:
-          last_error = f'empty response from {model} attempt {attempt+1}'
-          print(f'Gemini returned empty response on {model} attempt {attempt+1}, retrying...', flush=True)
-          continue
-      except Exception as e:
-        err = str(e)
-        if '429' in err or 'RESOURCE_EXHAUSTED' in err:
-          wait = 15 * (attempt + 1)
-          last_error = f'rate limited on {model}'
-          print(f'Gemini rate limited ({model}), retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
-          time.sleep(wait)
-          if attempt == 2:
-            try_next_model = True
-        elif '503' in err or 'UNAVAILABLE' in err or 'high demand' in err.lower():
-          wait = 3 * (attempt + 1)
-          last_error = f'503 unavailable on {model}'
-          print(f'Gemini unavailable (503) on {model}, retrying in {wait}s... (attempt {attempt+1}/3)', flush=True)
-          time.sleep(wait)
-          if attempt == 2:
-            try_next_model = True
-        else:
-          raise
-    if try_next_model:
-      print(f'{model} failed after 3 attempts, falling back to next model...', flush=True)
-      continue
-    break
+    result = _try_gemini_model(gemini, model, query, config)
+    if result is not None:
+      print(f'[TIMING] Gemini total ({model} success): {time.time()-_t0:.3f}s', flush=True)
+      return result
+    print(f'{model} failed after 3 attempts, falling back to next model...', flush=True)
 
-  print(f'[TIMING] Gemini total (all attempts failed): {time.time()-_gemini_start:.3f}s', flush=True)
-  return f'Error generating feedback: {last_error}.'
+  print(f'[TIMING] Gemini total (all attempts failed): {time.time()-_t0:.3f}s', flush=True)
+  return 'Error generating feedback: all models failed.'
 
 
 # ==================================================================================================

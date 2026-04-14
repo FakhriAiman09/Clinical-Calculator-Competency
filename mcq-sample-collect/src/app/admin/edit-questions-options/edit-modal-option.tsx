@@ -1,6 +1,6 @@
 'use client';
 
-import { cache, useEffect, useId, useState, type Dispatch, type SetStateAction } from 'react';
+import { cache, useCallback, useEffect, useId, useState, type Dispatch, type SetStateAction } from 'react';
 import React from 'react';
 
 import { getHistoricalMCQs } from '@/utils/get-epa-data';
@@ -57,45 +57,45 @@ export default function EditOptionModal({
   }, [accordionID, optionKey]);
 
   // on change of selected option, get historical change data
-  useEffect(() => {
-    const fetchHistory = async () => {
-      setLoadingHistory(true);
-      setOptionHistory(null);
+  const fetchHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    setOptionHistory(null);
 
-      // If no option is selected, exit
-      if (!optionKey.get || !mcqsInformation.get) {
-        setLoadingHistory(false);
-        return;
-      }
-
-      // Fetch historical changes for the selected option
-      let history = mcqsInformation.get.map((mcqsMetaRow) => ({
-        updated_at: new Date(mcqsMetaRow.updated_at),
-        updated_by: mcqsMetaRow.updated_by ?? 'unknown updater',
-        text: (mcqsMetaRow.data as MCQ[]).find((mcq) => mcq.options[optionKey.get!])!.options[optionKey.get!],
-      })) satisfies changeHistoryInstance[];
-
-      // Fetch updater for each history instance
-      const updaterIDs = Array.from(new Set(history?.map((h) => h.updated_by)));
-      const updaterDetails = await Promise.all(
-        updaterIDs?.map(async (id) => await getCachedUpdaterDetails(id ?? '')) ?? []
-      );
-
-      history = history.map((h) => {
-        const updater = updaterDetails?.find((u) => u?.id === h.updated_by);
-        return {
-          ...h,
-          updater_display_name: updater?.display_name,
-          updater_email: updater?.email,
-        } satisfies changeHistoryInstance;
-      });
-
-      setOptionHistory(history);
+    // If no option is selected, exit
+    if (!optionKey.get || !mcqsInformation.get) {
       setLoadingHistory(false);
-    };
+      return;
+    }
 
-    fetchHistory();
+    // Fetch historical changes for the selected option
+    let history = mcqsInformation.get.map((mcqsMetaRow) => ({
+      updated_at: new Date(mcqsMetaRow.updated_at),
+      updated_by: mcqsMetaRow.updated_by ?? 'unknown updater',
+      text: (mcqsMetaRow.data as MCQ[]).find((mcq) => mcq.options[optionKey.get!])!.options[optionKey.get!],
+    })) satisfies changeHistoryInstance[];
+
+    // Fetch updater for each history instance
+    const updaterIDs = Array.from(new Set(history?.map((h) => h.updated_by)));
+    const updaterDetails = await Promise.all(
+      updaterIDs?.map(async (id) => await getCachedUpdaterDetails(id ?? '')) ?? []
+    );
+
+    history = history.map((h) => {
+      const updater = updaterDetails?.find((u) => u?.id === h.updated_by);
+      return {
+        ...h,
+        updater_display_name: updater?.display_name,
+        updater_email: updater?.email,
+      } satisfies changeHistoryInstance;
+    });
+
+    setOptionHistory(history);
+    setLoadingHistory(false);
   }, [mcqsInformation.get, optionKey.get]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   const handleSubmit = async () => {
     submitNewOption(optionKey.get!, newOptionText.get!).then(() =>

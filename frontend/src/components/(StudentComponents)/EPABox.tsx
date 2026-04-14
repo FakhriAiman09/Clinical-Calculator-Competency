@@ -108,6 +108,121 @@ function extractRelevantFeedback(
   return null;
 }
 
+// ── fetchData helpers ───────────���───────────────��──────────────────────────
+
+function extractCommentsFromFormRow(
+  formResponse: FormResponsesInner,
+  epaStr: string,
+  responseId: string,
+): CommentEntry[] {
+  const commentBlock = formResponse.response?.response?.[epaStr];
+  if (!commentBlock) return [];
+  const entries: CommentEntry[] = [];
+  for (const kfObj of Object.values(commentBlock)) {
+    if (!kfObj || typeof kfObj !== 'object' || !('text' in kfObj)) continue;
+    const texts = (kfObj as KeyFunctionResponse).text;
+    if (!Array.isArray(texts)) continue;
+    for (const t of texts) {
+      if (typeof t === 'string' && t.trim() !== '') entries.push({ text: t, responseId });
+    }
+  }
+  return entries;
+}
+
+function parseRowsIntoAssessmentsAndComments(
+  resultData: SupabaseRow[] | null,
+  studentId: string,
+  epaId: number,
+  epaStr: string,
+  reportCreatedAt: string,
+): { parsedAssessments: Assessment[]; parsedComments: CommentEntry[] } {
+  const parsedAssessments: Assessment[] = [];
+  const parsedComments: CommentEntry[] = [];
+
+  for (const row of resultData ?? []) {
+    const formResponse = row.form_responses;
+    if (formResponse?.form_requests?.student_id !== studentId) continue;
+    if (new Date(row.created_at) > new Date(reportCreatedAt)) continue;
+
+    const date = row.created_at;
+    const setting = formResponse.form_requests?.clinical_settings || null;
+    const responseId = row.response_id ?? '';
+    let commentExtractedForThisRow = false;
+
+    for (const [kfKey, level] of Object.entries(row.results)) {
+      const [epaKey, kfNum] = kfKey.split('.');
+      if (Number.parseInt(epaKey) !== epaId) continue;
+
+      parsedAssessments.push({ epaId, keyFunctionId: `kf${kfNum}`, devLevel: level as DevLevel, date, setting });
+
+      if (!commentExtractedForThisRow) {
+        commentExtractedForThisRow = true;
+        parsedComments.push(...extractCommentsFromFormRow(formResponse, epaStr, responseId));
+      }
+    }
+  }
+  return { parsedAssessments, parsedComments };
+}
+
+function deduplicateComments(comments: CommentEntry[]): CommentEntry[] {
+  const seen = new Set<string>();
+  return comments.filter((c) => {
+    const key = `${c.responseId}::${c.text}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function extractKfAveragesFromReport(
+  kfAvgData: Record<string, unknown> | null | undefined,
+  epaId: number,
+): { kfs: Record<string, number>; epaKfScores: number[] } {
+  const kfs: Record<string, number> = {};
+  const epaKfScores: number[] = [];
+  if (!kfAvgData) return { kfs, epaKfScores };
+  for (const [kfKey, val] of Object.entries(kfAvgData)) {
+    if (kfKey.startsWith(`${epaId}.`) && typeof val === 'number') {
+      kfs[`kf${kfKey.split('.')[1]}`] = val;
+      epaKfScores.push(val);
+    }
+  }
+  return { kfs, epaKfScores };
+}
+
+function getRawFeedback(llmFeedback: unknown): string | null {
+  const raw = typeof llmFeedback === 'string'
+    ? llmFeedback
+    : llmFeedback ? JSON.stringify(llmFeedback) : null;
+  return raw && raw !== 'Generating...' ? raw : null;
+}
+
+function buildGraphData(
+  parsedAssessments: Assessment[],
+  windowStart: Date,
+  graphUpperBound: Date,
+): { graphData: { date: string; value: number }[]; lifetimeScores: number[] } {
+  const monthlyMap: Record<string, number[]> = {};
+  const lifetimeScores: number[] = [];
+  for (const a of parsedAssessments) {
+    const val = a.devLevel;
+    if (typeof val !== 'number') continue;
+    lifetimeScores.push(val);
+    const aDate = new Date(a.date);
+    if (aDate >= windowStart && aDate <= graphUpperBound) {
+      const key = `${aDate.getFullYear()}-${String(aDate.getMonth() + 1).padStart(2, '0')}-01`;
+      if (!monthlyMap[key]) monthlyMap[key] = [];
+      monthlyMap[key].push(val);
+    }
+  }
+  const graphData = Object.entries(monthlyMap)
+    .map(([date, vals]) => ({ date, value: Math.floor(vals.reduce((a, b) => a + b, 0) / vals.length) }))
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  return { graphData, lifetimeScores };
+}
+
+// ── EPABox ──────────────────────────────────────────────────────────────────
+
 const EPABox: React.FC<EPABoxProps> = ({
   epaId,
   timeRange,
@@ -185,7 +300,6 @@ const EPABox: React.FC<EPABoxProps> = ({
   }, [epaStr]);
 
   const fetchData = useCallback(async () => {
-    // ── 1. Fetch assessments from form_results (live, filtered by student) ──
     const { data: resultData } = await supabase
       .from('form_results')
       .select(
@@ -204,137 +318,36 @@ const EPABox: React.FC<EPABoxProps> = ({
       )
       .returns<SupabaseRow[]>();
 
-    // ── 2. Fetch the specific report by its ID ──
     const { data: targetReport } = await supabase
       .from('student_reports')
       .select('created_at, time_window, report_data, kf_avg_data, llm_feedback')
       .eq('id', reportId)
       .single();
 
-    const parsedAssessments: Assessment[] = [];
-    const parsedComments: CommentEntry[] = [];
-
-    for (const row of resultData ?? []) {
-      const formResponse = row.form_responses;
-      if (formResponse?.form_requests?.student_id !== studentId) continue;
-      // Exclude assessments submitted after the report was generated.
-      if (new Date(row.created_at) > new Date(reportCreatedAt)) continue;
-
-      const date = row.created_at;
-      const setting = formResponse.form_requests?.clinical_settings || null;
-      const responseId = row.response_id ?? '';
-
-      let commentExtractedForThisRow = false;
-
-      for (const [kfKey, level] of Object.entries(row.results)) {
-        const [epaKey, kfNum] = kfKey.split('.');
-        if (Number.parseInt(epaKey) === epaId) {
-          parsedAssessments.push({
-            epaId,
-            keyFunctionId: `kf${kfNum}`,
-            devLevel: level as DevLevel,
-            date,
-            setting,
-          });
-
-          if (!commentExtractedForThisRow) {
-            commentExtractedForThisRow = true;
-            const commentBlock = formResponse.response?.response?.[epaStr];
-            if (commentBlock) {
-              Object.values(commentBlock).forEach((kfObj) => {
-                if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
-                  const texts = (kfObj as KeyFunctionResponse).text;
-                  if (Array.isArray(texts)) {
-                    texts.filter((t) => typeof t === 'string' && t.trim() !== '').forEach((t) => {
-                      parsedComments.push({ text: t, responseId });
-                    });
-                  }
-                }
-              });
-            }
-          }
-        }
-      }
-    }
-
+    const { parsedAssessments, parsedComments } = parseRowsIntoAssessmentsAndComments(
+      resultData, studentId, epaId, epaStr, reportCreatedAt,
+    );
     setAssessments(parsedAssessments);
-    // Deduplicate by text+responseId
-    const seen = new Set<string>();
-    setComments(parsedComments.filter((c) => {
-      const key = `${c.responseId}::${c.text}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }));
+    setComments(deduplicateComments(parsedComments));
 
-    // ── 3. Load stored scores and AI feedback from this specific report ──
     if (targetReport) {
-      const kfs: Record<string, number> = {};
-      const epaKfScores: number[] = [];
-
-      if (targetReport.kf_avg_data) {
-        for (const [kfKey, val] of Object.entries(targetReport.kf_avg_data)) {
-          if (kfKey.startsWith(`${epaId}.`)) {
-            const kfId = `kf${kfKey.split('.')[1]}`;
-            if (typeof val === 'number') {
-              kfs[kfId] = val;
-              epaKfScores.push(val);
-            }
-          }
-        }
-      }
-
+      const { kfs, epaKfScores } = extractKfAveragesFromReport(targetReport.kf_avg_data, epaId);
       setKfAverages(kfs);
       setEpaAvgFromKFs(
         epaKfScores.length > 0 ? Math.floor(epaKfScores.reduce((a, b) => a + b, 0) / epaKfScores.length) : null
       );
-
-      const rawFeedback = typeof targetReport.llm_feedback === 'string'
-        ? targetReport.llm_feedback
-        : targetReport.llm_feedback ? JSON.stringify(targetReport.llm_feedback) : null;
-      // Only save a completed feedback value — never 'Generating...' or null,
-      // as those cannot be meaningfully restored by the Stop button.
-      if (rawFeedback && rawFeedback !== 'Generating...') {
-        rawLlmFeedbackRef.current = rawFeedback;
-      }
+      // Only save a completed feedback value — never 'Generating...' or null.
+      const rawFeedback = getRawFeedback(targetReport.llm_feedback);
+      if (rawFeedback) rawLlmFeedbackRef.current = rawFeedback;
       setLlmFeedback(extractRelevantFeedback(targetReport.llm_feedback, epaId));
     }
 
-    // ── 4. Build the graph using assessments within this report's time window ──
-    // Use the later of reportDate or now so new assessments submitted after
-    // the report was generated still appear on the graph.
+    // Use the later of reportDate or now so new assessments after report generation appear.
     const windowStart = new Date(reportCreatedAt);
     windowStart.setMonth(windowStart.getMonth() - timeRange);
     const graphUpperBound = new Date(Math.max(reportDate.getTime(), Date.now()));
-
-    const monthlyMap: Record<string, number[]> = {};
-    const lifetimeScores: number[] = [];
-
-    for (const a of parsedAssessments) {
-      const val = a.devLevel;
-      if (typeof val === 'number') {
-        lifetimeScores.push(val);
-
-        const aDate = new Date(a.date);
-        if (aDate >= windowStart && aDate <= graphUpperBound) {
-          const year = aDate.getFullYear();
-          const month = String(aDate.getMonth() + 1).padStart(2, '0');
-          const key = `${year}-${month}-01`;
-          if (!monthlyMap[key]) monthlyMap[key] = [];
-          monthlyMap[key].push(val);
-        }
-      }
-    }
-
-    const graphData = Object.entries(monthlyMap)
-      .map(([date, vals]) => ({
-        date,
-        value: Math.floor(vals.reduce((a, b) => a + b, 0) / vals.length),
-      }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
+    const { graphData, lifetimeScores } = buildGraphData(parsedAssessments, windowStart, graphUpperBound);
     setLineGraphData(graphData);
-
     if (lifetimeScores.length > 0) {
       setLifetimeAverage(Math.floor(lifetimeScores.reduce((a, b) => a + b, 0) / lifetimeScores.length));
     }
@@ -349,38 +362,34 @@ const EPABox: React.FC<EPABoxProps> = ({
   }, [fetchData]);
 
   // Poll for llm_feedback every 5s until it arrives — scoped to this specific report.
+  const pollForLlmFeedback = useCallback(async () => {
+    if (stoppedRef.current) return;
+
+    const { data } = await supabase
+      .from('student_reports')
+      .select('llm_feedback')
+      .eq('id', reportId)
+      .single();
+
+    if (stoppedRef.current) return;
+    if (!data?.llm_feedback) return;
+    if (data.llm_feedback === 'Generating...') return;
+
+    const extracted = extractRelevantFeedback(data.llm_feedback, epaId);
+    if (extracted) {
+      const raw = getRawFeedback(data.llm_feedback) ?? JSON.stringify(data.llm_feedback);
+      if (raw && raw !== 'Generating...') rawLlmFeedbackRef.current = raw;
+      setLlmFeedback(extracted);
+    }
+  }, [reportId, epaId]);
+
   useEffect(() => {
     if (!expanded) return;
     if (llmFeedback && llmFeedback !== 'Generating...') return;
 
-    const poll = async () => {
-      if (stoppedRef.current) return;
-
-      const { data } = await supabase
-        .from('student_reports')
-        .select('llm_feedback')
-        .eq('id', reportId)
-        .single();
-
-      if (stoppedRef.current) return;
-      if (!data?.llm_feedback) return;
-      if (data.llm_feedback === 'Generating...') return;
-
-      const extracted = extractRelevantFeedback(data.llm_feedback, epaId);
-      if (extracted) {
-        const raw = typeof data.llm_feedback === 'string'
-          ? data.llm_feedback
-          : JSON.stringify(data.llm_feedback);
-        if (raw && raw !== 'Generating...') {
-          rawLlmFeedbackRef.current = raw;
-        }
-        setLlmFeedback(extracted);
-      }
-    };
-
-    const interval = setInterval(poll, 5000);
+    const interval = setInterval(pollForLlmFeedback, 5000);
     return () => clearInterval(interval);
-  }, [expanded, llmFeedback, reportId, epaId]);
+  }, [expanded, llmFeedback, pollForLlmFeedback]);
 
   // Trigger Gemini to regenerate AI feedback using the frozen kf_avg_data stored
   // at report creation time — today's new assessments are NOT included.

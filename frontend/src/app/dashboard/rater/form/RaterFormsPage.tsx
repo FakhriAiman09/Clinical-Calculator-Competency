@@ -405,6 +405,151 @@ function ProfessionalismSection({
   );
 }
 
+// ─── Module-level helpers (keep complexity of nested functions low) ──────────
+
+function buildKfToQuestionsMap(kfData: KeyFunction[]): Record<string, KeyFunction[]> {
+  const map: Record<string, KeyFunction[]> = {};
+  for (const kf of kfData) {
+    const key = `${kf.epa}.${kf.kf}`;
+    if (!map[key]) map[key] = [];
+    map[key].push(kf);
+  }
+  return map;
+}
+
+function applyKfDataToQuestion(
+  oneKfData: Record<string, unknown>,
+  idx: number,
+  questionId: string,
+  epaNum: number,
+  rebuiltResponses: Responses,
+  rebuiltTextInputs: Record<number, Record<string, string>>,
+): void {
+  for (const key of Object.keys(oneKfData)) {
+    if (key !== 'text' && typeof oneKfData[key] === 'boolean') {
+      rebuiltResponses[epaNum][questionId][key] = oneKfData[key] as boolean;
+    }
+  }
+  const texts = oneKfData.text;
+  if (Array.isArray(texts) && texts[idx]) {
+    rebuiltTextInputs[epaNum][questionId] = texts[idx] as string || '';
+    rebuiltResponses[epaNum][questionId].text = texts[idx] as string || '';
+  }
+}
+
+function rebuildResponsesFromAggregated(
+  aggregatedResponses: Record<string, Record<string, Record<string, unknown>>>,
+  kfToQuestions: Record<string, KeyFunction[]>,
+): { rebuiltResponses: Responses; rebuiltTextInputs: Record<number, Record<string, string>> } {
+  const rebuiltResponses: Responses = {};
+  const rebuiltTextInputs: Record<number, Record<string, string>> = {};
+
+  for (const epaKey of Object.keys(aggregatedResponses)) {
+    const epaNum = parseInt(epaKey, 10);
+    const epaData = aggregatedResponses[epaKey];
+    rebuiltResponses[epaNum] = rebuiltResponses[epaNum] ?? {};
+    rebuiltTextInputs[epaNum] = rebuiltTextInputs[epaNum] ?? {};
+
+    for (const kfKey of Object.keys(epaData)) {
+      const oneKfData = epaData[kfKey] as Record<string, unknown>;
+      const questions = kfToQuestions[`${epaNum}.${kfKey}`] ?? [];
+
+      for (const [idx, question] of questions.entries()) {
+        const { questionId } = question;
+        rebuiltResponses[epaNum][questionId] = rebuiltResponses[epaNum][questionId] ?? ({ text: '' } as any);
+        applyKfDataToQuestion(oneKfData, idx, questionId, epaNum, rebuiltResponses, rebuiltTextInputs);
+      }
+    }
+  }
+  return { rebuiltResponses, rebuiltTextInputs };
+}
+
+function mergeTextInputsIntoResponses(
+  responses: Responses,
+  textInputs: Record<number, Record<string, string>>,
+): Responses {
+  const merged: Responses = { ...responses };
+  for (const epaKey of Object.keys(textInputs)) {
+    const epaNum = parseInt(epaKey, 10);
+    if (!merged[epaNum]) merged[epaNum] = {} as any;
+    for (const questionId of Object.keys(textInputs[epaNum])) {
+      if (!merged[epaNum][questionId]) merged[epaNum][questionId] = { text: '' } as any;
+      merged[epaNum][questionId].text = textInputs[epaNum][questionId];
+    }
+  }
+  return merged;
+}
+
+function buildQuestionMapping(kfData: KeyFunction[]): Record<string, { kf: string; epa: number }> {
+  const mapping: Record<string, { kf: string; epa: number }> = {};
+  for (const q of kfData) mapping[q.questionId] = { kf: q.kf, epa: q.epa };
+  return mapping;
+}
+
+function aggregateByKF(
+  mergedResponses: Responses,
+  questionMapping: Record<string, { kf: string; epa: number }>,
+): AggregatedResponses {
+  const aggregated: AggregatedResponses = {};
+  for (const epaKey of Object.keys(mergedResponses)) {
+    const epaNum = parseInt(epaKey, 10);
+    aggregated[epaNum] = aggregated[epaNum] ?? {};
+    for (const questionId of Object.keys(mergedResponses[epaNum])) {
+      const mapping = questionMapping[questionId];
+      if (!mapping) continue;
+      const { kf: kfKey } = mapping;
+      aggregated[epaNum][kfKey] = aggregated[epaNum][kfKey] ?? { text: [] };
+      const qResponse = mergedResponses[epaNum][questionId];
+      for (const key of Object.keys(qResponse)) {
+        if (key === 'text') continue;
+        aggregated[epaNum][kfKey][key] =
+          (aggregated[epaNum][kfKey][key] as boolean | undefined) ?? qResponse[key];
+      }
+      aggregated[epaNum][kfKey].text.push(qResponse.text);
+    }
+    for (const kfKey of Object.keys(aggregated[epaNum])) {
+      aggregated[epaNum][kfKey].text.sort(compareNumericDotStrings);
+    }
+  }
+  return aggregated;
+}
+
+function sortAggregatedByEpaAndKf(aggregated: AggregatedResponses): AggregatedResponses {
+  const sorted: AggregatedResponses = {};
+  Object.keys(aggregated)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .forEach((epaNum) => {
+      sorted[epaNum] = {};
+      for (const kfKey of Object.keys(aggregated[epaNum]).sort(compareNumericDotStrings)) {
+        sorted[epaNum][kfKey] = aggregated[epaNum][kfKey];
+      }
+    });
+  return sorted;
+}
+
+async function callAISummaryAPI(
+  body: Record<string, unknown>,
+): Promise<{ summary: string }> {
+  const res = await fetch('/api/ai/summary', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const friendlyMsg =
+      data?.message ||
+      (res.status === 429
+        ? 'Daily AI limit reached. Resets at midnight UTC. See Settings to learn more.'
+        : 'Summary failed. Please try again.');
+    throw new Error(friendlyMsg);
+  }
+  return data as { summary: string };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function RaterFormsPage() {
   useRequireRole(['rater', 'dev']);
 
@@ -610,28 +755,7 @@ export default function RaterFormsPage() {
             .map(([, label]) => label)
         : [];
 
-      const res = await fetch('/api/ai/summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          model: aiModel,
-          kf,
-          selectedOptions,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        const friendlyMsg =
-          data?.message ||
-          (res.status === 429
-            ? 'Daily AI limit reached. Resets at midnight UTC. See Settings to learn more.'
-            : 'Summary failed. Please try again.');
-        throw new Error(friendlyMsg);
-      }
-
+      const data = await callAISummaryAPI({ text, model: aiModel, kf, selectedOptions });
       await incrementUsage();
       setSummaryByField((prev) => ({ ...prev, [key]: (data.summary ?? '').trim() }));
     } catch (err: any) {
@@ -660,23 +784,7 @@ export default function RaterFormsPage() {
     setSummaryErrorByField((prev) => ({ ...prev, [key]: '' }));
 
     try {
-      const res = await fetch('/api/ai/summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, model: aiModel, kf: 'professionalism' }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        const friendlyMsg =
-          data?.message ||
-          (res.status === 429
-            ? 'Daily AI limit reached. Resets at midnight UTC. See Settings to learn more.'
-            : 'Summary failed. Please try again.');
-        throw new Error(friendlyMsg);
-      }
-
+      const data = await callAISummaryAPI({ text, model: aiModel, kf: 'professionalism' });
       await incrementUsage();
       setSummaryByField((prev) => ({ ...prev, [key]: (data.summary ?? '').trim() }));
     } catch (err: any) {
@@ -874,48 +982,11 @@ export default function RaterFormsPage() {
         const responseData = existingResponse.response as any;
         const aggregatedResponses = responseData?.response || {};
 
-        const rebuiltResponses: Responses = {};
-        const rebuiltTextInputs: { [epa: number]: { [questionId: string]: string } } = {};
-
-        const kfToQuestions: { [key: string]: KeyFunction[] } = {};
-        kfData.forEach((kf) => {
-          const key = `${kf.epa}.${kf.kf}`;
-          if (!kfToQuestions[key]) kfToQuestions[key] = [];
-          kfToQuestions[key].push(kf);
-        });
-
-        for (const epaKey of Object.keys(aggregatedResponses)) {
-          const epaNum = parseInt(epaKey, 10);
-          const epaData = aggregatedResponses[epaKey];
-
-          if (!rebuiltResponses[epaNum]) rebuiltResponses[epaNum] = {};
-          if (!rebuiltTextInputs[epaNum]) rebuiltTextInputs[epaNum] = {};
-
-          for (const kfKey of Object.keys(epaData)) {
-            const oneKfData = epaData[kfKey];
-            const fullKey = `${epaNum}.${kfKey}`;
-            const questions = kfToQuestions[fullKey] || [];
-
-            for (const [idx, question] of questions.entries()) {
-              const questionId = question.questionId;
-
-              if (!rebuiltResponses[epaNum][questionId]) {
-                rebuiltResponses[epaNum][questionId] = { text: '' } as any;
-              }
-
-              for (const key of Object.keys(oneKfData)) {
-                if (key !== 'text' && typeof oneKfData[key] === 'boolean') {
-                  rebuiltResponses[epaNum][questionId][key] = oneKfData[key];
-                }
-              }
-
-              if (Array.isArray(oneKfData.text) && oneKfData.text[idx]) {
-                rebuiltTextInputs[epaNum][questionId] = oneKfData.text[idx] || '';
-                rebuiltResponses[epaNum][questionId].text = oneKfData.text[idx] || '';
-              }
-            }
-          }
-        }
+        const kfToQuestions = buildKfToQuestionsMap(kfData);
+        const { rebuiltResponses, rebuiltTextInputs } = rebuildResponsesFromAggregated(
+          aggregatedResponses,
+          kfToQuestions,
+        );
 
         setResponses(rebuiltResponses);
         setTextInputs(rebuiltTextInputs);
@@ -1145,57 +1216,11 @@ export default function RaterFormsPage() {
 
     setSubmittingFinal(true);
 
-    const mergedResponses: Responses = { ...responses };
-    Object.keys(textInputs).forEach((epaKey) => {
-      const epaNum = parseInt(epaKey, 10);
-      if (!mergedResponses[epaNum]) mergedResponses[epaNum] = {} as any;
-
-      Object.keys(textInputs[epaNum]).forEach((questionId) => {
-        if (!mergedResponses[epaNum][questionId]) mergedResponses[epaNum][questionId] = { text: '' } as any;
-        mergedResponses[epaNum][questionId].text = textInputs[epaNum][questionId];
-      });
-    });
-
-    const questionMapping: { [questionId: string]: { kf: string; epa: number } } = {};
-    kfData.forEach((q) => (questionMapping[q.questionId] = { kf: q.kf, epa: q.epa }));
-
-    const aggregatedResponses: AggregatedResponses = {};
-    for (const epaKey of Object.keys(mergedResponses)) {
-      const epaNum = parseInt(epaKey, 10);
-      if (!aggregatedResponses[epaNum]) aggregatedResponses[epaNum] = {};
-
-      for (const questionId of Object.keys(mergedResponses[epaNum])) {
-        const mapping = questionMapping[questionId];
-        if (!mapping) continue;
-
-        const kfKey = mapping.kf;
-        if (!aggregatedResponses[epaNum][kfKey]) aggregatedResponses[epaNum][kfKey] = { text: [] };
-
-        const qResponse = mergedResponses[epaNum][questionId];
-        for (const key of Object.keys(qResponse)) {
-          if (key === 'text') continue;
-          aggregatedResponses[epaNum][kfKey][key] =
-            (aggregatedResponses[epaNum][kfKey][key] as boolean | undefined) ?? qResponse[key];
-        }
-
-        aggregatedResponses[epaNum][kfKey].text.push(qResponse.text);
-      }
-
-      for (const kfKey of Object.keys(aggregatedResponses[epaNum])) {
-        aggregatedResponses[epaNum][kfKey].text.sort(compareNumericDotStrings);
-      }
-    }
-
-    const sortedAggregatedResponses: AggregatedResponses = {};
-    Object.keys(aggregatedResponses)
-      .map((num) => parseInt(num, 10))
-      .sort((a, b) => a - b)
-      .forEach((epaNum) => {
-        const kfGroup = aggregatedResponses[epaNum];
-        const sortedKfKeys = Object.keys(kfGroup).sort(compareNumericDotStrings);
-        sortedAggregatedResponses[epaNum] = {};
-        sortedKfKeys.forEach((kfKey) => (sortedAggregatedResponses[epaNum][kfKey] = kfGroup[kfKey]));
-      });
+    const mergedResponses = mergeTextInputsIntoResponses(responses, textInputs);
+    const questionMapping = buildQuestionMapping(kfData);
+    const sortedAggregatedResponses = sortAggregatedByEpaAndKf(
+      aggregateByKF(mergedResponses, questionMapping),
+    );
 
     const localData = cachedJSON
       ? { ...cachedJSON }

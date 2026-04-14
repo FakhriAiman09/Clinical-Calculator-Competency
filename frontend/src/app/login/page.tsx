@@ -71,6 +71,21 @@ function LoginForm() {
     }
   }, [router]);
 
+  const handleSuccessfulAuth = async (isSignup: boolean) => {
+    await supabase.auth.getSession();
+    if (isSignup) {
+      router.push('/postsignup/verify');
+    } else {
+      const redirectTo = searchParams?.get('redirectTo');
+      if (redirectTo) {
+        localStorage.setItem('redirectTo', redirectTo);
+      } else {
+        localStorage.setItem('redirectToDashboard', 'true');
+      }
+      window.location.reload();
+    }
+  };
+
   const validate = async (
     e: SyntheticEvent,
     authFunction: (formData: FormData) => Promise<{ alertColor: string; error: string }>,
@@ -107,18 +122,7 @@ function LoginForm() {
       setError(error);
 
       if (!error) {
-        await supabase.auth.getSession();
-        if (isSignup) {
-          router.push('/postsignup/verify');
-        } else {
-          const redirectTo = searchParams?.get('redirectTo');
-          if (redirectTo) {
-            localStorage.setItem('redirectTo', redirectTo);
-          } else {
-            localStorage.setItem('redirectToDashboard', 'true');
-          }
-          window.location.reload();
-        }
+        await handleSuccessfulAuth(isSignup);
       }
     }
   };

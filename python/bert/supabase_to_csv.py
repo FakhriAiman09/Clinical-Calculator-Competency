@@ -10,6 +10,29 @@ import pandas as pd
 from utils import querySupabase
 
 
+def _resolve_dataset_name(dataset_name: str | None, folder_path: str, force: bool, verbose: bool) -> str:
+  if dataset_name is None:
+    yymmdd = pd.Timestamp.now().strftime('%y%m%d')
+    dataset_name = f'{yymmdd}-full'
+
+  csv_path = os.path.join(folder_path, dataset_name) + '.csv'
+  if not os.path.exists(csv_path):
+    return dataset_name
+
+  if not force:
+    suffix = 1
+    new_name = f"{dataset_name}_{suffix}"
+    while os.path.exists(os.path.join(folder_path, new_name) + '.csv'):
+      suffix += 1
+      new_name = f"{dataset_name}_{suffix}"
+    return new_name
+
+  if verbose:
+    print(f'Removing existing file {csv_path}...')
+  os.remove(csv_path)
+  return dataset_name
+
+
 def main(args: argparse.Namespace) -> None:
   '''
   Convert Supabase training data to a CSV.
@@ -20,28 +43,10 @@ def main(args: argparse.Namespace) -> None:
   if not os.path.exists(folder_path) and not args.dry_run:
     os.makedirs(folder_path)
 
-  # Get arguments
   force = args.force
   verbose = args.verbose
 
-  dataset_name = args.ds_name
-  if dataset_name is None:
-    yymmdd = pd.Timestamp.now().strftime('%y%m%d')
-    dataset_name = f'{yymmdd}-full'
-
-  # Handle if dataset already exists
-  if os.path.exists(os.path.join(folder_path, dataset_name) + '.csv'):
-    if not force:
-      suffix = 1
-      new_dataset_name = f"{dataset_name}_{suffix}"
-      while os.path.exists(os.path.join(folder_path, new_dataset_name) + '.csv'):
-        suffix += 1
-        new_dataset_name = f"{dataset_name}_{suffix}"
-      dataset_name = new_dataset_name
-    else:
-      if verbose:
-        print(f'Removing existing file {os.path.join(folder_path, dataset_name)}...')
-      os.remove(os.path.join(folder_path, dataset_name) + '.csv')
+  dataset_name = _resolve_dataset_name(args.ds_name, folder_path, force, verbose)
 
   if verbose:
     print(f'Creating dataset {dataset_name}...')

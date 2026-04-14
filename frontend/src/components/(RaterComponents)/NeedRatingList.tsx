@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FaSortUp, FaSortDown } from 'react-icons/fa';
 import { createClient } from '@/utils/supabase/client';
 import { useUser } from '@/context/UserContext';
@@ -30,47 +30,46 @@ const RaterDashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
+  const fetchFormRequests = useCallback(async () => {
     if (!user) return;
+    setLoading(true);
 
-    const fetchFormRequests = async () => {
-      setLoading(true);
+    const { data: formRequests, error: formError } = await supabase
+      .from('form_requests')
+      .select('*')
+      .eq('completed_by', user.id)
+      .eq('active_status', true); // Only fetch active requests
 
-      const { data: formRequests, error: formError } = await supabase
-        .from('form_requests')
-        .select('*')
-        .eq('completed_by', user.id)
-        .eq('active_status', true); // Only fetch active requests
-
-      if (formError) {
-        console.error('Error fetching form requests:', formError.message);
-        setLoading(false);
-        return;
-      }
-
-      const { data: users, error: userError } = await supabase.rpc('fetch_users');
-
-      if (userError) {
-        console.error('Error fetching users:', userError.message);
-        setLoading(false);
-        return;
-      }
-
-      const requests = (formRequests || []).map((request) => {
-        const student = users.find((u: { user_id: string }) => u.user_id === request.student_id);
-        return {
-          ...request,
-          display_name: student?.display_name || 'Unknown',
-          email: student?.email,
-        };
-      });
-
-      setFormRequests(requests);
+    if (formError) {
+      console.error('Error fetching form requests:', formError.message);
       setLoading(false);
-    };
+      return;
+    }
 
-    fetchFormRequests();
+    const { data: users, error: userError } = await supabase.rpc('fetch_users');
+
+    if (userError) {
+      console.error('Error fetching users:', userError.message);
+      setLoading(false);
+      return;
+    }
+
+    const requests = (formRequests || []).map((request) => {
+      const student = users.find((u: { user_id: string }) => u.user_id === request.student_id);
+      return {
+        ...request,
+        display_name: student?.display_name || 'Unknown',
+        email: student?.email,
+      };
+    });
+
+    setFormRequests(requests);
+    setLoading(false);
   }, [user]);
+
+  useEffect(() => {
+    fetchFormRequests();
+  }, [fetchFormRequests]);
 
   const toggleSortOrder = () => {
     const newSortOrder = sortOrder === 'asc' ? 'desc' : 'asc';

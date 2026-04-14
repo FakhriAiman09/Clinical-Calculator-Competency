@@ -173,6 +173,47 @@ def equalizeClasses(
   return df.groupby(level_col_label).apply(lambda x: x.sample(min_rows, random_state=42))
 
 
+def _create_keras_dirs(
+    destination: str,
+    classes,
+    class_names: list[str],
+    verbose: bool,
+    dry_run: bool,
+    force: bool,
+) -> None:
+  if dry_run:
+    if verbose:
+      print(f'Would create folder {destination}...')
+    return
+  if verbose:
+    print(f'Creating folder {destination}...')
+  os.makedirs(destination)
+  for c in classes:
+    os.makedirs(os.path.join(destination, 'train', class_names[c]), exist_ok=force)
+    os.makedirs(os.path.join(destination, 'validate', class_names[c]), exist_ok=force)
+    os.makedirs(os.path.join(destination, 'test', class_names[c]), exist_ok=force)
+
+
+def _write_class_to_keras(
+    class_df,
+    split: str,
+    class_name: str,
+    destination: str,
+    text_col_label: str,
+    verbose: bool,
+    dry_run: bool,
+) -> None:
+  if dry_run:
+    if verbose:
+      print(f'Would write {len(class_df)} {split} samples for class {class_name}')
+    return
+  if verbose:
+    print(f'Writing {len(class_df)} {split} samples for class {class_name}')
+  for i, row in class_df.iterrows():
+    with open(os.path.join(destination, split, class_name, f'{i}.txt'), 'w') as f:
+      f.write(str(row[text_col_label]))
+
+
 def exportKerasFolder(
     train_df: pd.DataFrame,
     val_df: pd.DataFrame,
@@ -253,17 +294,7 @@ def exportKerasFolder(
   #     raise ValueError(
   #         f'Destination folder {destination} already exists. Use --force to overwrite.')
 
-  if not dry_run:
-    if verbose:
-      print(f'Creating folder {destination}...')
-    os.makedirs(destination)
-    for c in classes:
-      os.makedirs(os.path.join(destination, 'train', class_names[c]), exist_ok=force)
-      os.makedirs(os.path.join(destination, 'validate', class_names[c]), exist_ok=force)
-      os.makedirs(os.path.join(destination, 'test', class_names[c]), exist_ok=force)
-  else:
-    if verbose:
-      print(f'Would create folder {destination}...')
+  _create_keras_dirs(destination, classes, class_names, verbose, dry_run, force)
 
   if verbose:
     print(f'Exporting {len(train_df)} training, {len(val_df)} validation, and {len(test_df)} '
@@ -272,15 +303,7 @@ def exportKerasFolder(
   for df, split in [(train_df, 'train'), (val_df, 'validate'), (test_df, 'test')]:
     for c in classes:
       class_df = df[df[level_col_label] == c]
-      if dry_run:
-        if verbose:
-          print(f'Would write {len(class_df)} {split} samples for class {class_names[c]}')
-      else:
-        if verbose:
-          print(f'Writing {len(class_df)} {split} samples for class {class_names[c]}')
-        for i, row in class_df.iterrows():
-          with open(os.path.join(destination, split, class_names[c], f'{i}.txt'), 'w') as f:
-            f.write(str(row[text_col_label]))
+      _write_class_to_keras(class_df, split, class_names[c], destination, text_col_label, verbose, dry_run)
 
 
 def exportDfPickle(

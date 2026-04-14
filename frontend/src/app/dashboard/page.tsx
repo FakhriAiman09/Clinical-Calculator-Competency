@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useUser } from '@/context/UserContext';
 import { createClient } from '@/utils/supabase/client';
 import Markdown from '@uiw/react-markdown-preview';
@@ -71,12 +71,14 @@ const Dashboard = () => {
     sessionStorage.setItem('dismissedBannerIds', JSON.stringify(dismissedIds));
   }, [dismissedIds]);
 
+  const applyDismiss = useCallback((id: string) => {
+    setDismissedIds((prev) => [...prev, id]);
+    setFadingIds((prev) => prev.filter((f) => f !== id));
+  }, []);
+
   const handleDismiss = (id: string) => {
     setFadingIds((prev) => [...prev, id]);
-    setTimeout(() => {
-      setDismissedIds((prev) => [...prev, id]);
-      setFadingIds((prev) => prev.filter((f) => f !== id));
-    }, 300); // match Bootstrap fade animation duration
+    setTimeout(() => applyDismiss(id), 300); // match Bootstrap fade animation duration
   };
 
   // Calculate whether the display name has been set (ignoring any whitespace)

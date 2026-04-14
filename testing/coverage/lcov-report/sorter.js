@@ -60,9 +60,9 @@ var addSorting = (function() {
         for (i = 0; i < colNodes.length; i += 1) {
             colNode = colNodes[i];
             col = {
-                key: colNode.getAttribute('data-col'),
-                sortable: !colNode.getAttribute('data-nosort'),
-                type: colNode.getAttribute('data-type') || 'string'
+                key: colNode.dataset.col,
+                sortable: !colNode.dataset.nosort,
+                type: colNode.dataset.type || 'string'
             };
             cols.push(col);
             if (col.sortable) {
@@ -85,7 +85,7 @@ var addSorting = (function() {
         for (i = 0; i < tableCols.length; i += 1) {
             colNode = tableCols[i];
             col = cols[i];
-            val = colNode.getAttribute('data-value');
+            val = colNode.dataset.value;
             if (col.type === 'number') {
                 val = Number(val);
             }

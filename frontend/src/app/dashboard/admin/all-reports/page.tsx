@@ -286,6 +286,35 @@ export function reasonLabel(r: FaultReason) {
   }
 }
 
+function collectCommentsPerEpa(
+  resultData: SupabaseRow[] | null,
+  selectedStudentId: string,
+  reportCreatedAt: Date,
+): Record<number, string[]> {
+  const perEPAComments: Record<number, string[]> = {};
+  for (const epa of REPORT_EPAS) perEPAComments[epa] = [];
+  for (const row of resultData ?? []) {
+    if (new Date(row.created_at) > reportCreatedAt) continue;
+    const fr = row.form_responses;
+    if (fr?.form_requests?.student_id !== selectedStudentId) continue;
+    const responseRoot = fr.response?.response;
+    if (!responseRoot) continue;
+    for (const epaId of REPORT_EPAS) {
+      const commentBlock = responseRoot[String(epaId)];
+      if (!commentBlock) continue;
+      Object.values(commentBlock).forEach((kfObj) => {
+        if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
+          const texts = (kfObj as KeyFunctionResponse).text;
+          if (Array.isArray(texts)) {
+            perEPAComments[epaId].push(...texts.filter((t) => typeof t === 'string' && t.trim() !== ''));
+          }
+        }
+      });
+    }
+  }
+  return perEPAComments;
+}
+
 export default function AdminAllReportsPage() {
   useRequireRole(['admin', 'dev']);
 
@@ -570,6 +599,16 @@ export default function AdminAllReportsPage() {
     }
   }, [selectedStudent, selectedReport, editingEPA, selectedFormId, fetchComments, fetchFormRequestData]);
 
+  const handleResultChange = useCallback((key: string, newVal: number) => {
+    setFormResults((prev) =>
+      prev.map((r) =>
+        r.response_id === selectedFormId
+          ? { ...r, results: { ...r.results, [key]: newVal } }
+          : r
+      )
+    );
+  }, [selectedFormId]);
+
   const handleGenerate = async () => {
     if (!selectedStudent) return;
     await supabase.rpc('generate_report', {
@@ -839,32 +878,7 @@ export default function AdminAllReportsPage() {
       const reportCreatedAt = new Date(selectedReport.created_at);
 
       // 3) Collect comments per EPA (scoped to report date)
-      const perEPAComments: Record<number, string[]> = {};
-      REPORT_EPAS.forEach((epa) => (perEPAComments[epa] = []));
-
-      for (const row of resultData ?? []) {
-        if (new Date(row.created_at) > reportCreatedAt) continue;
-        const fr = row.form_responses;
-        if (fr?.form_requests?.student_id !== selectedStudent.id) continue;
-
-        const responseRoot = fr.response?.response;
-        if (!responseRoot) continue;
-
-        for (const epaId of REPORT_EPAS) {
-          const epaKey = String(epaId);
-          const commentBlock = responseRoot[epaKey];
-          if (!commentBlock) continue;
-
-          Object.values(commentBlock).forEach((kfObj) => {
-            if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
-              const texts = (kfObj as KeyFunctionResponse).text;
-              if (Array.isArray(texts)) {
-                perEPAComments[epaId].push(...texts.filter((t) => typeof t === 'string' && t.trim() !== ''));
-              }
-            }
-          });
-        }
-      }
+      const perEPAComments = collectCommentsPerEpa(resultData, selectedStudent.id, reportCreatedAt);
 
       // 4) Analyze each EPA
       const summaries: Record<number, EPACheckSummary> = {};
@@ -1401,16 +1415,7 @@ export default function AdminAllReportsPage() {
                                   <select
                                     className='form-select'
                                     value={Math.floor(Number(val))}
-                                    onChange={(e) => {
-                                      const newVal = parseInt(e.target.value);
-                                      setFormResults((prev) =>
-                                        prev.map((r) =>
-                                          r.response_id === selectedFormId
-                                            ? { ...r, results: { ...r.results, [key]: newVal } }
-                                            : r
-                                        )
-                                      );
-                                    }}
+                                    onChange={(e) => handleResultChange(key, parseInt(e.target.value))}
                                   >
                                     {[0, 1, 2, 3].map((n) => (
                                       <option key={n} value={n}>
