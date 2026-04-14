@@ -134,9 +134,9 @@ describe('Functional requirement: rater AI comment actions', () => {
 
     Object.defineProperty(global, 'IntersectionObserver', {
       value: class {
-        observe() {}
-        disconnect() {}
-        unobserve() {}
+        observe = jest.fn();
+        disconnect = jest.fn();
+        unobserve = jest.fn();
       },
       writable: true,
     });

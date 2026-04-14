@@ -87,6 +87,10 @@ async function loadDbFixture(): Promise<DbFixture> {
 // ----------------------------------------------------------------
 let mockRecognitionInstance: MockSpeechRecognition | null = null;
 
+function registerRecognitionInstance(instance: MockSpeechRecognition) {
+  mockRecognitionInstance = instance;
+}
+
 class MockSpeechRecognition {
   lang = '';
   interimResults = false;
@@ -100,8 +104,7 @@ class MockSpeechRecognition {
   }) => void) | null = null;
 
   constructor() {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    mockRecognitionInstance = this;
+    registerRecognitionInstance(this);
   }
 
   start() {
@@ -284,9 +287,9 @@ describe('Functional requirement: rater EPA 3 evaluation via speech-to-text and 
     Object.defineProperty(window, 'scrollTo', { value: jest.fn(), writable: true });
     Object.defineProperty(global, 'IntersectionObserver', {
       value: class {
-        observe() {}
-        disconnect() {}
-        unobserve() {}
+        observe = jest.fn();
+        disconnect = jest.fn();
+        unobserve = jest.fn();
       },
       writable: true,
     });

@@ -20,6 +20,35 @@ import { createClient } from '@/utils/supabase/server';
 
 const createClientMock = createClient as jest.Mock;
 
+const createStudentReportResponse = () => ({
+  data: {
+    id: 'rep-1',
+    user_id: 'stu-1',
+    title: 'Quarterly Report',
+    time_window: '3m',
+    report_data: { '1.1': 2.25 },
+    llm_feedback: 'Strong progress with clear communication.',
+    created_at: '2026-03-01T00:00:00Z',
+  },
+  error: null,
+});
+
+const createSingleStudentReportQuery = () => ({
+  single: jest.fn(async () => createStudentReportResponse()),
+});
+
+const createStudentReportEqQuery = () => ({
+  eq: jest.fn(createSingleStudentReportQuery),
+});
+
+const createStudentReportSelectQuery = () => ({
+  eq: jest.fn(createStudentReportEqQuery),
+});
+
+const createStudentReportsTable = () => ({
+  select: jest.fn(createStudentReportSelectQuery),
+});
+
 describe('Functional requirement: CSV export route', () => {
   // Reset mock call history before each test run.
   beforeEach(() => {
@@ -40,26 +69,7 @@ describe('Functional requirement: CSV export route', () => {
     const mockClient = {
       from: jest.fn((table: string) => {
         if (table === 'student_reports') {
-          return {
-            select: jest.fn(() => ({
-              eq: jest.fn(() => ({
-                eq: jest.fn(() => ({
-                  single: jest.fn(async () => ({
-                    data: {
-                      id: 'rep-1',
-                      user_id: 'stu-1',
-                      title: 'Quarterly Report',
-                      time_window: '3m',
-                      report_data: { '1.1': 2.25 },
-                      llm_feedback: 'Strong progress with clear communication.',
-                      created_at: '2026-03-01T00:00:00Z',
-                    },
-                    error: null,
-                  })),
-                })),
-              })),
-            })),
-          };
+          return createStudentReportsTable();
         }
 
         if (table === 'profiles') {

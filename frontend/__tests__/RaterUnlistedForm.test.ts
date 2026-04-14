@@ -2,16 +2,13 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import UnlistedStudentForm from '@/components/(RaterComponents)/UnlistedStudentForm';
+import { createClient } from '@/utils/supabase/client';
 
-// Use var here because jest.mock is hoisted.
-// If const/let is used, Jest may try to access it before initialization.
-var mockSupabase = {
-  from: jest.fn(),
-};
+let mockSupabase: { from: jest.Mock };
 
 // Mock the Supabase client used inside the component
 jest.mock('@/utils/supabase/client', () => ({
-  createClient: jest.fn(() => mockSupabase),
+  createClient: jest.fn(),
 }));
 
 // Mock data returned from Supabase
@@ -43,6 +40,10 @@ describe('UnlistedStudentForm Component (.ts version)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSupabase = {
+      from: jest.fn(),
+    };
+    (createClient as jest.Mock).mockReturnValue(mockSupabase);
 
     // Default mocked database behavior
     mockSupabase.from.mockImplementation((table: string) => {
@@ -282,6 +283,16 @@ describe('UnlistedStudentForm Component (.ts version)', () => {
 
   test('disables submit button while loading', async () => {
     // Mock delayed submission to verify loading state
+    const createDelayedResponse = () =>
+      new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            data: { id: 'new-request-123' },
+            error: null,
+          });
+        }, 100);
+      });
+
     mockSupabase.from.mockImplementation((table: string) => {
       if (table === 'user_roles') {
         return {
@@ -311,15 +322,7 @@ describe('UnlistedStudentForm Component (.ts version)', () => {
         return {
           insert: () => ({
             select: () => ({
-              single: () =>
-                new Promise((resolve) => {
-                  setTimeout(() => {
-                    resolve({
-                      data: { id: 'new-request-123' },
-                      error: null,
-                    });
-                  }, 100);
-                }),
+              single: () => createDelayedResponse(),
             }),
           }),
         };

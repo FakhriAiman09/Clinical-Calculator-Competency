@@ -48,7 +48,8 @@ export default function SubmitButtons({
       <div className='container p-3' style={{ maxWidth: '720px' }}>
         <div className='row'>
           <div className='btn-toolbar' role='toolbar' aria-label='Toolbar with button groups'>
-            <div className='btn-group me-2 flex-grow-1' role='group' aria-label='Development level'>
+            <fieldset className='btn-group me-2 flex-grow-1 border-0 p-0 m-0'>
+              <legend className='visually-hidden'>Development level</legend>
               {buttons.map((btn) => (
                 <React.Fragment key={btn.text}>
                   <input
@@ -66,8 +67,8 @@ export default function SubmitButtons({
                   </label>
                 </React.Fragment>
               ))}
-            </div>
-            <div className='btn-group' role='group' aria-label='Clear selection'>
+            </fieldset>
+            <div className='btn-group'>
               <button type='button' className='btn btn-outline-secondary' onClick={handleClear}>
                 <i className='bi bi-x-lg'></i>
               </button>

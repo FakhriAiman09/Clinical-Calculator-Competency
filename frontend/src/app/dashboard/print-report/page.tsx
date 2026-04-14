@@ -75,6 +75,115 @@ interface EPAData {
   llmFeedback: string | null;
 }
 
+type ReportResultRow = {
+  created_at: string;
+  results: Record<string, number>;
+  form_responses: {
+    response?: { response?: Record<string, Record<string, { text?: string[] }>> };
+    form_requests: { student_id: string; clinical_settings?: string };
+  };
+};
+
+function getValidCommentTexts(text?: string[]) {
+  if (!Array.isArray(text)) return [];
+  return text.filter((entry) => typeof entry === 'string' && entry.trim() !== '');
+}
+
+function parseFeedbackObject(llmFeedback: StudentReport['llm_feedback']) {
+  if (!llmFeedback) return null;
+  if (typeof llmFeedback === 'object') return llmFeedback as Record<string, string>;
+
+  try {
+    return JSON.parse(llmFeedback) as Record<string, string>;
+  } catch {
+    return null;
+  }
+}
+
+function collectAssessmentsAndComments(
+  resultRows: ReportResultRow[],
+  studentId: string,
+  epaId: number,
+  epaKey: string
+) {
+  const assessments: Assessment[] = [];
+  const comments: string[] = [];
+
+  for (const row of resultRows) {
+    const formResponse = row.form_responses;
+    if (formResponse?.form_requests?.student_id !== studentId) continue;
+
+    let commentExtractedForThisRow = false;
+
+    for (const [kfKey, level] of Object.entries(row.results)) {
+      const [resultEpaKey, kfNum] = kfKey.split('.');
+      if (parseInt(resultEpaKey) !== epaId) continue;
+
+      assessments.push({
+        keyFunctionId: `kf${kfNum}`,
+        devLevel: level,
+        date: row.created_at,
+        setting: formResponse.form_requests?.clinical_settings ?? null,
+      });
+
+      if (commentExtractedForThisRow) continue;
+
+      commentExtractedForThisRow = true;
+      const commentBlock = formResponse.response?.response?.[epaKey];
+      if (!commentBlock) continue;
+
+      Object.values(commentBlock).forEach((kfObj) => {
+        comments.push(...getValidCommentTexts(kfObj?.text));
+      });
+    }
+  }
+
+  return { assessments, comments };
+}
+
+function getKfAveragesForEpa(report: StudentReport, epaId: number) {
+  const kfAverages: Record<string, number> = {};
+  const epaKfScores: number[] = [];
+
+  if (!report.kf_avg_data) {
+    return { kfAverages, epaKfScores };
+  }
+
+  for (const [key, val] of Object.entries(report.kf_avg_data)) {
+    if (!key.startsWith(`${epaId}.`) || typeof val !== 'number') continue;
+
+    const kfId = `kf${key.split('.')[1]}`;
+    kfAverages[kfId] = val;
+    epaKfScores.push(val);
+  }
+
+  return { kfAverages, epaKfScores };
+}
+
+function getAverageScore(scores: number[]) {
+  if (scores.length === 0) return null;
+  return Math.floor(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+}
+
+function getRelevantFeedback(feedbackObj: Record<string, string> | null, epaId: number) {
+  if (!feedbackObj || '_error' in feedbackObj) return null;
+
+  const rawFeedback = Object.entries(feedbackObj)
+    .filter(([key]) => parseInt(key.split('.')[0]) === epaId && feedbackObj[key])
+    .sort(([a], [b]) => parseInt(a.split('.')[1]) - parseInt(b.split('.')[1]))
+    .map(([key, val]) => `**Key Function ${key}**\n\n${val}`)
+    .join('\n\n---\n\n');
+
+  return rawFeedback ? annotateScores(rawFeedback) : null;
+}
+
+function getRecentAssessments(assessments: Assessment[], cutoff: Date, reportCreatedAt: Date) {
+  return assessments.filter((assessment) => {
+    const assessmentDate = new Date(assessment.date);
+    return assessmentDate >= cutoff && assessmentDate <= reportCreatedAt;
+  });
+}
+
 /* ─── Badge Component ───────────────────────────────────── */
 function DevBadge({ value }: { value: number | null | undefined }) {
   if (value == null) return <span className="badge-none">No data</span>;
@@ -194,7 +303,7 @@ function PrintReportContent() {
     const cutoff = new Date(report.created_at);
     cutoff.setMonth(cutoff.getMonth() - timeRange);
 
-    const { data: resultRows } = await supabase
+    const { data } = await supabase
       .from('form_results')
       .select(`
         created_at,
@@ -216,95 +325,24 @@ function PrintReportContent() {
         };
       }[]>();
 
-    let feedbackObj: Record<string, string> | null = null;
-    if (report.llm_feedback) {
-      if (typeof report.llm_feedback === 'object') {
-        feedbackObj = report.llm_feedback as Record<string, string>;
-      } else {
-        try { feedbackObj = JSON.parse(report.llm_feedback); } catch { feedbackObj = null; }
-      }
-    }
+    const resultRows = data ?? [];
+    const feedbackObj = parseFeedbackObject(report.llm_feedback);
+    const reportCreatedAt = new Date(report.created_at);
 
     const built: EPAData[] = REPORT_EPAS.map((epaId) => {
       const epaStr = String(epaId);
-      const assessments: Assessment[] = [];
-      const comments: string[] = [];
+      const { assessments, comments } = collectAssessmentsAndComments(
+        resultRows,
+        student.id,
+        epaId,
+        epaStr
+      );
 
-      for (const row of resultRows ?? []) {
-        const fr = row.form_responses;
-        if (fr?.form_requests?.student_id !== student.id) continue;
-
-        // FIX 1: guard flag — extract comments at most once per form-response
-        // row. Previously the commentBlock push happened after the KF loop,
-        // which meant it fired for every row regardless of whether that row
-        // contained any KF results for this EPA. A rater who scored N key
-        // functions in one submission would cause every comment to appear N
-        // times in the report.
-        let commentExtractedForThisRow = false;
-
-        for (const [kfKey, level] of Object.entries(row.results)) {
-          const [epaKey, kfNum] = kfKey.split('.');
-          if (parseInt(epaKey) === epaId) {
-            assessments.push({
-              keyFunctionId: `kf${kfNum}`,
-              devLevel: level,
-              date: row.created_at,
-              setting: fr.form_requests?.clinical_settings ?? null,
-            });
-
-            // Extract comments exactly once per row, on the first KF match
-            if (!commentExtractedForThisRow) {
-              commentExtractedForThisRow = true;
-              const commentBlock = fr.response?.response?.[epaStr];
-              if (commentBlock) {
-                Object.values(commentBlock).forEach((kfObj) => {
-                  if (kfObj?.text && Array.isArray(kfObj.text)) {
-                    comments.push(...kfObj.text.filter((t) => typeof t === 'string' && t.trim() !== ''));
-                  }
-                });
-              }
-            }
-          }
-        }
-      }
-
-      const kfAverages: Record<string, number> = {};
-      const epaKfScores: number[] = [];
-      if (report.kf_avg_data) {
-        for (const [key, val] of Object.entries(report.kf_avg_data)) {
-          if (key.startsWith(`${epaId}.`) && typeof val === 'number') {
-            const kfId = `kf${key.split('.')[1]}`;
-            kfAverages[kfId] = val;
-            epaKfScores.push(val);
-          }
-        }
-      }
-
-      const epaAverage =
-        epaKfScores.length > 0
-          ? Math.floor(epaKfScores.reduce((a, b) => a + b, 0) / epaKfScores.length)
-          : null;
-
-      const allScores = assessments.map((a) => a.devLevel).filter((v) => typeof v === 'number');
-      const lifetimeAverage =
-        allScores.length > 0
-          ? Math.floor(allScores.reduce((a, b) => a + b, 0) / allScores.length)
-          : null;
-
-      const rawFeedback = feedbackObj && !('_error' in feedbackObj)
-        ? Object.entries(feedbackObj)
-            .filter(([key]) => parseInt(key.split('.')[0]) === epaId && feedbackObj![key])
-            .sort(([a], [b]) => parseInt(a.split('.')[1]) - parseInt(b.split('.')[1]))
-            .map(([key, val]) => `**Key Function ${key}**\n\n${val}`)
-            .join('\n\n---\n\n')
-        : null;
-      const relevantFeedback = rawFeedback ? annotateScores(rawFeedback) : null;
-
-      const reportCreatedAt = new Date(report.created_at);
-      const recentAssessments = assessments.filter((a) => {
-        const d = new Date(a.date);
-        return d >= cutoff && d <= reportCreatedAt;
-      });
+      const { kfAverages, epaKfScores } = getKfAveragesForEpa(report, epaId);
+      const epaAverage = getAverageScore(epaKfScores);
+      const lifetimeAverage = getAverageScore(assessments.map((assessment) => assessment.devLevel));
+      const relevantFeedback = getRelevantFeedback(feedbackObj, epaId);
+      const recentAssessments = getRecentAssessments(assessments, cutoff, reportCreatedAt);
 
       return {
         epaId,

@@ -8,28 +8,36 @@ import { mockFormRequests } from '../__mocks__/mockFormRequest';
 let mockSupabaseData: any;
 let mockSupabaseError: { message: string } | null = null;
 
+const resolveSupabaseResponse = () =>
+  Promise.resolve({
+    data: mockSupabaseData,
+    error: mockSupabaseError,
+  });
+
+const createEqChain = () => ({
+  eq: jest.fn(resolveSupabaseResponse),
+});
+
+const createFromResult = () => ({
+  select: jest.fn().mockReturnThis(),
+  eq: jest.fn(createEqChain),
+});
+
+const createRpcResponse = () =>
+  Promise.resolve({
+    data: mockSupabaseData,
+    error: null,
+  });
+
+const createMockSupabaseClient = () => ({
+  from: jest.fn(createFromResult),
+  rpc: jest.fn(createRpcResponse),
+});
+
 jest.mock('@/context/UserContext');
 
 jest.mock('@/utils/supabase/client', () => ({
-  createClient: jest.fn(() => ({
-    from: jest.fn().mockImplementation(() => ({
-      select: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockImplementation(() => ({
-        eq: jest.fn().mockImplementation(() =>
-          Promise.resolve({
-            data: mockSupabaseData,
-            error: mockSupabaseError,
-          })
-        ),
-      })),
-    })),
-    rpc: jest.fn().mockImplementation(() =>
-      Promise.resolve({
-        data: mockSupabaseData,
-        error: null,
-      })
-    ),
-  })),
+  createClient: jest.fn(createMockSupabaseClient),
 }));
 
 jest.mock('next/navigation', () => ({

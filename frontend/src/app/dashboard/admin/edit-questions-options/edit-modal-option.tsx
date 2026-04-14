@@ -14,6 +14,17 @@ import { filterHistory } from './utils';
 
 const getCachedUpdaterDetails = cache(getUpdaterDetails);
 
+function getOptionHistoryText(mcqs: MCQ[], optionKey: string) {
+  return mcqs.find((mcq) => mcq.options[optionKey])?.options[optionKey] ?? '';
+}
+
+function findUpdaterById(
+  updaterDetails: Awaited<ReturnType<typeof getCachedUpdaterDetails>>[],
+  updatedBy: string
+) {
+  return updaterDetails.find((updater) => updater?.id === updatedBy);
+}
+
 export default function EditOptionModal({
   mcqsInformation,
   optionMCQ,
@@ -72,7 +83,7 @@ export default function EditOptionModal({
       let history = mcqsInformation.get.map((mcqsMetaRow) => ({
         updated_at: new Date(mcqsMetaRow.updated_at),
         updated_by: mcqsMetaRow.updated_by ?? 'unknown updater',
-        text: (mcqsMetaRow.data as MCQ[]).find((mcq) => mcq.options[optionKey.get!])!.options[optionKey.get!],
+        text: getOptionHistoryText(mcqsMetaRow.data as MCQ[], optionKey.get!),
       })) satisfies changeHistoryInstance[];
 
       // Fetch updater for each history instance
@@ -82,7 +93,7 @@ export default function EditOptionModal({
       );
 
       history = history.map((h) => {
-        const updater = updaterDetails?.find((u) => u?.id === h.updated_by);
+        const updater = findUpdaterById(updaterDetails ?? [], h.updated_by);
         return {
           ...h,
           updater_display_name: updater?.display_name,

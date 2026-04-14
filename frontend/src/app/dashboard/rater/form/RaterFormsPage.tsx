@@ -108,6 +108,303 @@ function getSummaryGuard(summary: string, kf?: string | null) {
   return { canApply: true, message: '' };
 }
 
+const professionalismFieldKey = 'professionalism';
+
+function makeFieldKey(epaId: number, questionId: string) {
+  return `${epaId}::${questionId}`;
+}
+
+function getTargetFieldKey(target: ActiveTarget) {
+  if (!target) return null;
+  return target.type === 'professionalism'
+    ? professionalismFieldKey
+    : makeFieldKey(target.epaId, target.questionId);
+}
+
+function stopRecognitionSafely(recognition: { stop: () => void }) {
+  try {
+    recognition.stop();
+  } catch {}
+}
+
+function appendTranscript(existing: string, transcript: string) {
+  return (existing ? existing.trimEnd() + ' ' : '') + transcript.trim();
+}
+
+function SummaryPanel({
+  summary,
+  summaryGuard,
+  onInsert,
+  onReplace,
+}: {
+  summary: string;
+  summaryGuard: ReturnType<typeof getSummaryGuard>;
+  onInsert: () => void;
+  onReplace: () => void;
+}) {
+  if (!summary) return null;
+
+  return (
+    <div
+      className='mt-2 p-2 rounded bg-body-secondary'
+      style={{
+        border: summaryGuard.canApply ? '1px solid var(--bs-border-color)' : '1px solid #f0ad4e',
+      }}
+    >
+      <div className='d-flex justify-content-between align-items-center mb-1'>
+        <small className='text-muted'>{summaryGuard.canApply ? 'Summary' : 'AI Result'}</small>
+
+        <div className='d-flex gap-2'>
+          <button
+            type='button'
+            className='btn btn-sm btn-outline-secondary'
+            onClick={onInsert}
+            disabled={!summaryGuard.canApply}
+          >
+            Insert
+          </button>
+
+          <button
+            type='button'
+            className='btn btn-sm btn-outline-danger'
+            onClick={onReplace}
+            title='Replace comments with AI summary (deletes original)'
+            disabled={!summaryGuard.canApply}
+          >
+            Replace
+          </button>
+        </div>
+      </div>
+
+      {!summaryGuard.canApply ? (
+        <div className='small mb-2' style={{ color: '#b26a00' }}>
+          {summaryGuard.message}
+        </div>
+      ) : null}
+
+      <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{summary}</div>
+    </div>
+  );
+}
+
+function EPAQuestionSection({
+  epaId,
+  kf,
+  currentText,
+  isListening,
+  vttStatus,
+  summary,
+  isSummarizing,
+  summaryErr,
+  summaryGuard,
+  isChecked,
+  onOptionChange,
+  onTextChange,
+  onRequestSummary,
+  onToggleDictation,
+  onInsertSummary,
+  onReplaceSummary,
+}: {
+  epaId: number;
+  kf: KeyFunction;
+  currentText: string;
+  isListening: boolean;
+  vttStatus: string;
+  summary: string;
+  isSummarizing: boolean;
+  summaryErr: string;
+  summaryGuard: ReturnType<typeof getSummaryGuard>;
+  isChecked: (questionId: string, optionKey: string) => boolean;
+  onOptionChange: (questionId: string, optionKey: string, value: boolean) => void;
+  onTextChange: (questionId: string, value: string) => void;
+  onRequestSummary: (questionId: string) => void;
+  onToggleDictation: (questionId: string) => void;
+  onInsertSummary: (questionId: string) => void;
+  onReplaceSummary: (questionId: string) => void;
+}) {
+  const questionKey = kf.questionId;
+
+  return (
+    <div key={questionKey} className='mb-4'>
+      <p className='fw-bold'>{kf.question}</p>
+
+      <div className='row'>
+        {Object.entries(kf.options).map(([optionKey, optionLabel]) => (
+          <div key={optionKey} className='col-md-6 mb-2'>
+            <div className='form-check'>
+              <input
+                className='form-check-input'
+                type='checkbox'
+                id={`epa-${epaId}-q-${questionKey}-option-${optionKey}`}
+                name={`epa-${epaId}-q-${questionKey}-option-${optionKey}`}
+                checked={isChecked(questionKey, optionKey)}
+                onChange={(e) => onOptionChange(questionKey, optionKey, e.target.checked)}
+              />
+              <label
+                className='form-check-label'
+                htmlFor={`epa-${epaId}-q-${questionKey}-option-${optionKey}`}
+              >
+                {optionLabel}
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <h6 className='mb-2'>Additional comments:</h6>
+
+        <div className='comment-wrapper'>
+          <textarea
+            className='form-control comment-textarea'
+            placeholder='Additional comments ...'
+            value={currentText}
+            onChange={(e) => onTextChange(questionKey, e.target.value)}
+          />
+
+          <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 8, zIndex: 2 }}>
+            <button
+              type='button'
+              className='vtt-btn'
+              onClick={() => onRequestSummary(questionKey)}
+              title='Generate AI summary from comments'
+              disabled={isSummarizing}
+            >
+              <i className={`bi ${isSummarizing ? 'bi-hourglass-split' : 'bi-stars'}`} />
+            </button>
+
+            <button
+              type='button'
+              className={`vtt-btn ${isListening ? 'recording' : ''}`}
+              onClick={() => onToggleDictation(questionKey)}
+              title={isListening ? 'Stop voice input' : 'Start voice input'}
+            >
+              <i className={`bi ${isListening ? 'bi-stop-circle-fill' : 'bi-mic-fill'}`} />
+            </button>
+          </div>
+        </div>
+
+        {vttStatus ? <div className='vtt-status'>{vttStatus}</div> : null}
+        {summaryErr ? (
+          <div className='vtt-status' style={{ color: '#dc3545' }}>
+            {summaryErr}
+          </div>
+        ) : null}
+
+        <SummaryPanel
+          summary={summary}
+          summaryGuard={summaryGuard}
+          onInsert={() => onInsertSummary(questionKey)}
+          onReplace={() => onReplaceSummary(questionKey)}
+        />
+      </div>
+
+      <hr />
+    </div>
+  );
+}
+
+function ProfessionalismSection({
+  professionalism,
+  isListening,
+  isSummarizing,
+  vttStatus,
+  summaryError,
+  summary,
+  onChange,
+  onRequestSummary,
+  onToggleDictation,
+  onInsertSummary,
+  onReplaceSummary,
+  onSubmit,
+  submittingFinal,
+  isEditMode,
+}: {
+  professionalism: string;
+  isListening: boolean;
+  isSummarizing: boolean;
+  vttStatus: string;
+  summaryError: string;
+  summary: string;
+  onChange: (value: string) => void;
+  onRequestSummary: () => void;
+  onToggleDictation: () => void;
+  onInsertSummary: () => void;
+  onReplaceSummary: () => void;
+  onSubmit: () => void;
+  submittingFinal: boolean;
+  isEditMode: boolean;
+}) {
+  const summaryGuard = getSummaryGuard(summary, 'professionalism');
+  const submitLabel = submittingFinal
+    ? isEditMode
+      ? 'Updating...'
+      : 'Submitting...'
+    : isEditMode
+    ? 'Update Evaluation'
+    : 'Submit Final Evaluation';
+
+  return (
+    <div className='card mt-4'>
+      <div className='card-header bg-primary text-white'>Professionalism Assessment</div>
+      <div className='card-body'>
+        <div className='mb-4'>
+          <p className='fw-bold'>Please describe the student&apos;s professionalism:</p>
+
+          <div className='comment-wrapper'>
+            <textarea
+              className='form-control comment-textarea'
+              placeholder="Describe the student's professionalism..."
+              rows={5}
+              value={professionalism}
+              onChange={(e) => onChange(e.target.value)}
+            />
+
+            <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 8, zIndex: 2 }}>
+              <button
+                type='button'
+                className='vtt-btn'
+                onClick={onRequestSummary}
+                title='Generate AI summary from professionalism comments'
+                disabled={isSummarizing}
+              >
+                <i className={`bi ${isSummarizing ? 'bi-hourglass-split' : 'bi-stars'}`} />
+              </button>
+
+              <button
+                type='button'
+                className={`vtt-btn ${isListening ? 'recording' : ''}`}
+                onClick={onToggleDictation}
+                title={isListening ? 'Stop voice input' : 'Start voice input'}
+              >
+                <i className={`bi ${isListening ? 'bi-stop-circle-fill' : 'bi-mic-fill'}`} />
+              </button>
+            </div>
+          </div>
+
+          {vttStatus ? <div className='vtt-status'>{vttStatus}</div> : null}
+          {summaryError ? (
+            <div className='vtt-status' style={{ color: '#dc3545' }}>
+              {summaryError}
+            </div>
+          ) : null}
+
+          <SummaryPanel
+            summary={summary}
+            summaryGuard={summaryGuard}
+            onInsert={onInsertSummary}
+            onReplace={onReplaceSummary}
+          />
+        </div>
+
+        <button className='btn btn-success mt-3' onClick={onSubmit} disabled={submittingFinal}>
+          {submitLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function RaterFormsPage() {
   useRequireRole(['rater', 'dev']);
 
@@ -154,9 +451,6 @@ export default function RaterFormsPage() {
   const [listeningByField, setListeningByField] = useState<Record<string, boolean>>({});
   const [statusByField, setStatusByField] = useState<Record<string, string>>({});
 
-  const makeFieldKey = (epaId: number, questionId: string) => `${epaId}::${questionId}`;
-  const professionalismFieldKey = 'professionalism';
-
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -170,40 +464,27 @@ export default function RaterFormsPage() {
     recognition.interimResults = true;
     recognition.continuous = true;
 
-    recognition.onstart = () => {
-      const target = activeTargetRef.current;
-      if (!target) return;
+    const getCurrentFieldKey = () => getTargetFieldKey(activeTargetRef.current);
 
-      const key =
-        target.type === 'professionalism'
-          ? professionalismFieldKey
-          : makeFieldKey(target.epaId, target.questionId);
+    recognition.onstart = () => {
+      const key = getCurrentFieldKey();
+      if (!key) return;
 
       setListeningByField((prev) => ({ ...prev, [key]: true }));
       setStatusByField((prev) => ({ ...prev, [key]: 'Listening…' }));
     };
 
     recognition.onend = () => {
-      const target = activeTargetRef.current;
-      if (!target) return;
-
-      const key =
-        target.type === 'professionalism'
-          ? professionalismFieldKey
-          : makeFieldKey(target.epaId, target.questionId);
+      const key = getCurrentFieldKey();
+      if (!key) return;
 
       setListeningByField((prev) => ({ ...prev, [key]: false }));
       setStatusByField((prev) => ({ ...prev, [key]: '' }));
     };
 
     recognition.onerror = (e: any) => {
-      const target = activeTargetRef.current;
-      if (!target) return;
-
-      const key =
-        target.type === 'professionalism'
-          ? professionalismFieldKey
-          : makeFieldKey(target.epaId, target.questionId);
+      const key = getCurrentFieldKey();
+      if (!key) return;
 
       setListeningByField((prev) => ({ ...prev, [key]: false }));
       setStatusByField((prev) => ({ ...prev, [key]: `Error: ${e?.error || 'unknown'}` }));
@@ -213,10 +494,8 @@ export default function RaterFormsPage() {
       const target = activeTargetRef.current;
       if (!target) return;
 
-      const key =
-        target.type === 'professionalism'
-          ? professionalismFieldKey
-          : makeFieldKey(target.epaId, target.questionId);
+      const key = getCurrentFieldKey();
+      if (!key) return;
 
       let finalText = '';
       let interimText = '';
@@ -229,11 +508,11 @@ export default function RaterFormsPage() {
 
       if (finalText.trim()) {
         if (target.type === 'professionalism') {
-          setProfessionalism((prev) => (prev ? prev.trimEnd() + ' ' : '') + finalText.trim());
+          setProfessionalism((prev) => appendTranscript(prev, finalText));
         } else {
           setTextInputs((prev) => {
             const existing = prev[target.epaId]?.[target.questionId] ?? '';
-            const newValue = (existing ? existing.trimEnd() + ' ' : '') + finalText.trim();
+            const newValue = appendTranscript(existing, finalText);
             return {
               ...prev,
               [target.epaId]: {
@@ -256,9 +535,7 @@ export default function RaterFormsPage() {
     recognitionRef.current = recognition;
 
     return () => {
-      try {
-        recognition.stop();
-      } catch {}
+      stopRecognitionSafely(recognition);
     };
   }, []);
 

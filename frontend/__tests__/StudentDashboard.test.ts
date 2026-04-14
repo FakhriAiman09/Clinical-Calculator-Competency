@@ -4,9 +4,9 @@ import '@testing-library/jest-dom';
 import { useUser } from '@/context/UserContext';
 import StudentDashboard from '@/components/(StudentComponents)/studentDashboard';
 
-var mockSupabaseFrom: jest.Mock;
-var mockSupabaseSelect: jest.Mock;
-var mockSupabaseFilter: jest.Mock;
+let mockSupabaseFrom: jest.Mock;
+let mockSupabaseSelect: jest.Mock;
+let mockSupabaseFilter: jest.Mock;
 
 jest.mock('@/context/UserContext');
 

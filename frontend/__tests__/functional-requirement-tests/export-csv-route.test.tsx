@@ -85,6 +85,92 @@ let dbFixture: DbFixture = {
   source: 'fallback',
 };
 
+const createStudentReportRecord = () => ({
+  id: dbFixture.reportId,
+  user_id: dbFixture.studentId,
+  title: 'Quarterly Report',
+  time_window: '3m',
+  report_data: { '1.1': 2.25 },
+  llm_feedback: 'Strong progress with clear communication.',
+  created_at: '2026-03-01T00:00:00Z',
+});
+
+const createStudentReportSingleQuery = () => ({
+  single: jest.fn(async () => ({
+    data: createStudentReportRecord(),
+    error: null,
+  })),
+});
+
+const createStudentReportSecondEqQuery = () => ({
+  eq: jest.fn(createStudentReportSingleQuery),
+});
+
+const createStudentReportFirstEqQuery = () => ({
+  eq: jest.fn(createStudentReportSecondEqQuery),
+});
+
+const createStudentReportsTable = () => ({
+  select: jest.fn(createStudentReportFirstEqQuery),
+});
+
+const createProfilesTable = () => ({
+  select: jest.fn(() => ({
+    eq: jest.fn(() => ({
+      single: jest.fn(async () => ({
+        data: { display_name: dbFixture.studentName },
+        error: null,
+      })),
+    })),
+  })),
+});
+
+const createFormRequestsTable = () => ({
+  select: jest.fn(() => ({
+    eq: jest.fn(async () => ({
+      data: [{ id: 'req-1' }],
+      error: null,
+    })),
+  })),
+});
+
+const createFormResponsesTable = () => ({
+  select: jest.fn(() => ({
+    in: jest.fn(async () => ({
+      data: [{ response_id: 'resp-1' }],
+      error: null,
+    })),
+  })),
+});
+
+const createFormResultsTable = () => ({
+  select: jest.fn(() => ({
+    in: jest.fn(async () => ({
+      data: [
+        {
+          response_id: 'resp-1',
+          created_at: '2026-03-01T00:00:00Z',
+          results: { '1.1': 2.1 },
+        },
+      ],
+      error: null,
+    })),
+  })),
+});
+
+const createDefaultTable = () => ({
+  select: jest.fn(async () => ({ data: [], error: null })),
+});
+
+const buildTableMock = (table: string) => {
+  if (table === 'student_reports') return createStudentReportsTable();
+  if (table === 'profiles') return createProfilesTable();
+  if (table === 'form_requests') return createFormRequestsTable();
+  if (table === 'form_responses') return createFormResponsesTable();
+  if (table === 'form_results') return createFormResultsTable();
+  return createDefaultTable();
+};
+
 function getRouteHandler() {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const routeModule = require('@/app/api/generate-csv/route') as {
@@ -175,84 +261,7 @@ describe('Functional requirement: CSV export route', () => {
   });
 
   const buildMockClient = () => ({
-    from: jest.fn((table: string) => {
-      if (table === 'student_reports') {
-        return {
-          select: jest.fn(() => ({
-            eq: jest.fn(() => ({
-              eq: jest.fn(() => ({
-                single: jest.fn(async () => ({
-                  data: {
-                    id: dbFixture.reportId,
-                    user_id: dbFixture.studentId,
-                    title: 'Quarterly Report',
-                    time_window: '3m',
-                    report_data: { '1.1': 2.25 },
-                    llm_feedback: 'Strong progress with clear communication.',
-                    created_at: '2026-03-01T00:00:00Z',
-                  },
-                  error: null,
-                })),
-              })),
-            })),
-          })),
-        };
-      }
-
-      if (table === 'profiles') {
-        return {
-          select: jest.fn(() => ({
-            eq: jest.fn(() => ({
-              single: jest.fn(async () => ({
-                data: { display_name: dbFixture.studentName },
-                error: null,
-              })),
-            })),
-          })),
-        };
-      }
-
-      if (table === 'form_requests') {
-        return {
-          select: jest.fn(() => ({
-            eq: jest.fn(async () => ({
-              data: [{ id: 'req-1' }],
-              error: null,
-            })),
-          })),
-        };
-      }
-
-      if (table === 'form_responses') {
-        return {
-          select: jest.fn(() => ({
-            in: jest.fn(async () => ({
-              data: [{ response_id: 'resp-1' }],
-              error: null,
-            })),
-          })),
-        };
-      }
-
-      if (table === 'form_results') {
-        return {
-          select: jest.fn(() => ({
-            in: jest.fn(async () => ({
-              data: [
-                {
-                  response_id: 'resp-1',
-                  created_at: '2026-03-01T00:00:00Z',
-                  results: { '1.1': 2.1 },
-                },
-              ],
-              error: null,
-            })),
-          })),
-        };
-      }
-
-      return { select: jest.fn(async () => ({ data: [], error: null })) };
-    }),
+    from: jest.fn(buildTableMock),
   });
 
   // Verifies API returns 400 when studentId/reportId query params are missing.
