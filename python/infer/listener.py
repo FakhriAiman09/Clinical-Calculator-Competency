@@ -33,6 +33,8 @@ from inference import (deberta_infer, download_deberta_model, download_svm_model
                        generate_report_summary, load_deberta_model,
                        load_svm_models, svm_infer)
 
+GENERATING_PLACEHOLDER = 'Generating...'
+
 DEBERTA_MODEL_PATH = Path(os.environ.get('DEBERTA_MODEL_PATH', Path(__file__).resolve().parent / 'models' / 'deberta'))
 SVM_MODELS_PATH = Path(os.environ.get('SVM_MODELS_PATH', Path(__file__).resolve().parent / 'svm-models'))
 LOGS_PATH = Path(os.environ.get('INFER_LOGS_PATH', Path(__file__).resolve().parent / 'logs'))
@@ -305,17 +307,17 @@ def handle_updated_response(payload, deberta_model, svm_models, supabase) -> Non
 
 
 def handle_updated_report(payload, gemini, supabase) -> None:
-  """Regenerate AI feedback when a report's llm_feedback is reset to 'Generating...'."""
+  """Regenerate AI feedback when a report's llm_feedback is reset to GENERATING_PLACEHOLDER."""
   record = payload['data']['record']
   old_record = payload['data'].get('old_record', {})
 
-  # Only act when an existing feedback value is manually reset to 'Generating...'
-  # Skip if new value is not 'Generating...', old was already 'Generating...', or
+  # Only act when an existing feedback value is manually reset to GENERATING_PLACEHOLDER
+  # Skip if new value is not GENERATING_PLACEHOLDER, old was already GENERATING_PLACEHOLDER, or
   # old was null/empty (meaning this UPDATE came from handle_new_report's own status step)
-  if record.get('llm_feedback') != 'Generating...':
+  if record.get('llm_feedback') != GENERATING_PLACEHOLDER:
     return
   old_feedback = old_record.get('llm_feedback')
-  if not old_feedback or old_feedback == 'Generating...':
+  if not old_feedback or old_feedback == GENERATING_PLACEHOLDER:
     return
 
   report_id = record['id']
@@ -331,7 +333,7 @@ def handle_new_report(payload, gemini, supabase) -> None:
 
   try:
     (supabase.table('student_reports')
-     .update({'llm_feedback': 'Generating...'})
+     .update({'llm_feedback': GENERATING_PLACEHOLDER})
      .eq('id', report_id)
      .execute())
 

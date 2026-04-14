@@ -116,6 +116,27 @@ async function toggleUserStatus(
   return { success: true, newStatus };
 }
 
+// ── Updater factories (module-level to avoid deep function nesting) ───────────
+function makeRoleUpdater(
+  setUsers: React.Dispatch<React.SetStateAction<UserRow[]>>,
+  targetId: string,
+) {
+  return async (_id: string, role: string): Promise<UpdateResult> => {
+    setUsers((prev) => prev.map((u) => (u.userId === targetId ? { ...u, role } : u)));
+    return { error: null };
+  };
+}
+
+function makeStatusUpdater(
+  setUsers: React.Dispatch<React.SetStateAction<UserRow[]>>,
+  targetId: string,
+) {
+  return async (_id: string, accountStatus: string): Promise<UpdateResult> => {
+    setUsers((prev) => prev.map((u) => (u.userId === targetId ? { ...u, accountStatus } : u)));
+    return { error: null };
+  };
+}
+
 // ── UI component: Admin Manage Users panel ────────────────────────────────────
 function AdminManageUsersPanel() {
   const [users, setUsers] = useState<UserRow[]>([dbFixture.targetUser]);
@@ -142,13 +163,7 @@ function AdminManageUsersPanel() {
     const result = await updateUserRole(
       selectedUser.userId,
       selectedUser.role,
-      async (_id, role) => {
-        // simulate upsert
-        setUsers((prev) =>
-          prev.map((u) => (u.userId === selectedUser.userId ? { ...u, role } : u))
-        );
-        return { error: null };
-      }
+      makeRoleUpdater(setUsers, selectedUser.userId),
     );
     if (result.success) {
       setSaveFeedback(`Role updated to "${selectedUser.role}" successfully.`);
@@ -161,14 +176,7 @@ function AdminManageUsersPanel() {
     const result = await toggleUserStatus(
       selectedUser.userId,
       selectedUser.accountStatus,
-      async (_id, status) => {
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.userId === selectedUser.userId ? { ...u, accountStatus: status } : u
-          )
-        );
-        return { error: null };
-      }
+      makeStatusUpdater(setUsers, selectedUser.userId),
     );
     if (result.success) {
       setStatusFeedback(

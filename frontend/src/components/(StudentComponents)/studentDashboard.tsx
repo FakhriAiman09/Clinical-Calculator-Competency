@@ -55,6 +55,52 @@ interface FormResultsEntry {
   form_responses: FormResponses;
 }
 
+function buildEpaMap(entries: FormResultsEntry[]): Record<number, EPA> {
+  const epaMap: Record<number, EPA> = {};
+  entries.forEach((entry) => {
+    const { form_responses, created_at } = entry;
+    if (
+      entry.parent_response_id !== form_responses.response_id ||
+      form_responses.request_id !== form_responses.form_requests.id
+    ) {
+      console.error('ID mismatch in joined data:', entry);
+      return;
+    }
+    Object.entries(entry.results as Record<string, number>).forEach(([key, value]) => {
+      const epaId = parseInt(key.split('.')[0], 10);
+      const clampedLevel = Math.min(Math.floor(value), 3);
+      const levelName =
+        (Object.keys(devLevelMap) as DevLevel[]).find((lvl) => devLevelMap[lvl] === clampedLevel) || 'none';
+      if (!epaMap[epaId]) {
+        epaMap[epaId] = { epa: epaId, title: '', keyFunctions: [] };
+      }
+      epaMap[epaId].keyFunctions.push({ id: key, history: [{ date: created_at, level: levelName }], description: '' });
+    });
+  });
+  return epaMap;
+}
+
+function applyDescriptions(epas: EPA[], epaDescRow: Record<string, unknown>): EPA[] {
+  const formattedEPAs = Object.entries(epaDescRow.epa_descriptions as Record<string, string>).map(
+    ([key, value]) => ({ id: parseInt(key, 10), description: value })
+  );
+  const formattedKFs = Object.entries(epaDescRow.kf_descriptions as Record<string, string>).map(
+    ([key, value]) => ({ id: key, description: value })
+  );
+  return epas
+    .map((epa) => {
+      const match = formattedEPAs.find((item) => item.id === epa.epa);
+      return { ...epa, title: match ? match.description : epa.title };
+    })
+    .map((epa) => ({
+      ...epa,
+      keyFunctions: epa.keyFunctions.map((kf) => ({
+        ...kf,
+        description: formattedKFs.find((item) => item.id === kf.id)?.description || '',
+      })),
+    }));
+}
+
 const StudentDashboard: React.FC = () => {
   const [data, setData] = useState<EPA[]>([]);
   const [range, setRange] = useState<3 | 6 | 12>(3);
@@ -62,10 +108,9 @@ const StudentDashboard: React.FC = () => {
   const { user, loading } = useUser();
 
   useEffect(() => {
-    if (!user) return; 
+    if (!user) return;
 
     async function fetchData() {
-
       const { data: formResultsData, error: formError } = await supabase
         .from('form_results')
         .select(`
@@ -83,101 +128,24 @@ const StudentDashboard: React.FC = () => {
             )
           )
         `)
-
         .filter('form_responses.form_requests.student_id', 'eq', user?.id || '');
 
-      if (formError) {
-        console.error('Data Fetch Error:', formError);
-        return;
-      }
+      if (formError) { console.error('Data Fetch Error:', formError); return; }
       if (!formResultsData || !Array.isArray(formResultsData) || formResultsData.length === 0) {
         console.warn('No valid data found in form_results for this student');
         return;
       }
-      const epaMap: Record<number, EPA> = {};
 
-      (formResultsData as unknown as FormResultsEntry[]).forEach((entry) => {
-        const { form_responses, created_at } = entry;
-
-        if (
-          entry.parent_response_id !== form_responses.response_id ||
-          form_responses.request_id !== form_responses.form_requests.id
-        ) {
-          console.error('ID mismatch in joined data:', entry);
-          return;
-        }
-        const parsedData = entry.results as Record<string, number>;
-        Object.entries(parsedData).forEach(([key, value]) => {
-
-          const [epaIdStr] = key.split('.');
-          const epaId = parseInt(epaIdStr, 10);
-          const kfId = key;
-
-
-          const clampedLevel = Math.min(Math.floor(value), 3);
-          const levelName =
-            (Object.keys(devLevelMap) as DevLevel[]).find(
-              (lvl) => devLevelMap[lvl] === clampedLevel
-            ) || 'none';
-
-          if (!epaMap[epaId]) {
-            epaMap[epaId] = { epa: epaId, title: '', keyFunctions: [] };
-          }
-          epaMap[epaId].keyFunctions.push({
-            id: kfId,
-            history: [{ date: created_at, level: levelName }],
-            description: '', 
-          });
-        });
-      });
-
-      const epasArray = Object.values(epaMap);
-
+      const epasArray = Object.values(buildEpaMap(formResultsData as unknown as FormResultsEntry[]));
 
       const { data: epaDescData, error: epaDescError } = await supabase
         .from('epa_kf_descriptions')
         .select('*');
 
-      if (epaDescError) {
-        console.error('EPA Fetch Error:', epaDescError);
-        setData(epasArray);
-        return;
-      }
-      if (!epaDescData || !epaDescData.length) {
-        console.warn('EPA descriptions not found');
-        setData(epasArray);
-        return;
-      }
+      if (epaDescError) { console.error('EPA Fetch Error:', epaDescError); setData(epasArray); return; }
+      if (!epaDescData || !epaDescData.length) { console.warn('EPA descriptions not found'); setData(epasArray); return; }
 
-
-      const formattedEPAs = Object.entries(epaDescData[0].epa_descriptions).map(
-        ([key, value]) => ({
-          id: parseInt(key, 10),
-          description: value as string,
-        })
-      );
-      const formattedKFs = Object.entries(epaDescData[0].kf_descriptions).map(
-        ([key, value]) => ({
-          id: key,
-          description: value as string,
-        })
-      );
-
-      const epasWithTitles = epasArray.map((epa) => {
-        const match = formattedEPAs.find((item) => item.id === epa.epa);
-        return { ...epa, title: match ? match.description : epa.title };
-      });
-
-
-      const epasWithKFDescriptions = epasWithTitles.map((epa) => ({
-        ...epa,
-        keyFunctions: epa.keyFunctions.map((kf) => ({
-          ...kf,
-          description: formattedKFs.find((item) => item.id === kf.id)?.description || '',
-        })),
-      }));
-
-      setData(epasWithKFDescriptions);
+      setData(applyDescriptions(epasArray, epaDescData[0]));
     }
 
     fetchData();

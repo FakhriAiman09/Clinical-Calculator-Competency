@@ -540,48 +540,15 @@ export default function RaterFormsPage() {
   }, []);
 
   const toggleDictation = (epaId: number, questionId: string) => {
-    if (!recognitionRef.current) {
-      setSaveStatus('Speech-to-text not supported. Use Chrome/Edge.');
-      setTimeout(() => setSaveStatus(''), 5000);
-      return;
-    }
-
     const key = makeFieldKey(epaId, questionId);
-    const isListening = !!listeningByField[key];
-
-    try {
-      if (isListening) {
-        recognitionRef.current.stop();
-      } else {
-        try {
-          recognitionRef.current.stop();
-        } catch {}
-        activeTargetRef.current = { type: 'epa', epaId, questionId };
-        recognitionRef.current.start();
-      }
-    } catch {}
+    toggleRecognitionForTarget({ type: 'epa', epaId, questionId }, !!listeningByField[key]);
   };
 
   const toggleProfessionalismDictation = () => {
-    if (!recognitionRef.current) {
-      setSaveStatus('Speech-to-text not supported. Use Chrome/Edge.');
-      setTimeout(() => setSaveStatus(''), 5000);
-      return;
-    }
-
-    const isListening = !!listeningByField[professionalismFieldKey];
-
-    try {
-      if (isListening) {
-        recognitionRef.current.stop();
-      } else {
-        try {
-          recognitionRef.current.stop();
-        } catch {}
-        activeTargetRef.current = { type: 'professionalism' };
-        recognitionRef.current.start();
-      }
-    } catch {}
+    toggleRecognitionForTarget(
+      { type: 'professionalism' },
+      !!listeningByField[professionalismFieldKey]
+    );
   };
 
   // =========================
@@ -590,6 +557,33 @@ export default function RaterFormsPage() {
   const [summaryByField, setSummaryByField] = useState<Record<string, string>>({});
   const [summarizingByField, setSummarizingByField] = useState<Record<string, boolean>>({});
   const [summaryErrorByField, setSummaryErrorByField] = useState<Record<string, string>>({});
+
+  const showSpeechNotSupportedMessage = useCallback(() => {
+    setSaveStatus('Speech-to-text not supported. Use Chrome/Edge.');
+    setTimeout(() => setSaveStatus(''), 5000);
+  }, []);
+
+  const toggleRecognitionForTarget = useCallback(
+    (target: Exclude<ActiveTarget, null>, isListening: boolean) => {
+      const recognition = recognitionRef.current;
+      if (!recognition) {
+        showSpeechNotSupportedMessage();
+        return;
+      }
+
+      try {
+        if (isListening) {
+          recognition.stop();
+          return;
+        }
+
+        stopRecognitionSafely(recognition);
+        activeTargetRef.current = target;
+        recognition.start();
+      } catch {}
+    },
+    [showSpeechNotSupportedMessage]
+  );
 
   const requestAISummary = async (epaId: number, questionId: string) => {
     const key = makeFieldKey(epaId, questionId);
@@ -890,38 +884,38 @@ export default function RaterFormsPage() {
           kfToQuestions[key].push(kf);
         });
 
-        Object.keys(aggregatedResponses).forEach((epaKey) => {
+        for (const epaKey of Object.keys(aggregatedResponses)) {
           const epaNum = parseInt(epaKey, 10);
           const epaData = aggregatedResponses[epaKey];
 
           if (!rebuiltResponses[epaNum]) rebuiltResponses[epaNum] = {};
           if (!rebuiltTextInputs[epaNum]) rebuiltTextInputs[epaNum] = {};
 
-          Object.keys(epaData).forEach((kfKey) => {
+          for (const kfKey of Object.keys(epaData)) {
             const oneKfData = epaData[kfKey];
             const fullKey = `${epaNum}.${kfKey}`;
             const questions = kfToQuestions[fullKey] || [];
 
-            questions.forEach((question, idx) => {
+            for (const [idx, question] of questions.entries()) {
               const questionId = question.questionId;
 
               if (!rebuiltResponses[epaNum][questionId]) {
                 rebuiltResponses[epaNum][questionId] = { text: '' } as any;
               }
 
-              Object.keys(oneKfData).forEach((key) => {
+              for (const key of Object.keys(oneKfData)) {
                 if (key !== 'text' && typeof oneKfData[key] === 'boolean') {
                   rebuiltResponses[epaNum][questionId][key] = oneKfData[key];
                 }
-              });
+              }
 
               if (Array.isArray(oneKfData.text) && oneKfData.text[idx]) {
                 rebuiltTextInputs[epaNum][questionId] = oneKfData.text[idx] || '';
                 rebuiltResponses[epaNum][questionId].text = oneKfData.text[idx] || '';
               }
-            });
-          });
-        });
+            }
+          }
+        }
 
         setResponses(rebuiltResponses);
         setTextInputs(rebuiltTextInputs);
@@ -1001,8 +995,8 @@ export default function RaterFormsPage() {
     setResponses((prev: Responses) => {
       const newResponses: Responses = { ...prev };
 
-      kfData.forEach((kf) => {
-        if (!selectedEPAs.includes(kf.epa)) return;
+      for (const kf of kfData) {
+        if (!selectedEPAs.includes(kf.epa)) continue;
 
         const epa = kf.epa;
         const questionId = kf.questionId;
@@ -1011,10 +1005,10 @@ export default function RaterFormsPage() {
 
         if (!newResponses[epa][questionId]) {
           const defaults: { [key: string]: boolean } = {};
-          Object.keys(kf.options).forEach((optKey) => (defaults[optKey] = false));
+          for (const optKey of Object.keys(kf.options)) defaults[optKey] = false;
           newResponses[epa][questionId] = { ...defaults, text: '' } as any;
         }
-      });
+      }
 
       return newResponses;
     });
@@ -1166,31 +1160,31 @@ export default function RaterFormsPage() {
     kfData.forEach((q) => (questionMapping[q.questionId] = { kf: q.kf, epa: q.epa }));
 
     const aggregatedResponses: AggregatedResponses = {};
-    Object.keys(mergedResponses).forEach((epaKey) => {
+    for (const epaKey of Object.keys(mergedResponses)) {
       const epaNum = parseInt(epaKey, 10);
       if (!aggregatedResponses[epaNum]) aggregatedResponses[epaNum] = {};
 
-      Object.keys(mergedResponses[epaNum]).forEach((questionId) => {
+      for (const questionId of Object.keys(mergedResponses[epaNum])) {
         const mapping = questionMapping[questionId];
-        if (!mapping) return;
+        if (!mapping) continue;
 
         const kfKey = mapping.kf;
         if (!aggregatedResponses[epaNum][kfKey]) aggregatedResponses[epaNum][kfKey] = { text: [] };
 
         const qResponse = mergedResponses[epaNum][questionId];
-        Object.keys(qResponse).forEach((key) => {
-          if (key === 'text') return;
+        for (const key of Object.keys(qResponse)) {
+          if (key === 'text') continue;
           aggregatedResponses[epaNum][kfKey][key] =
             (aggregatedResponses[epaNum][kfKey][key] as boolean | undefined) ?? qResponse[key];
-        });
+        }
 
         aggregatedResponses[epaNum][kfKey].text.push(qResponse.text);
-      });
+      }
 
-      Object.keys(aggregatedResponses[epaNum]).forEach((kfKey) => {
-        aggregatedResponses[epaNum][kfKey].text.sort((a, b) => compareNumericDotStrings(a, b));
-      });
-    });
+      for (const kfKey of Object.keys(aggregatedResponses[epaNum])) {
+        aggregatedResponses[epaNum][kfKey].text.sort(compareNumericDotStrings);
+      }
+    }
 
     const sortedAggregatedResponses: AggregatedResponses = {};
     Object.keys(aggregatedResponses)
@@ -1586,117 +1580,27 @@ export default function RaterFormsPage() {
                     const summaryGuard = getSummaryGuard(summary, kf.kf);
 
                     return (
-                      <div key={questionKey} className='mb-4'>
-                        <p className='fw-bold'>{kf.question}</p>
-
-                        <div className='row'>
-                          {Object.entries(kf.options).map(([optionKey, optionLabel]) => (
-                            <div key={optionKey} className='col-md-6 mb-2'>
-                              <div className='form-check'>
-                                <input
-                                  className='form-check-input'
-                                  type='checkbox'
-                                  id={`epa-${currentEPA}-q-${questionKey}-option-${optionKey}`}
-                                  name={`epa-${currentEPA}-q-${questionKey}-option-${optionKey}`}
-                                  checked={!!responses[currentEPA]?.[questionKey]?.[optionKey]}
-                                  onChange={(e) => handleOptionChange(currentEPA, questionKey, optionKey, e.target.checked)}
-                                />
-                                <label
-                                  className='form-check-label'
-                                  htmlFor={`epa-${currentEPA}-q-${questionKey}-option-${optionKey}`}
-                                >
-                                  {optionLabel}
-                                </label>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div>
-                          <h6 className='mb-2'>Additional comments:</h6>
-
-                          <div className='comment-wrapper'>
-                            <textarea
-                              className='form-control comment-textarea'
-                              placeholder='Additional comments ...'
-                              value={currentText}
-                              onChange={(e) => handleTextInputChange(currentEPA, questionKey, e.target.value)}
-                            />
-
-                            <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 8, zIndex: 2 }}>
-                              <button
-                                type='button'
-                                className='vtt-btn'
-                                onClick={() => requestAISummary(currentEPA, questionKey)}
-                                title='Generate AI summary from comments'
-                                disabled={isSummarizing}
-                              >
-                                <i className={`bi ${isSummarizing ? 'bi-hourglass-split' : 'bi-stars'}`} />
-                              </button>
-
-                              <button
-                                type='button'
-                                className={`vtt-btn ${isListening ? 'recording' : ''}`}
-                                onClick={() => toggleDictation(currentEPA, questionKey)}
-                                title={isListening ? 'Stop voice input' : 'Start voice input'}
-                              >
-                                <i className={`bi ${isListening ? 'bi-stop-circle-fill' : 'bi-mic-fill'}`} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {vttStatus ? <div className='vtt-status'>{vttStatus}</div> : null}
-                          {summaryErr ? (
-                            <div className='vtt-status' style={{ color: '#dc3545' }}>
-                              {summaryErr}
-                            </div>
-                          ) : null}
-
-                          {summary ? (
-                            <div
-                              className='mt-2 p-2 rounded bg-body-secondary'
-                              style={{
-                                border: summaryGuard.canApply ? '1px solid var(--bs-border-color)' : '1px solid #f0ad4e',
-                              }}
-                            >
-                              <div className='d-flex justify-content-between align-items-center mb-1'>
-                                <small className='text-muted'>{summaryGuard.canApply ? 'Summary' : 'AI Result'}</small>
-
-                                <div className='d-flex gap-2'>
-                                  <button
-                                    type='button'
-                                    className='btn btn-sm btn-outline-secondary'
-                                    onClick={() => insertSummaryIntoTextarea(currentEPA, questionKey)}
-                                    disabled={!summaryGuard.canApply}
-                                  >
-                                    Insert
-                                  </button>
-
-                                  <button
-                                    type='button'
-                                    className='btn btn-sm btn-outline-danger'
-                                    onClick={() => replaceTextareaWithSummary(currentEPA, questionKey)}
-                                    title='Replace comments with AI summary (deletes original)'
-                                    disabled={!summaryGuard.canApply}
-                                  >
-                                    Replace
-                                  </button>
-                                </div>
-                              </div>
-
-                              {!summaryGuard.canApply ? (
-                                <div className='small mb-2' style={{ color: '#b26a00' }}>
-                                  {summaryGuard.message}
-                                </div>
-                              ) : null}
-
-                              <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{summary}</div>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <hr />
-                      </div>
+                      <EPAQuestionSection
+                        key={questionKey}
+                        epaId={currentEPA}
+                        kf={kf}
+                        currentText={currentText}
+                        isListening={isListening}
+                        vttStatus={vttStatus}
+                        summary={summary}
+                        isSummarizing={isSummarizing}
+                        summaryErr={summaryErr}
+                        summaryGuard={summaryGuard}
+                        isChecked={(qid, optionKey) => !!responses[currentEPA]?.[qid]?.[optionKey]}
+                        onOptionChange={(qid, optionKey, value) =>
+                          handleOptionChange(currentEPA, qid, optionKey, value)
+                        }
+                        onTextChange={(qid, value) => handleTextInputChange(currentEPA, qid, value)}
+                        onRequestSummary={(qid) => requestAISummary(currentEPA, qid)}
+                        onToggleDictation={(qid) => toggleDictation(currentEPA, qid)}
+                        onInsertSummary={(qid) => insertSummaryIntoTextarea(currentEPA, qid)}
+                        onReplaceSummary={(qid) => replaceTextareaWithSummary(currentEPA, qid)}
+                      />
                     );
                   })}
 
@@ -1712,132 +1616,24 @@ export default function RaterFormsPage() {
             </div>
           )}
 
-          {showProfessionalismForm && (
-            <div className='card mt-4'>
-              <div className='card-header bg-primary text-white'>Professionalism Assessment</div>
-              <div className='card-body'>
-                <div className='mb-4'>
-                  <p className='fw-bold'>Please describe the student&apos;s professionalism:</p>
-
-                  <div className='comment-wrapper'>
-                    <textarea
-                      className='form-control comment-textarea'
-                      placeholder="Describe the student's professionalism..."
-                      rows={5}
-                      value={professionalism}
-                      onChange={(e) => handleProfessionalismChange(e.target.value)}
-                    />
-
-                    <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 8, zIndex: 2 }}>
-                      <button
-                        type='button'
-                        className='vtt-btn'
-                        onClick={requestProfessionalismSummary}
-                        title='Generate AI summary from professionalism comments'
-                        disabled={!!summarizingByField[professionalismFieldKey]}
-                      >
-                        <i
-                          className={`bi ${
-                            summarizingByField[professionalismFieldKey] ? 'bi-hourglass-split' : 'bi-stars'
-                          }`}
-                        />
-                      </button>
-
-                      <button
-                        type='button'
-                        className={`vtt-btn ${listeningByField[professionalismFieldKey] ? 'recording' : ''}`}
-                        onClick={toggleProfessionalismDictation}
-                        title={listeningByField[professionalismFieldKey] ? 'Stop voice input' : 'Start voice input'}
-                      >
-                        <i
-                          className={`bi ${
-                            listeningByField[professionalismFieldKey] ? 'bi-stop-circle-fill' : 'bi-mic-fill'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </div>
-
-                  {statusByField[professionalismFieldKey] ? (
-                    <div className='vtt-status'>{statusByField[professionalismFieldKey]}</div>
-                  ) : null}
-
-                  {summaryErrorByField[professionalismFieldKey] ? (
-                    <div className='vtt-status' style={{ color: '#dc3545' }}>
-                      {summaryErrorByField[professionalismFieldKey]}
-                    </div>
-                  ) : null}
-
-                  {summaryByField[professionalismFieldKey] ? (
-                    <div
-                      className='mt-2 p-2 rounded bg-body-secondary'
-                      style={{
-                        border: (() => {
-                          const professionalismSummary = summaryByField[professionalismFieldKey];
-                          const summaryGuard = getSummaryGuard(professionalismSummary, 'professionalism');
-                          return summaryGuard.canApply ? '1px solid var(--bs-border-color)' : '1px solid #f0ad4e';
-                        })(),
-                      }}
-                    >
-                      {(() => {
-                        const professionalismSummary = summaryByField[professionalismFieldKey];
-                        const summaryGuard = getSummaryGuard(professionalismSummary, 'professionalism');
-
-                        return (
-                          <>
-                      <div className='d-flex justify-content-between align-items-center mb-1'>
-                        <small className='text-muted'>{summaryGuard.canApply ? 'Summary' : 'AI Result'}</small>
-
-                        <div className='d-flex gap-2'>
-                          <button
-                            type='button'
-                            className='btn btn-sm btn-outline-secondary'
-                            onClick={insertProfessionalismSummary}
-                            disabled={!summaryGuard.canApply}
-                          >
-                            Insert
-                          </button>
-
-                          <button
-                            type='button'
-                            className='btn btn-sm btn-outline-danger'
-                            onClick={replaceProfessionalismWithSummary}
-                            title='Replace comments with AI summary (deletes original)'
-                            disabled={!summaryGuard.canApply}
-                          >
-                            Replace
-                          </button>
-                        </div>
-                      </div>
-
-                      {!summaryGuard.canApply ? (
-                        <div className='small mb-2' style={{ color: '#b26a00' }}>
-                          {summaryGuard.message}
-                        </div>
-                      ) : null}
-
-                      <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
-                        {summaryByField[professionalismFieldKey]}
-                      </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  ) : null}
-                </div>
-
-                <button className='btn btn-success mt-3' onClick={finalSubmit} disabled={submittingFinal}>
-                  {submittingFinal
-                    ? isEditMode
-                      ? 'Updating...'
-                      : 'Submitting...'
-                    : isEditMode
-                    ? 'Update Evaluation'
-                    : 'Submit Final Evaluation'}
-                </button>
-              </div>
-            </div>
-          )}
+          {showProfessionalismForm ? (
+            <ProfessionalismSection
+              professionalism={professionalism}
+              isListening={!!listeningByField[professionalismFieldKey]}
+              isSummarizing={!!summarizingByField[professionalismFieldKey]}
+              vttStatus={statusByField[professionalismFieldKey] || ''}
+              summaryError={summaryErrorByField[professionalismFieldKey] || ''}
+              summary={summaryByField[professionalismFieldKey] || ''}
+              onChange={handleProfessionalismChange}
+              onRequestSummary={requestProfessionalismSummary}
+              onToggleDictation={toggleProfessionalismDictation}
+              onInsertSummary={insertProfessionalismSummary}
+              onReplaceSummary={replaceProfessionalismWithSummary}
+              onSubmit={finalSubmit}
+              submittingFinal={submittingFinal}
+              isEditMode={isEditMode}
+            />
+          ) : null}
         </div>
       </div>
     </>

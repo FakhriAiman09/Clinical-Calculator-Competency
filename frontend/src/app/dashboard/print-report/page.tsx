@@ -20,7 +20,7 @@ const devLabel = (val: number | null | undefined) =>
 /* Annotate raw numbers in AI text with their level labels */
 export function annotateScores(text: string): string {
   // Replace patterns like "2.0625" or "Score: 1.375" with "2.0625 (Developing)"
-  return text.replace(/\b(\d+\.\d+)\b/g, (match) => {
+  return text.replace(/(?<!\d)\d+\.\d+(?!\d)/g, (match) => {
     const num = parseFloat(match);
     if (num >= 0 && num <= 3.99) {
       const label = DEV_LABELS[Math.floor(num)];

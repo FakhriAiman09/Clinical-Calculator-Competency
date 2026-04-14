@@ -87,6 +87,41 @@ async function callOpenRouter(apiKey: string, model: string, system: string, use
   }
 }
 
+async function tryFallbackOnUnavailable(
+  apiKey: string,
+  system: string,
+  userContent: string,
+  resp: Response,
+  rawText: string,
+): Promise<{ resp: Response; rawText: string }> {
+  if (resp.ok) return { resp, rawText };
+  try {
+    const errBody = JSON.parse(rawText);
+    const errMsg: string = errBody?.error?.message ?? '';
+    const errCode: string = errBody?.error?.code ?? errBody?.error?.type ?? '';
+    if (errMsg.toLowerCase().includes('no endpoints') || errCode === 'model_not_found') {
+      console.warn('[AI Summary] Model unavailable, retrying with fallback:', FALLBACK_MODEL);
+      const fallbackResp = await callOpenRouter(apiKey, FALLBACK_MODEL, system, userContent);
+      const fallbackText = await fallbackResp.text();
+      console.log('[AI Summary] Fallback status:', fallbackResp.status, '| Response:', fallbackText.slice(0, 300));
+      return { resp: fallbackResp, rawText: fallbackText };
+    }
+  } catch {}
+  return { resp, rawText };
+}
+
+function buildErrorMessage(rawText: string, status: number): string {
+  const base = `AI service error (${status}). Please try again.`;
+  try {
+    const err = JSON.parse(rawText);
+    const code = err?.error?.code ?? err?.error?.type ?? '';
+    if (code === 'context_length_exceeded') return 'Text is too long for this model. Try a shorter selection.';
+    if (code === 'model_not_found') return 'Selected model unavailable. Try switching in Settings.';
+    if (err?.error?.message) return err.error.message as string;
+  } catch {}
+  return base;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -127,19 +162,7 @@ export async function POST(req: Request) {
     let rawText = await resp.text();
     console.log('[AI Summary] Status:', resp.status, '| Response:', rawText.slice(0, 300));
 
-    if (!resp.ok) {
-      try {
-        const errBody = JSON.parse(rawText);
-        const errMsg: string = errBody?.error?.message ?? '';
-        const errCode: string = errBody?.error?.code ?? errBody?.error?.type ?? '';
-        if (errMsg.toLowerCase().includes('no endpoints') || errCode === 'model_not_found') {
-          console.warn('[AI Summary] Model unavailable, retrying with fallback:', FALLBACK_MODEL);
-          resp    = await callOpenRouter(apiKey, FALLBACK_MODEL, system, userContent);
-          rawText = await resp.text();
-          console.log('[AI Summary] Fallback status:', resp.status, '| Response:', rawText.slice(0, 300));
-        }
-      } catch {}
-    }
+    ({ resp, rawText } = await tryFallbackOnUnavailable(apiKey, system, userContent, resp, rawText));
 
     if (resp.status === 429) {
       return NextResponse.json(
@@ -149,15 +172,10 @@ export async function POST(req: Request) {
     }
 
     if (!resp.ok) {
-      let message = `AI service error (${resp.status}). Please try again.`;
-      try {
-        const err = JSON.parse(rawText);
-        const code = err?.error?.code ?? err?.error?.type ?? '';
-        if (code === 'context_length_exceeded') message = 'Text is too long for this model. Try a shorter selection.';
-        else if (code === 'model_not_found')     message = 'Selected model unavailable. Try switching in Settings.';
-        else if (err?.error?.message)            message = err.error.message;
-      } catch {}
-      return NextResponse.json({ error: 'openrouter_error', message }, { status: resp.status });
+      return NextResponse.json(
+        { error: 'openrouter_error', message: buildErrorMessage(rawText, resp.status) },
+        { status: resp.status }
+      );
     }
 
     const data = JSON.parse(rawText);

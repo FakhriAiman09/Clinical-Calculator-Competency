@@ -16,7 +16,6 @@ Dependencies:
 """
 
 import os
-import re
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -56,7 +55,7 @@ def fetch_data() -> None:
     raise ValueError("kf_descriptions not found in the response data.")
 
   kf_descriptions = response.data["kf_descriptions"]
-  table_names = ['mcq_kf' + re.sub(r'\.', '_', kf) for kf in [*kf_descriptions.keys()]]
+  table_names = ['mcq_kf' + kf.replace('.', '_') for kf in [*kf_descriptions.keys()]]
 
   for table in table_names:
     data = query_supabase(supabase, table)

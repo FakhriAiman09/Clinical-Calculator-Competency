@@ -55,7 +55,11 @@ const DemoEPABox: React.FC<DemoEPABoxProps> = ({
   const [expanded, setExpanded] = useState(false);
 
   const epaAvg = computeEPAAverage(kfAvgData, epaId);
-  const kfKeys = Object.keys(kfAvgData).filter((k) => k.startsWith(`${epaId}.`)).sort();
+  const kfKeys = Object.keys(kfAvgData).filter((k) => k.startsWith(`${epaId}.`)).sort((a, b) => {
+    const [aEpa, aKf] = a.split('.').map(Number);
+    const [bEpa, bKf] = b.split('.').map(Number);
+    return aEpa !== bEpa ? aEpa - bEpa : aKf - bKf;
+  });
   const kfDescs = KF_DESCRIPTIONS[epaId] ?? [];
   const feedback = extractFeedback(llmFeedback, epaId);
   const title = EPA_TITLES[epaId] ?? `EPA ${epaId}`;
