@@ -11,11 +11,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@8f4b7f848644e39d33f5f8b7a4f5c4d7b7b2a9e4
+        uses: actions/checkout@v4
         # pinned v4
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@3d5f5c2e1b6b0a4d9d7e1a0c4f3b9b3f1e7d0c5a
+        uses: SonarSource/sonarcloud-github-action@v2
         # pinned
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
