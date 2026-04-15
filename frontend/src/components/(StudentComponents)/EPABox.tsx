@@ -10,6 +10,7 @@ import LineGraph from '@/components/(StudentComponents)/LineGraph';
 import HalfCircleGauge from '@/components/(StudentComponents)/HalfCircleGauge';
 import { createClient } from '@/utils/supabase/client';
 import { DEV_LEVEL_LABELS, getEpaLevelFromScores } from '@/utils/epa-scoring';
+import { getRawFeedback, getRelevantFeedbackMarkdown } from '@/utils/report-feedback';
 
 export type DevLevel = 0 | 1 | 2 | 3 | null;
 
@@ -72,42 +73,6 @@ interface EPABoxProps {
 }
 
 const supabase = createClient();
-
-function extractRelevantFeedback(
-  llmFeedback: unknown,
-  epaId: number
-): string | null {
-  if (!llmFeedback) return null;
-
-  const formatEntries = (entries: [string, string][]) =>
-    entries
-      .filter(([, val]) => val)
-      .sort(([a], [b]) => {
-        const [, ka] = a.split('.'); const [, kb] = b.split('.');
-        return parseInt(ka) - parseInt(kb);
-      })
-      .map(([key, val]) => `**Key Function ${key}**\n\n${val}`)
-      .join('\n\n---\n\n');
-
-  if (typeof llmFeedback === 'object') {
-    const feedbackObj = llmFeedback as Record<string, string>;
-    const relevantEntries = Object.entries(feedbackObj).filter(([key]) => parseInt(key.split('.')[0]) === epaId);
-    return formatEntries(relevantEntries) || null;
-  }
-
-  if (typeof llmFeedback === 'string') {
-    try {
-      const feedbackObj = JSON.parse(llmFeedback) as Record<string, string>;
-      if ('_error' in feedbackObj) return `_error:${feedbackObj['_error']}`;
-      const relevantEntries = Object.entries(feedbackObj).filter(([key]) => parseInt(key.split('.')[0]) === epaId);
-      return formatEntries(relevantEntries) || null;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
 
 // ── fetchData helpers ───────────���───────────────��──────────────────────────
 
@@ -189,13 +154,6 @@ function extractKfAveragesFromReport(
     }
   }
   return { kfs, epaKfScores };
-}
-
-function getRawFeedback(llmFeedback: unknown): string | null {
-  const raw = typeof llmFeedback === 'string'
-    ? llmFeedback
-    : llmFeedback ? JSON.stringify(llmFeedback) : null;
-  return raw && raw !== 'Generating...' ? raw : null;
 }
 
 function buildGraphData(
@@ -338,7 +296,7 @@ const EPABox: React.FC<EPABoxProps> = ({
       // Only save a completed feedback value — never 'Generating...' or null.
       const rawFeedback = getRawFeedback(targetReport.llm_feedback);
       if (rawFeedback) rawLlmFeedbackRef.current = rawFeedback;
-      setLlmFeedback(extractRelevantFeedback(targetReport.llm_feedback, epaId));
+      setLlmFeedback(getRelevantFeedbackMarkdown(targetReport.llm_feedback, epaId, { includeErrors: true }));
     }
 
     // Use the later of reportDate or now so new assessments after report generation appear.
@@ -374,7 +332,7 @@ const EPABox: React.FC<EPABoxProps> = ({
     if (!data?.llm_feedback) return;
     if (data.llm_feedback === 'Generating...') return;
 
-    const extracted = extractRelevantFeedback(data.llm_feedback, epaId);
+    const extracted = getRelevantFeedbackMarkdown(data.llm_feedback, epaId, { includeErrors: true });
     if (extracted) {
       const raw = getRawFeedback(data.llm_feedback) ?? JSON.stringify(data.llm_feedback);
       if (raw && raw !== 'Generating...') rawLlmFeedbackRef.current = raw;
@@ -420,7 +378,7 @@ const EPABox: React.FC<EPABoxProps> = ({
 
     // Always show something — never leave UI in the spinner after Stop.
     if (prevRaw && prevRaw !== 'Generating...') {
-      const extracted = extractRelevantFeedback(prevRaw, epaId);
+      const extracted = getRelevantFeedbackMarkdown(prevRaw, epaId, { includeErrors: true });
       setLlmFeedback(extracted ?? '_error:Generation was stopped. Click Regenerate to try again.');
     } else {
       setLlmFeedback('_error:Generation was stopped. Click Regenerate to try again.');
@@ -476,12 +434,16 @@ const EPABox: React.FC<EPABoxProps> = ({
     onCommentDeleted?.();
   };
 
+  const toggleExpanded = () => setExpanded((prev) => !prev);
+
   return (
     <div className={`card rounded shadow-sm ${expanded ? 'expanded' : ''}`}>
-      <div
+      <button
+        type='button'
         className='card-header d-flex justify-content-between align-items-center'
-        onClick={() => setExpanded((prev) => !prev)}
-        style={{ cursor: 'pointer' }}
+        onClick={toggleExpanded}
+        aria-expanded={expanded}
+        style={{ cursor: 'pointer', textAlign: 'left', border: 0, width: '100%' }}
       >
         <div>
           <h5 className='mb-0'>
@@ -489,7 +451,7 @@ const EPABox: React.FC<EPABoxProps> = ({
           </h5>
         </div>
         <HalfCircleGauge average={epaAvgFromKFs} allGreen={allGreen} />
-      </div>
+      </button>
 
       <div className='card-body' style={{ display: expanded ? 'block' : 'none' }}>
         <div className='row mb-4'>

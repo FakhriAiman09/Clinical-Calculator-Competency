@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import HalfCircleGauge from './DemoHalfCircleGauge';
 import LineGraph from './DemoLineGraph';
+import { getRelevantFeedbackMarkdown } from '@/utils/report-feedback';
 import {
   KF_DESCRIPTIONS,
   EPA_TITLES,
@@ -31,17 +32,6 @@ interface DemoEPABoxProps {
   onEditClick: () => void;
 }
 
-function extractFeedback(llmFeedback: string, epaId: number): string | null {
-  try {
-    const obj = JSON.parse(llmFeedback) as Record<string, string>;
-    if ('_error' in obj) return null;
-    const entries = Object.entries(obj).filter(([k]) => parseInt(k.split('.')[0]) === epaId);
-    return entries.map(([, v]) => v).join('\n\n') || null;
-  } catch {
-    return null;
-  }
-}
-
 const DemoEPABox: React.FC<DemoEPABoxProps> = ({
   epaId,
   kfAvgData,
@@ -61,7 +51,7 @@ const DemoEPABox: React.FC<DemoEPABoxProps> = ({
     return aEpa !== bEpa ? aEpa - bEpa : aKf - bKf;
   });
   const kfDescs = KF_DESCRIPTIONS[epaId] ?? [];
-  const feedback = extractFeedback(llmFeedback, epaId);
+  const feedback = getRelevantFeedbackMarkdown(llmFeedback, epaId, { includeKeyFunctionHeadings: false });
   const title = EPA_TITLES[epaId] ?? `EPA ${epaId}`;
   const flagged = !!check && check.flaggedComments > 0;
 
