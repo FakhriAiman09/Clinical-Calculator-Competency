@@ -1,3 +1,7 @@
+import { useCallback, useEffect, useState } from 'react';
+
+import { getHistoricalMCQs } from '@/utils/get-epa-data';
+import type { Tables } from '@/utils/supabase/database.types';
 import type { changeHistoryInstance } from '@/utils/types';
 
 export const filterHistory = (hist: changeHistoryInstance[]) => {
@@ -28,4 +32,86 @@ export async function enrichHistoryWithUpdaterDetails(
       updater_email: updater?.email,
     } satisfies changeHistoryInstance;
   });
+}
+
+type MCQsInformationState = {
+  get: Tables<'mcqs_options'>[] | null;
+  set: (mcqs: Tables<'mcqs_options'>[] | null) => void;
+};
+
+type UseEditModalHistoryParams = {
+  accordionID: string;
+  modalID: string;
+  mcqsInformation: MCQsInformationState;
+  canFetchHistory: boolean;
+  getHistoryText: (mcqsMetaRow: Tables<'mcqs_options'>) => string;
+  getUpdaterDetails: (id: string) => Promise<UpdaterDetails>;
+  resetModalState: () => void;
+};
+
+export function useEditModalHistory({
+  accordionID,
+  modalID,
+  mcqsInformation,
+  canFetchHistory,
+  getHistoryText,
+  getUpdaterDetails,
+  resetModalState,
+}: UseEditModalHistoryParams) {
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [history, setHistory] = useState<changeHistoryInstance[] | null>(null);
+
+  useEffect(() => {
+    const modal = document.getElementById(modalID);
+    const onModalHidden = () => {
+      resetModalState();
+      if (document.getElementById(`${accordionID}-list`)?.classList.contains('show')) {
+        document.getElementById(`${accordionID}-list-button`)?.click();
+      }
+    };
+
+    modal?.addEventListener('hide.bs.modal', onModalHidden);
+    return () => modal?.removeEventListener('hide.bs.modal', onModalHidden);
+  }, [accordionID, modalID, resetModalState]);
+
+  const fetchHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    setHistory(null);
+
+    if (!canFetchHistory || !mcqsInformation.get) {
+      setLoadingHistory(false);
+      return;
+    }
+
+    const modalHistory = mcqsInformation.get.map((mcqsMetaRow) => ({
+      updated_at: new Date(mcqsMetaRow.updated_at),
+      updated_by: mcqsMetaRow.updated_by ?? 'unknown updater',
+      text: getHistoryText(mcqsMetaRow),
+    })) satisfies changeHistoryInstance[];
+
+    setHistory(await enrichHistoryWithUpdaterDetails(modalHistory, getUpdaterDetails));
+    setLoadingHistory(false);
+  }, [canFetchHistory, getHistoryText, getUpdaterDetails, mcqsInformation.get]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  return {
+    history: filterHistory(history ?? []),
+    loadingHistory,
+  };
+}
+
+export async function refreshHistoricalMCQs(mcqsInformation: MCQsInformationState) {
+  const mcqs = await getHistoricalMCQs();
+  mcqsInformation.set(mcqs ?? null);
+}
+
+export async function submitChangeAndRefresh(
+  submitChange: () => Promise<unknown>,
+  mcqsInformation: MCQsInformationState
+) {
+  await submitChange();
+  await refreshHistoricalMCQs(mcqsInformation);
 }

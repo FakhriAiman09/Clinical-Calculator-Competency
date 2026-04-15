@@ -1,15 +1,14 @@
 'use client';
 
-import { cache, useCallback, useEffect, useId, useState, type Dispatch, type SetStateAction } from 'react';
+import { cache, useCallback, useId, type Dispatch, type SetStateAction } from 'react';
 
-import { getHistoricalMCQs } from '@/utils/get-epa-data';
 import type { Tables } from '@/utils/supabase/database.types';
-import type { MCQ, changeHistoryInstance } from '@/utils/types';
+import type { MCQ } from '@/utils/types';
 
 import { getUpdaterDetails, submitNewOption } from './actions';
 import { renderOption, renderQuestion } from './render-spans';
-import EditModalChangesList from './edit-modal-changes-list';
-import { enrichHistoryWithUpdaterDetails, filterHistory } from './utils';
+import EditModalLayout from './edit-modal-layout';
+import { submitChangeAndRefresh, useEditModalHistory } from './utils';
 
 const getCachedUpdaterDetails = cache(getUpdaterDetails);
 
@@ -41,124 +40,66 @@ export default function EditOptionModal({
     set: Dispatch<SetStateAction<string | null>>;
   };
 }) {
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [optionHistory, setOptionHistory] = useState<changeHistoryInstance[] | null>(null);
-
   const accordionID = useId();
 
-  useEffect(() => {
-    // add event listener when modal is closed
-    document.getElementById('edit-option-modal')?.addEventListener('hide.bs.modal', () => {
-      optionKey.set(null);
-      if (document.getElementById(`${accordionID}-list`)?.classList.contains('show'))
-        document.getElementById(`${accordionID}-list-button`)?.click();
-    });
-  }, [accordionID, optionKey]);
+  const getOptionHistoryText = useCallback(
+    (mcqsMetaRow: Tables<'mcqs_options'>) =>
+      (mcqsMetaRow.data as MCQ[]).find((mcq) => mcq.options[optionKey.get!])!.options[optionKey.get!],
+    [optionKey.get]
+  );
+  const resetOptionModal = useCallback(() => optionKey.set(null), [optionKey]);
 
-  // on change of selected option, get historical change data
-  const fetchHistory = useCallback(async () => {
-    setLoadingHistory(true);
-    setOptionHistory(null);
-
-    // If no option is selected, exit
-    if (!optionKey.get || !mcqsInformation.get) {
-      setLoadingHistory(false);
-      return;
-    }
-
-    // Fetch historical changes for the selected option
-    let history = mcqsInformation.get.map((mcqsMetaRow) => ({
-      updated_at: new Date(mcqsMetaRow.updated_at),
-      updated_by: mcqsMetaRow.updated_by ?? 'unknown updater',
-      text: (mcqsMetaRow.data as MCQ[]).find((mcq) => mcq.options[optionKey.get!])!.options[optionKey.get!],
-    })) satisfies changeHistoryInstance[];
-
-    history = await enrichHistoryWithUpdaterDetails(history, getCachedUpdaterDetails);
-
-    setOptionHistory(history);
-    setLoadingHistory(false);
-  }, [mcqsInformation.get, optionKey.get]);
-
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
+  const { history, loadingHistory } = useEditModalHistory({
+    accordionID,
+    modalID: 'edit-option-modal',
+    mcqsInformation,
+    canFetchHistory: Boolean(optionKey.get),
+    getHistoryText: getOptionHistoryText,
+    getUpdaterDetails: getCachedUpdaterDetails,
+    resetModalState: resetOptionModal,
+  });
 
   const handleSubmit = async () => {
-    submitNewOption(optionKey.get!, newOptionText.get!).then(() =>
-      getHistoricalMCQs().then((mcqs) => mcqsInformation.set(mcqs ?? null))
-    );
+    await submitChangeAndRefresh(() => submitNewOption(optionKey.get!, newOptionText.get!), mcqsInformation);
   };
 
   const submitDisabled =
     !optionMCQ.get || !optionKey.get || !optionText.get || !newOptionText.get || newOptionText.get === optionText.get;
 
   return (
-    <div
-      className='modal fade'
-      id='edit-option-modal'
-      tabIndex={-1}
-      aria-labelledby='edit-option-modal-label'
-      aria-hidden='true'
+    <EditModalLayout
+      accordionID={accordionID}
+      changesLabel='option'
+      history={history}
+      loadingHistory={loadingHistory}
+      modalID='edit-option-modal'
+      submitDisabled={submitDisabled}
+      title='Edit option'
+      onSubmit={handleSubmit}
     >
-      <div className='modal-dialog modal-dialog-centered modal-dialog-scrollable'>
-        <div className='modal-content'>
-          <div className='modal-header'>
-            <h1 className='modal-title h5' id='edit-option-modal-label'>
-              Edit option
-            </h1>
-            <button type='button' className='btn-close' data-bs-dismiss='modal' aria-label='Close' />
-          </div>
+      <p>
+        <strong>Question:</strong>
+        <br />
+        {optionMCQ.get ? renderQuestion(optionMCQ.get.kf, optionMCQ.get.question) : ''}
+      </p>
 
-          <div className='modal-body'>
-            <p>
-              <strong>Question:</strong>
-              <br />
-              {optionMCQ.get ? renderQuestion(optionMCQ.get.kf, optionMCQ.get.question) : ''}
-            </p>
+      <hr />
 
-            <hr />
-
-            <p>
-              <strong>Old option:</strong>
-              <br />
-              {renderOption(optionKey.get ?? '', optionText.get ?? '')}
-            </p>
-            <p className='fw-bold mb-1'>New option:</p>
-            <div className='mb-3'>
-              <input
-                id='new-option'
-                className='form-control'
-                type='text'
-                placeholder='Option text'
-                onChange={(e) => newOptionText.set(e.target.value)}
-              />
-            </div>
-
-            <hr className='my-4' />
-
-            <EditModalChangesList
-              loadingHistory={loadingHistory}
-              history={filterHistory(optionHistory ?? [])}
-              useID={accordionID}
-            />
-          </div>
-
-          <div className='modal-footer'>
-            <button type='button' className='btn btn-secondary' data-bs-dismiss='modal'>
-              Cancel
-            </button>
-            <button
-              type='button'
-              className='btn btn-primary'
-              data-bs-dismiss='modal'
-              disabled={submitDisabled}
-              onClick={handleSubmit}
-            >
-              Save changes
-            </button>
-          </div>
-        </div>
+      <p>
+        <strong>Old option:</strong>
+        <br />
+        {renderOption(optionKey.get ?? '', optionText.get ?? '')}
+      </p>
+      <p className='fw-bold mb-1'>New option:</p>
+      <div className='mb-3'>
+        <input
+          id='new-option'
+          className='form-control'
+          type='text'
+          placeholder='Option text'
+          onChange={(e) => newOptionText.set(e.target.value)}
+        />
       </div>
-    </div>
+    </EditModalLayout>
   );
 }

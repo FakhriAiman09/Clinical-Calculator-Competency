@@ -4,10 +4,12 @@ import Loading from '@/components/loading';
 import type { changeHistoryInstance } from '@/utils/types';
 
 const EditModalChangesList = memo(function EditModalChangesList({
+  changesLabel,
   loadingHistory,
   history,
   useID,
 }: {
+  changesLabel: string;
   loadingHistory: boolean;
   history: changeHistoryInstance[] | null;
   useID: string;
@@ -41,7 +43,7 @@ const EditModalChangesList = memo(function EditModalChangesList({
             aria-expanded='false'
             aria-controls='collapse'
           >
-            Past changes to this option
+            Past changes to this {changesLabel}
           </button>
         </h2>
 
