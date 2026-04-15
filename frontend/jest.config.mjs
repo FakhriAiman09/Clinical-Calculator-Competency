@@ -35,6 +35,13 @@ const jestConfig = {
         }
       ]
     },
+    collectCoverageFrom: [
+      'src/**/*.{ts,tsx}',
+      '!src/**/*.d.ts',
+      '!src/**/types.ts',
+      '!src/**/types/**',
+      '!src/**/__generated__/**',
+    ],
 };
 
 export default jestConfig;

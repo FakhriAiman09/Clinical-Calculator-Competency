@@ -115,7 +115,7 @@ describe('submitNewQuestion', () => {
   test('does nothing when no MCQs are found', async () => {
     getLatestMCQsMock.mockResolvedValueOnce(null);
     await expect(
-      submitNewQuestion({ question: 'Old Q', options: {} }, 'New Q')
+      submitNewQuestion({ question: 'Old Q', epa: '1', kf: '1', opt_count: 0, options: {} }, 'New Q')
     ).resolves.toBeUndefined();
     expect(insertMock).not.toHaveBeenCalled();
   });
@@ -128,7 +128,7 @@ describe('submitNewQuestion', () => {
     getLatestMCQsMock.mockResolvedValueOnce(mcqs);
     insertMock.mockResolvedValueOnce({ error: null });
 
-    await submitNewQuestion({ question: 'Old Question', options: { optionA: 'A' } }, 'Updated Question');
+    await submitNewQuestion({ question: 'Old Question', epa: '1', kf: '1', opt_count: 1, options: { optionA: 'A' } }, 'Updated Question');
     expect(insertMock).toHaveBeenCalledTimes(1);
 
     const arg = insertMock.mock.calls[0]?.[0] as { data: typeof mcqs } | undefined;
@@ -142,7 +142,7 @@ describe('submitNewQuestion', () => {
     getLatestMCQsMock.mockResolvedValueOnce(mcqs);
     insertMock.mockResolvedValueOnce({ error: null });
 
-    await submitNewQuestion({ question: 'Target Question', options: {} }, 'New Text');
+    await submitNewQuestion({ question: 'Target Question', epa: '1', kf: '1', opt_count: 0, options: {} }, 'New Text');
 
     const arg = insertMock.mock.calls[0]?.[0] as { data: typeof mcqs } | undefined;
     expect(arg?.data?.[0]?.question).toBe('Different Question');
