@@ -39,11 +39,20 @@ interface FormRequest {
   email?: string;
 }
 
-type Responses = {
-  [epa: number]: {
-    [questionId: string]: { [optionKey: string]: boolean } & { text: string };
-  };
+type FormRequestRow = Omit<FormRequest, 'display_name' | 'email'>;
+
+type ExistingResponseData = {
+  response?: Record<string, Record<string, Record<string, unknown>>>;
 };
+
+type EpaDescriptionRow = {
+  epa_descriptions?: Record<string, string>;
+};
+
+type QuestionResponse = Record<string, boolean | string> & { text: string };
+type Responses = Record<number, Record<string, QuestionResponse>>;
+
+type TextInputs = Record<number, Record<string, string>>;
 
 interface AggregatedResponseForKF {
   [optionKey: string]: boolean | string[];
@@ -60,6 +69,35 @@ type ActiveTarget =
   | { type: 'epa'; epaId: number; questionId: string }
   | { type: 'professionalism' }
   | null;
+
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  0: { transcript: string };
+};
+
+type SpeechRecognitionResultEventLike = {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+};
+
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onresult: ((event: SpeechRecognitionResultEventLike) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+type WindowWithSpeechRecognition = Window & {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+};
 
 function compareNumericDotStrings(a: string, b: string): number {
   const partsA = a.split('.').map(Number);
@@ -131,17 +169,66 @@ function appendTranscript(existing: string, transcript: string) {
   return (existing ? existing.trimEnd() + ' ' : '') + transcript.trim();
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+type SummaryGuard = ReturnType<typeof getSummaryGuard>;
+
+type SummaryPanelProps = {
+  summary: string;
+  summaryGuard: SummaryGuard;
+  onInsert: () => void;
+  onReplace: () => void;
+};
+
+type DictationStatusProps = {
+  isListening: boolean;
+  vttStatus: string;
+};
+
+type SummaryStatusProps = {
+  summary: string;
+  isSummarizing: boolean;
+  summaryGuard: SummaryGuard;
+};
+
+type EPAQuestionSectionProps = DictationStatusProps &
+  SummaryStatusProps & {
+    epaId: number;
+    kf: KeyFunction;
+    currentText: string;
+    summaryErr: string;
+    isChecked: (questionId: string, optionKey: string) => boolean;
+    onOptionChange: (questionId: string, optionKey: string, value: boolean) => void;
+    onTextChange: (questionId: string, value: string) => void;
+    onRequestSummary: (questionId: string) => void;
+    onToggleDictation: (questionId: string) => void;
+    onInsertSummary: (questionId: string) => void;
+    onReplaceSummary: (questionId: string) => void;
+  };
+
+type ProfessionalismSectionProps = DictationStatusProps & {
+  professionalism: string;
+  isSummarizing: boolean;
+  summaryError: string;
+  summary: string;
+  onChange: (value: string) => void;
+  onRequestSummary: () => void;
+  onToggleDictation: () => void;
+  onInsertSummary: () => void;
+  onReplaceSummary: () => void;
+  onSubmit: () => void;
+  submittingFinal: boolean;
+  isEditMode: boolean;
+};
+
 function SummaryPanel({
   summary,
   summaryGuard,
   onInsert,
   onReplace,
-}: {
-  summary: string;
-  summaryGuard: ReturnType<typeof getSummaryGuard>;
-  onInsert: () => void;
-  onReplace: () => void;
-}) {
+}: SummaryPanelProps) {
   if (!summary) return null;
 
   return (
@@ -204,24 +291,7 @@ function EPAQuestionSection({
   onToggleDictation,
   onInsertSummary,
   onReplaceSummary,
-}: {
-  epaId: number;
-  kf: KeyFunction;
-  currentText: string;
-  isListening: boolean;
-  vttStatus: string;
-  summary: string;
-  isSummarizing: boolean;
-  summaryErr: string;
-  summaryGuard: ReturnType<typeof getSummaryGuard>;
-  isChecked: (questionId: string, optionKey: string) => boolean;
-  onOptionChange: (questionId: string, optionKey: string, value: boolean) => void;
-  onTextChange: (questionId: string, value: string) => void;
-  onRequestSummary: (questionId: string) => void;
-  onToggleDictation: (questionId: string) => void;
-  onInsertSummary: (questionId: string) => void;
-  onReplaceSummary: (questionId: string) => void;
-}) {
+}: EPAQuestionSectionProps) {
   const questionKey = kf.questionId;
 
   return (
@@ -319,22 +389,7 @@ function ProfessionalismSection({
   onSubmit,
   submittingFinal,
   isEditMode,
-}: {
-  professionalism: string;
-  isListening: boolean;
-  isSummarizing: boolean;
-  vttStatus: string;
-  summaryError: string;
-  summary: string;
-  onChange: (value: string) => void;
-  onRequestSummary: () => void;
-  onToggleDictation: () => void;
-  onInsertSummary: () => void;
-  onReplaceSummary: () => void;
-  onSubmit: () => void;
-  submittingFinal: boolean;
-  isEditMode: boolean;
-}) {
+}: ProfessionalismSectionProps) {
   const summaryGuard = getSummaryGuard(summary, 'professionalism');
   const submitLabel = submittingFinal
     ? isEditMode
@@ -423,7 +478,7 @@ function applyKfDataToQuestion(
   questionId: string,
   epaNum: number,
   rebuiltResponses: Responses,
-  rebuiltTextInputs: Record<number, Record<string, string>>,
+  rebuiltTextInputs: TextInputs,
 ): void {
   for (const key of Object.keys(oneKfData)) {
     if (key !== 'text' && typeof oneKfData[key] === 'boolean') {
@@ -437,26 +492,28 @@ function applyKfDataToQuestion(
   }
 }
 
+function ensureResponseBucket(epaNum: number, rebuiltResponses: Responses, rebuiltTextInputs: TextInputs) {
+  rebuiltResponses[epaNum] = rebuiltResponses[epaNum] ?? {};
+  rebuiltTextInputs[epaNum] = rebuiltTextInputs[epaNum] ?? {};
+}
+
 function rebuildResponsesFromAggregated(
   aggregatedResponses: Record<string, Record<string, Record<string, unknown>>>,
   kfToQuestions: Record<string, KeyFunction[]>,
-): { rebuiltResponses: Responses; rebuiltTextInputs: Record<number, Record<string, string>> } {
+): { rebuiltResponses: Responses; rebuiltTextInputs: TextInputs } {
   const rebuiltResponses: Responses = {};
-  const rebuiltTextInputs: Record<number, Record<string, string>> = {};
+  const rebuiltTextInputs: TextInputs = {};
 
-  for (const epaKey of Object.keys(aggregatedResponses)) {
-    const epaNum = parseInt(epaKey, 10);
-    const epaData = aggregatedResponses[epaKey];
-    rebuiltResponses[epaNum] = rebuiltResponses[epaNum] ?? {};
-    rebuiltTextInputs[epaNum] = rebuiltTextInputs[epaNum] ?? {};
+  for (const [epaKey, epaData] of Object.entries(aggregatedResponses)) {
+    const epaNum = Number.parseInt(epaKey, 10);
+    ensureResponseBucket(epaNum, rebuiltResponses, rebuiltTextInputs);
 
-    for (const kfKey of Object.keys(epaData)) {
-      const oneKfData = epaData[kfKey] as Record<string, unknown>;
+    for (const [kfKey, oneKfData] of Object.entries(epaData)) {
       const questions = kfToQuestions[`${epaNum}.${kfKey}`] ?? [];
 
       for (const [idx, question] of questions.entries()) {
         const { questionId } = question;
-        rebuiltResponses[epaNum][questionId] = rebuiltResponses[epaNum][questionId] ?? ({ text: '' } as any);
+        rebuiltResponses[epaNum][questionId] = rebuiltResponses[epaNum][questionId] ?? { text: '' };
         applyKfDataToQuestion(oneKfData, idx, questionId, epaNum, rebuiltResponses, rebuiltTextInputs);
       }
     }
@@ -466,14 +523,14 @@ function rebuildResponsesFromAggregated(
 
 function mergeTextInputsIntoResponses(
   responses: Responses,
-  textInputs: Record<number, Record<string, string>>,
+  textInputs: TextInputs,
 ): Responses {
   const merged: Responses = { ...responses };
   for (const epaKey of Object.keys(textInputs)) {
-    const epaNum = parseInt(epaKey, 10);
-    if (!merged[epaNum]) merged[epaNum] = {} as any;
+    const epaNum = Number.parseInt(epaKey, 10);
+    if (!merged[epaNum]) merged[epaNum] = {};
     for (const questionId of Object.keys(textInputs[epaNum])) {
-      if (!merged[epaNum][questionId]) merged[epaNum][questionId] = { text: '' } as any;
+      if (!merged[epaNum][questionId]) merged[epaNum][questionId] = { text: '' };
       merged[epaNum][questionId].text = textInputs[epaNum][questionId];
     }
   }
@@ -492,7 +549,7 @@ function aggregateByKF(
 ): AggregatedResponses {
   const aggregated: AggregatedResponses = {};
   for (const epaKey of Object.keys(mergedResponses)) {
-    const epaNum = parseInt(epaKey, 10);
+    const epaNum = Number.parseInt(epaKey, 10);
     aggregated[epaNum] = aggregated[epaNum] ?? {};
     for (const questionId of Object.keys(mergedResponses[epaNum])) {
       const mapping = questionMapping[questionId];
@@ -573,7 +630,7 @@ export default function RaterFormsPage() {
     response: Responses;
   } | null>(null);
 
-  const [textInputs, setTextInputs] = useState<{ [epa: number]: { [questionId: string]: string } }>({});
+  const [textInputs, setTextInputs] = useState<TextInputs>({});
   const [professionalism, setProfessionalism] = useState<string>('');
   const [showProfessionalismForm, setShowProfessionalismForm] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<string>('');
@@ -590,14 +647,15 @@ export default function RaterFormsPage() {
   // =========================================================
   // VOICE TO TEXT
   // =========================================================
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const activeTargetRef = useRef<ActiveTarget>(null);
 
   const [listeningByField, setListeningByField] = useState<Record<string, boolean>>({});
   const [statusByField, setStatusByField] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as WindowWithSpeechRecognition;
+    const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       recognitionRef.current = null;
@@ -627,7 +685,7 @@ export default function RaterFormsPage() {
       setStatusByField((prev) => ({ ...prev, [key]: '' }));
     };
 
-    recognition.onerror = (e: any) => {
+    recognition.onerror = (e) => {
       const key = getCurrentFieldKey();
       if (!key) return;
 
@@ -635,7 +693,7 @@ export default function RaterFormsPage() {
       setStatusByField((prev) => ({ ...prev, [key]: `Error: ${e?.error || 'unknown'}` }));
     };
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event) => {
       const target = activeTargetRef.current;
       if (!target) return;
 
@@ -758,10 +816,10 @@ export default function RaterFormsPage() {
       const data = await callAISummaryAPI({ text, model: aiModel, kf, selectedOptions });
       await incrementUsage();
       setSummaryByField((prev) => ({ ...prev, [key]: (data.summary ?? '').trim() }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSummaryErrorByField((prev) => ({
         ...prev,
-        [key]: err?.message || 'Summary failed. Try again.',
+        [key]: getErrorMessage(err, 'Summary failed. Try again.'),
       }));
     } finally {
       setSummarizingByField((prev) => ({ ...prev, [key]: false }));
@@ -787,10 +845,10 @@ export default function RaterFormsPage() {
       const data = await callAISummaryAPI({ text, model: aiModel, kf: 'professionalism' });
       await incrementUsage();
       setSummaryByField((prev) => ({ ...prev, [key]: (data.summary ?? '').trim() }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSummaryErrorByField((prev) => ({
         ...prev,
-        [key]: err?.message || 'Summary failed. Try again.',
+        [key]: getErrorMessage(err, 'Summary failed. Try again.'),
       }));
     } finally {
       setSummarizingByField((prev) => ({ ...prev, [key]: false }));
@@ -862,7 +920,7 @@ export default function RaterFormsPage() {
     const debouncedFunction = debounce(
       (
         newResponses: Responses,
-        newTextInputs: { [epa: number]: { [questionId: string]: string } },
+        newTextInputs: TextInputs,
         newProfessionalism: string,
         newSelectedEPAs: number[]
       ) => {
@@ -893,7 +951,7 @@ export default function RaterFormsPage() {
       try {
         const parsedData = JSON.parse(cachedData) as {
           responses: Responses;
-          textInputs: { [epa: number]: { [questionId: string]: string } };
+          textInputs: TextInputs;
           professionalism: string;
           selectedEPAs?: number[];
         };
@@ -949,7 +1007,7 @@ export default function RaterFormsPage() {
       const student = (users as User[]).find((u) => u.user_id === formData.student_id);
 
       const fr: FormRequest = {
-        ...(formData as any),
+        ...(formData as FormRequestRow),
         display_name: student?.display_name ?? 'Unknown',
         email: student?.email ?? 'Unknown',
       };
@@ -979,7 +1037,7 @@ export default function RaterFormsPage() {
         setIsEditMode(true);
         setSaveStatus('Loading previous responses...');
 
-        const responseData = existingResponse.response as any;
+        const responseData = existingResponse.response as ExistingResponseData;
         const aggregatedResponses = responseData?.response || {};
 
         const kfToQuestions = buildKfToQuestionsMap(kfData);
@@ -1032,12 +1090,15 @@ export default function RaterFormsPage() {
       const { data: epaData, error: epaError } = await supabase.from('epa_kf_descriptions').select('*');
       if (epaError) {
         console.error('EPA Fetch Error:', epaError);
-      } else if (epaData && epaData.length > 0 && (epaData as any)[0].epa_descriptions) {
-        const formattedEPAs: EPA[] = Object.entries((epaData as any)[0].epa_descriptions).map(([key, value]) => ({
-          id: parseInt(key, 10),
-          description: value as string,
-        }));
-        setEPAs(formattedEPAs);
+      } else {
+        const epaDescriptions = (epaData as EpaDescriptionRow[] | null)?.[0]?.epa_descriptions;
+        if (epaDescriptions) {
+          const formattedEPAs: EPA[] = Object.entries(epaDescriptions).map(([key, value]) => ({
+            id: Number.parseInt(key, 10),
+            description: value,
+          }));
+          setEPAs(formattedEPAs);
+        }
       }
 
       const latestMCQs = await getLatestMCQs();
@@ -1045,7 +1106,7 @@ export default function RaterFormsPage() {
         const formattedKFData: KeyFunction[] = latestMCQs.map(
           (mcq: { epa: string; kf: string; question: string; options: { [key: string]: string } }) => ({
             kf: mcq.kf,
-            epa: parseInt(mcq.epa, 10),
+            epa: Number.parseInt(mcq.epa, 10),
             question: mcq.question,
             options: mcq.options,
             questionId: Object.keys(mcq.options).sort(compareNumericDotStrings)[0],
@@ -1072,12 +1133,12 @@ export default function RaterFormsPage() {
         const epa = kf.epa;
         const questionId = kf.questionId;
 
-        if (!newResponses[epa]) newResponses[epa] = {} as any;
+        if (!newResponses[epa]) newResponses[epa] = {};
 
         if (!newResponses[epa][questionId]) {
           const defaults: { [key: string]: boolean } = {};
           for (const optKey of Object.keys(kf.options)) defaults[optKey] = false;
-          newResponses[epa][questionId] = { ...defaults, text: '' } as any;
+          newResponses[epa][questionId] = { ...defaults, text: '' };
         }
       }
 

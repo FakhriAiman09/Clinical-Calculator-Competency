@@ -41,14 +41,17 @@ export type ModalState<T> = {
 
 export type MCQsInformationState = ModalState<Tables<'mcqs_options'>[] | null>;
 
-type UseEditModalHistoryParams = {
-  accordionID: string;
+type EditModalHistoryConfig = {
   modalID: string;
   mcqsInformation: MCQsInformationState;
   canFetchHistory: boolean;
   getHistoryText: (mcqsMetaRow: Tables<'mcqs_options'>) => string;
   getUpdaterDetails: (id: string) => Promise<UpdaterDetails>;
   resetModalState: () => void;
+};
+
+type UseEditModalHistoryParams = EditModalHistoryConfig & {
+  accordionID: string;
 };
 
 export function useEditModalHistory({
@@ -118,13 +121,7 @@ export async function submitChangeAndRefresh(
   await refreshHistoricalMCQs(mcqsInformation);
 }
 
-type UseEditModalControllerParams = {
-  modalID: string;
-  mcqsInformation: MCQsInformationState;
-  canFetchHistory: boolean;
-  getHistoryText: (mcqsMetaRow: Tables<'mcqs_options'>) => string;
-  getUpdaterDetails: (id: string) => Promise<UpdaterDetails>;
-  resetModalState: () => void;
+type UseEditModalControllerParams = EditModalHistoryConfig & {
   submitChange: () => Promise<unknown>;
 };
 
