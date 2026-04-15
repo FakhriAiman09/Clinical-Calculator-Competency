@@ -223,6 +223,23 @@ type ProfessionalismSectionProps = DictationStatusProps & {
   isEditMode: boolean;
 };
 
+type CommentEditorProps = DictationStatusProps & {
+  value: string;
+  placeholder: string;
+  rows?: number;
+  isSummarizing: boolean;
+  summaryError: string;
+  summaryPanel: SummaryPanelProps;
+  onChange: (value: string) => void;
+  onRequestSummary: () => void;
+  onToggleDictation: () => void;
+};
+
+function getProfessionalismSubmitLabel(submittingFinal: boolean, isEditMode: boolean) {
+  if (!submittingFinal) return isEditMode ? 'Update Evaluation' : 'Submit Final Evaluation';
+  return isEditMode ? 'Updating...' : 'Submitting...';
+}
+
 function SummaryPanel({
   summary,
   summaryGuard,
@@ -271,6 +288,64 @@ function SummaryPanel({
 
       <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{summary}</div>
     </div>
+  );
+}
+
+function CommentEditor({
+  value,
+  placeholder,
+  rows,
+  isListening,
+  isSummarizing,
+  vttStatus,
+  summaryError,
+  summaryPanel,
+  onChange,
+  onRequestSummary,
+  onToggleDictation,
+}: CommentEditorProps) {
+  return (
+    <>
+      <div className='comment-wrapper'>
+        <textarea
+          className='form-control comment-textarea'
+          placeholder={placeholder}
+          rows={rows}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+
+        <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 8, zIndex: 2 }}>
+          <button
+            type='button'
+            className='vtt-btn'
+            onClick={onRequestSummary}
+            title='Generate AI summary from comments'
+            disabled={isSummarizing}
+          >
+            <i className={`bi ${isSummarizing ? 'bi-hourglass-split' : 'bi-stars'}`} />
+          </button>
+
+          <button
+            type='button'
+            className={`vtt-btn ${isListening ? 'recording' : ''}`}
+            onClick={onToggleDictation}
+            title={isListening ? 'Stop voice input' : 'Start voice input'}
+          >
+            <i className={`bi ${isListening ? 'bi-stop-circle-fill' : 'bi-mic-fill'}`} />
+          </button>
+        </div>
+      </div>
+
+      {vttStatus ? <div className='vtt-status'>{vttStatus}</div> : null}
+      {summaryError ? (
+        <div className='vtt-status' style={{ color: '#dc3545' }}>
+          {summaryError}
+        </div>
+      ) : null}
+
+      <SummaryPanel {...summaryPanel} />
+    </>
   );
 }
 
@@ -324,48 +399,22 @@ function EPAQuestionSection({
       <div>
         <h6 className='mb-2'>Additional comments:</h6>
 
-        <div className='comment-wrapper'>
-          <textarea
-            className='form-control comment-textarea'
-            placeholder='Additional comments ...'
-            value={currentText}
-            onChange={(e) => onTextChange(questionKey, e.target.value)}
-          />
-
-          <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 8, zIndex: 2 }}>
-            <button
-              type='button'
-              className='vtt-btn'
-              onClick={() => onRequestSummary(questionKey)}
-              title='Generate AI summary from comments'
-              disabled={isSummarizing}
-            >
-              <i className={`bi ${isSummarizing ? 'bi-hourglass-split' : 'bi-stars'}`} />
-            </button>
-
-            <button
-              type='button'
-              className={`vtt-btn ${isListening ? 'recording' : ''}`}
-              onClick={() => onToggleDictation(questionKey)}
-              title={isListening ? 'Stop voice input' : 'Start voice input'}
-            >
-              <i className={`bi ${isListening ? 'bi-stop-circle-fill' : 'bi-mic-fill'}`} />
-            </button>
-          </div>
-        </div>
-
-        {vttStatus ? <div className='vtt-status'>{vttStatus}</div> : null}
-        {summaryErr ? (
-          <div className='vtt-status' style={{ color: '#dc3545' }}>
-            {summaryErr}
-          </div>
-        ) : null}
-
-        <SummaryPanel
-          summary={summary}
-          summaryGuard={summaryGuard}
-          onInsert={() => onInsertSummary(questionKey)}
-          onReplace={() => onReplaceSummary(questionKey)}
+        <CommentEditor
+          value={currentText}
+          placeholder='Additional comments ...'
+          isListening={isListening}
+          isSummarizing={isSummarizing}
+          vttStatus={vttStatus}
+          summaryError={summaryErr}
+          onChange={(value) => onTextChange(questionKey, value)}
+          onRequestSummary={() => onRequestSummary(questionKey)}
+          onToggleDictation={() => onToggleDictation(questionKey)}
+          summaryPanel={{
+            summary,
+            summaryGuard,
+            onInsert: () => onInsertSummary(questionKey),
+            onReplace: () => onReplaceSummary(questionKey),
+          }}
         />
       </div>
 
@@ -391,13 +440,7 @@ function ProfessionalismSection({
   isEditMode,
 }: ProfessionalismSectionProps) {
   const summaryGuard = getSummaryGuard(summary, 'professionalism');
-  const submitLabel = submittingFinal
-    ? isEditMode
-      ? 'Updating...'
-      : 'Submitting...'
-    : isEditMode
-    ? 'Update Evaluation'
-    : 'Submit Final Evaluation';
+  const submitLabel = getProfessionalismSubmitLabel(submittingFinal, isEditMode);
 
   return (
     <div className='card mt-4'>
@@ -406,49 +449,23 @@ function ProfessionalismSection({
         <div className='mb-4'>
           <p className='fw-bold'>Please describe the student&apos;s professionalism:</p>
 
-          <div className='comment-wrapper'>
-            <textarea
-              className='form-control comment-textarea'
-              placeholder="Describe the student's professionalism..."
-              rows={5}
-              value={professionalism}
-              onChange={(e) => onChange(e.target.value)}
-            />
-
-            <div style={{ position: 'absolute', bottom: 8, right: 8, display: 'flex', gap: 8, zIndex: 2 }}>
-              <button
-                type='button'
-                className='vtt-btn'
-                onClick={onRequestSummary}
-                title='Generate AI summary from professionalism comments'
-                disabled={isSummarizing}
-              >
-                <i className={`bi ${isSummarizing ? 'bi-hourglass-split' : 'bi-stars'}`} />
-              </button>
-
-              <button
-                type='button'
-                className={`vtt-btn ${isListening ? 'recording' : ''}`}
-                onClick={onToggleDictation}
-                title={isListening ? 'Stop voice input' : 'Start voice input'}
-              >
-                <i className={`bi ${isListening ? 'bi-stop-circle-fill' : 'bi-mic-fill'}`} />
-              </button>
-            </div>
-          </div>
-
-          {vttStatus ? <div className='vtt-status'>{vttStatus}</div> : null}
-          {summaryError ? (
-            <div className='vtt-status' style={{ color: '#dc3545' }}>
-              {summaryError}
-            </div>
-          ) : null}
-
-          <SummaryPanel
-            summary={summary}
-            summaryGuard={summaryGuard}
-            onInsert={onInsertSummary}
-            onReplace={onReplaceSummary}
+          <CommentEditor
+            value={professionalism}
+            placeholder="Describe the student's professionalism..."
+            rows={5}
+            isListening={isListening}
+            isSummarizing={isSummarizing}
+            vttStatus={vttStatus}
+            summaryError={summaryError}
+            onChange={onChange}
+            onRequestSummary={onRequestSummary}
+            onToggleDictation={onToggleDictation}
+            summaryPanel={{
+              summary,
+              summaryGuard,
+              onInsert: onInsertSummary,
+              onReplace: onReplaceSummary,
+            }}
           />
         </div>
 
