@@ -6,7 +6,7 @@ import Header from '@/components/header';
 import Loading from '@/components/loading';
 import { getEPAKFDescs, getKFSampleCounts, getLatestMCQs } from '@/utils/get-epa-data';
 import { DevLevel, MCQ, type EPAKFDesc } from '@/utils/types';
-import { getDevLevelInt } from '@/utils/util';
+import { getDevLevelInt, getSecureRandomFloat } from '@/utils/util';
 
 import EpaKfDesc from './epa-kf-desc';
 import Question from './question';
@@ -46,7 +46,7 @@ export default function Form() {
     // Accept when selected == 50% for case of 2 options
     let selectedCount = 0;
     while (selectedCount === 0 || selectedCount / length > 0.5) {
-      choices = keys.reduce((o, k) => ({ ...o, [k]: Math.random() < 0.5 }), {});
+      choices = keys.reduce((o, k) => ({ ...o, [k]: getSecureRandomFloat() < 0.5 }), {});
       selectedCount = Object.values(choices).filter((v) => v).length;
     }
 
@@ -56,7 +56,7 @@ export default function Form() {
   const getWeightedRandomKf = (sampleCounts: { kf: string; count: number }[]) => {
     const weights = sampleCounts.map((sc) => 1 / (sc.count + 1));
     const totalWeight = weights.reduce((a, b) => a + b, 0);
-    const rand = Math.random() * totalWeight;
+    const rand = getSecureRandomFloat() * totalWeight;
     let sum = 0;
     for (let i = 0; i < sampleCounts.length; i++) {
       sum += weights[i];

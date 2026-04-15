@@ -1,5 +1,20 @@
 import { DevLevel } from './types';
 
+const UINT32_MAX_PLUS_ONE = 0x100000000;
+
+/**
+ * Returns a cryptographically secure random number in the range [0, 1).
+ */
+export function getSecureRandomFloat(): number {
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new Error('Secure random number generation is unavailable in this environment.');
+  }
+
+  const values = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(values);
+  return values[0] / UINT32_MAX_PLUS_ONE;
+}
+
 /**
  * Takes in a list of items and returns a random item from the list.
  * @param {T[]} list - The `list` with items.
@@ -7,7 +22,7 @@ import { DevLevel } from './types';
  */
 export function getRandomItem<T>(list: T[]): T | undefined {
   if (list.length === 0) return undefined;
-  return list[Math.floor(Math.random() * list.length)];
+  return list[Math.floor(getSecureRandomFloat() * list.length)];
 }
 
 /**
