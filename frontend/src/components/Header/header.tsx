@@ -140,7 +140,7 @@ export default function Header() {
 
           {/* Nav inline on lg+ */}
           {user && (
-            <nav className='d-none d-lg-flex align-items-center flex-wrap gap-2 ms-3 flex-grow-1' onClick={() => setNavOpen(false)}>
+            <nav className='d-none d-lg-flex align-items-center flex-wrap gap-2 ms-3 flex-grow-1'>
               <NavLinks />
             </nav>
           )}
@@ -182,8 +182,8 @@ export default function Header() {
         {/* ── Mobile nav: drops below the top row on small screens ── */}
         {user && (
           <div className={`header-nav-collapse d-lg-none${navOpen ? ' open' : ''}`}>
-            <nav className='header-nav-inner' onClick={() => setNavOpen(false)}>
-              <NavLinks />
+            <nav className='header-nav-inner'>
+              <NavLinks onNavigate={() => setNavOpen(false)} />
             </nav>
           </div>
         )}

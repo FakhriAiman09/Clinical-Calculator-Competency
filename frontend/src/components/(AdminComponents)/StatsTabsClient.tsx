@@ -208,11 +208,13 @@ export default function StatsTabsClient() {
           {activeTab === 'EPA Distribution' && (
             <div className='epa-distribution-grid'>
               {Object.entries(stats.monthlyEPADistribution).map(([epa, data]) => (
-                <div
+                <button
+                  type='button'
                   key={epa}
-                  className='border rounded shadow-sm bg-body-secondary p-3 min-w-0'
+                  className='border rounded shadow-sm bg-body-secondary p-3 min-w-0 text-body text-start'
                   style={{ cursor: 'pointer' }}
                   title='Click to enlarge'
+                  aria-label={`View enlarged EPA ${epa} monthly distribution`}
                   onClick={() => setSelectedEpa({ epa, data })}
                 >
                   <h6 className='mb-3 text-center'>EPA {epa}</h6>
@@ -269,7 +271,7 @@ export default function StatsTabsClient() {
                       />
                     ))}
                   </svg>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -278,15 +280,15 @@ export default function StatsTabsClient() {
 
       {/* EPA Graph Modal */}
       {selectedEpa && (
-        <div
-          className='modal d-block'
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          onClick={() => setSelectedEpa(null)}
-        >
-          <div
-            className='modal-dialog modal-lg modal-dialog-centered'
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className='modal d-block' role='dialog' aria-modal='true' aria-label={`EPA ${selectedEpa.epa} monthly distribution`}>
+          <button
+            type='button'
+            className='position-absolute top-0 start-0 w-100 h-100 border-0 p-0'
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+            aria-label='Close EPA graph'
+            onClick={() => setSelectedEpa(null)}
+          />
+          <div className='modal-dialog modal-lg modal-dialog-centered position-relative'>
             <div className='modal-content'>
               <div className='modal-header'>
                 <h5 className='modal-title'>EPA {selectedEpa.epa} — Monthly Distribution</h5>

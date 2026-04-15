@@ -83,16 +83,15 @@ const EPAModal: React.FC<EPAModalProps> = ({ selectedEpa, onClose, range }) => {
 
   return (
     <>
-      <div
-        className='modal fade show d-block'
-        tabIndex={-1}
-        role='dialog'
-        aria-labelledby='epaModalLabel'
-        aria-modal='true'
-        style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-        onClick={onClose}
-      >
-        <div className='modal-dialog modal-dialog-centered' role='document' onClick={(e) => e.stopPropagation()}>
+      <div className='modal fade show d-block' tabIndex={-1} role='dialog' aria-labelledby='epaModalLabel' aria-modal='true'>
+        <button
+          type='button'
+          className='position-absolute top-0 start-0 w-100 h-100 border-0 p-0'
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          aria-label='Close EPA key functions'
+          onClick={onClose}
+        />
+        <div className='modal-dialog modal-dialog-centered position-relative' role='document'>
           <div className='modal-content'>
             <div className='modal-header'>
               <h5 className='modal-title' id='epaModalLabel'>

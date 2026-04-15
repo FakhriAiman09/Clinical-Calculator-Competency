@@ -174,18 +174,26 @@ export default function AboutPage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 2000,
           }}
-          onClick={closeDevDetails}
         >
+          <button
+            type='button'
+            aria-label='Close developer details'
+            onClick={closeDevDetails}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              border: 0,
+              background: 'rgba(0,0,0,0.5)',
+            }}
+          />
           <div
             className='card shadow bg-body'
-            style={{ width: 420, maxWidth: '95%' }}
-            onClick={(e) => e.stopPropagation()}
+            style={{ width: 420, maxWidth: '95%', position: 'relative' }}
           >
             <div className='card-body'>
               <div className='d-flex justify-content-between align-items-start mb-3'>

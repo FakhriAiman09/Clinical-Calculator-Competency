@@ -121,9 +121,13 @@ export default function TicketsPage() {
             </thead>
             <tbody>
               {tickets.map((t, idx) => (
-                <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(t)}>
+                <tr key={t.id}>
                   <td>{idx + 1}</td>
-                  <td>{t.title}</td>
+                  <td>
+                    <button type='button' className='btn btn-link p-0 text-start' onClick={() => setSelected(t)}>
+                      {t.title}
+                    </button>
+                  </td>
                   <td className='text-capitalize'>{t.type}</td>
                   <td>{t.status}</td>
                   <td>{new Date(t.submitted_at).toLocaleString()}</td>
@@ -148,9 +152,14 @@ export default function TicketsPage() {
       {/* ── detail modal ─────────────────────────────────── */}
       {selected && (
         <>
-          <div className='modal-backdrop fade show' onClick={closeModal} />
-          <div className='modal fade show d-block' role='dialog' onClick={closeModal}>
-            <div className='modal-dialog modal-lg' onClick={(e) => e.stopPropagation()}>
+          <button
+            type='button'
+            className='modal-backdrop fade show border-0'
+            aria-label='Close ticket details'
+            onClick={closeModal}
+          />
+          <div className='modal fade show d-block' role='dialog' aria-modal='true'>
+            <div className='modal-dialog modal-lg'>
               <div className='modal-content rounded-3 shadow'>
                 <div className='modal-header'>
                   <h5 className='modal-title'>{selected.title}</h5>

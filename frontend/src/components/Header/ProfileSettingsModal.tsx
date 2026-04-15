@@ -81,11 +81,16 @@ const ProfileSettingsModal = ({ show, onClose }: ProfileSettingsModalProps) => {
       )}
 
       {/* Simulated Bootstrap modal backdrop */}
-      <div className='modal-backdrop fade show'></div>
+      <button
+        type='button'
+        className='modal-backdrop fade show border-0'
+        aria-label='Close profile settings'
+        onClick={onClose}
+      />
 
       {/* Bootstrap-styled modal controlled by React */}
-      <div className='modal fade show d-block' tabIndex={-1} role='dialog' onClick={onClose}>
-        <div className='modal-dialog' role='document' onClick={(e) => e.stopPropagation()}>
+      <div className='modal fade show d-block' tabIndex={-1} role='dialog' aria-modal='true'>
+        <div className='modal-dialog' role='document'>
           <div className='modal-content'>
             <div className='modal-header'>
               <h5 className='modal-title'>Profile Settings</h5>

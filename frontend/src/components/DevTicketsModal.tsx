@@ -96,11 +96,16 @@ export default function DeveloperTicketModal({ show, onClose }: DeveloperTicketM
       )}
 
       {/* backdrop */}
-      <div className='modal-backdrop fade show' onClick={onClose} />
+      <button
+        type='button'
+        className='modal-backdrop fade show border-0'
+        aria-label='Close developer ticket modal'
+        onClick={onClose}
+      />
 
       {/* modal */}
-      <div className='modal fade show d-block' tabIndex={-1} role='dialog' aria-modal='true' onClick={onClose}>
-        <div className='modal-dialog modal-lg' role='document' onClick={(e) => e.stopPropagation()}>
+      <div className='modal fade show d-block' tabIndex={-1} role='dialog' aria-modal='true'>
+        <div className='modal-dialog modal-lg' role='document'>
           <div className='modal-content rounded-3 shadow'>
             <div className='modal-header'>
               <h5 className='modal-title'>Submit a Developer Ticket</h5>
