@@ -35,7 +35,7 @@ RUN mkdir -p /home/appuser/models /home/appuser/svm-models /home/appuser/logs \
 
 # Install openssh-client for Railway SSH file transfers
 USER root
-RUN apt-get update && apt-get install -y openssh-client && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/*
 
 USER appuser
 
