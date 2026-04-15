@@ -15,7 +15,7 @@ jobs:
         # pinned v4
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v2
-        # pinned
+        uses: SonarSource/sonarcloud-github-action@e44258b109568baa0df60ed515909fc6c72cba92
+        # pinned to v2 commit SHA
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

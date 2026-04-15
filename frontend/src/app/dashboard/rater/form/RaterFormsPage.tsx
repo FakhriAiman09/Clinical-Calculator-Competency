@@ -622,6 +622,111 @@ async function callAISummaryAPI(
   return data as { summary: string };
 }
 
+function clearSummaryErrorAfterDelay(
+  key: string,
+  setSummaryErrorByField: React.Dispatch<React.SetStateAction<Record<string, string>>>,
+) {
+  setTimeout(() => {
+    setSummaryErrorByField((prev) => ({ ...prev, [key]: '' }));
+  }, 3000);
+}
+
+function removeEpaFromProgressCache(studentId: string, epaId: number): void {
+  const cachedData = localStorage.getItem(`form-progress-${studentId}`);
+  if (!cachedData) return;
+
+  try {
+    const parsedData = JSON.parse(cachedData) as { responses?: Responses; textInputs?: TextInputs };
+    if (parsedData.responses) delete parsedData.responses[epaId];
+    if (parsedData.textInputs) delete parsedData.textInputs[epaId];
+    localStorage.setItem(`form-progress-${studentId}`, JSON.stringify(parsedData));
+  } catch (error) {
+    console.error('Error updating cached JSON:', error);
+  }
+}
+
+function pruneProgressCacheToSelectedEpas(studentId: string, selectedEPAs: number[]): void {
+  const cacheKey = `form-progress-${studentId}`;
+  const cachedData = localStorage.getItem(cacheKey);
+  if (!cachedData) return;
+
+  try {
+    const formProgress = JSON.parse(cachedData) as { responses?: Responses; textInputs?: TextInputs };
+
+    if (formProgress.responses) {
+      Object.keys(formProgress.responses).forEach((epaKey) => {
+        if (!selectedEPAs.includes(Number(epaKey))) delete formProgress.responses?.[Number(epaKey)];
+      });
+    }
+
+    if (formProgress.textInputs) {
+      Object.keys(formProgress.textInputs).forEach((epaKey) => {
+        if (!selectedEPAs.includes(Number(epaKey))) delete formProgress.textInputs?.[Number(epaKey)];
+      });
+    }
+
+    localStorage.setItem(cacheKey, JSON.stringify(formProgress));
+  } catch (error) {
+    console.error('Error updating cached JSON:', error);
+  }
+}
+
+function buildSubmissionData(
+  cachedJSON: { metadata: { student_id: string; rater_id: string }; response: Responses } | null,
+  formRequest: FormRequest,
+  sortedAggregatedResponses: AggregatedResponses,
+) {
+  const localData = cachedJSON
+    ? { ...cachedJSON }
+    : {
+        metadata: { student_id: formRequest.student_id, rater_id: formRequest.completed_by },
+        response: {} as Responses,
+      };
+
+  localData.response = sortedAggregatedResponses as unknown as Responses;
+  return localData;
+}
+
+async function upsertFormResponse(
+  isEditMode: boolean,
+  existingResponseId: string | null,
+  formRequestId: string,
+  localData: { metadata: { student_id: string; rater_id: string }; response: Responses },
+  professionalism: string,
+) {
+  if (isEditMode && existingResponseId) {
+    const { error } = await supabase
+      .from('form_responses')
+      .update({ response: localData, professionalism })
+      .eq('response_id', existingResponseId);
+    if (!error) {
+      console.log('Updated existing response:', existingResponseId);
+    }
+    return error;
+  }
+
+  const { error } = await supabase.from('form_responses').insert({
+    request_id: formRequestId,
+    response: localData,
+    professionalism,
+  });
+  return error;
+}
+
+async function sendRaterNotificationEmail(formRequest: FormRequest): Promise<void> {
+  if (!formRequest.email) return;
+
+  try {
+    await sendRaterEmail({
+      to: formRequest.email,
+      studentName: formRequest.display_name ?? 'Student',
+    });
+    console.log('Rater notification email sent');
+  } catch (err: unknown) {
+    console.error('Error sending rater notification email:', err);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function RaterFormsPage() {
@@ -811,9 +916,7 @@ export default function RaterFormsPage() {
 
     if (!text) {
       setSummaryErrorByField((prev) => ({ ...prev, [key]: 'Nothing to summarize yet.' }));
-      setTimeout(() => {
-        setSummaryErrorByField((prev) => ({ ...prev, [key]: '' }));
-      }, 3000);
+      clearSummaryErrorAfterDelay(key, setSummaryErrorByField);
       return;
     }
 
@@ -849,9 +952,7 @@ export default function RaterFormsPage() {
 
     if (!text) {
       setSummaryErrorByField((prev) => ({ ...prev, [key]: 'Nothing to summarize yet.' }));
-      setTimeout(() => {
-        setSummaryErrorByField((prev) => ({ ...prev, [key]: '' }));
-      }, 3000);
+      clearSummaryErrorAfterDelay(key, setSummaryErrorByField);
       return;
     }
 
@@ -1179,19 +1280,7 @@ export default function RaterFormsPage() {
             return updatedTextInputs;
           });
 
-          const cachedData = localStorage.getItem(`form-progress-${studentId}`);
-          if (cachedData) {
-            try {
-              const parsedData = JSON.parse(cachedData);
-              if (parsedData.responses && parsedData.textInputs) {
-                delete parsedData.responses[epaId];
-                delete parsedData.textInputs[epaId];
-                localStorage.setItem(`form-progress-${studentId}`, JSON.stringify(parsedData));
-              }
-            } catch (error) {
-              console.error('Error updating cached JSON:', error);
-            }
-          }
+          removeEpaFromProgressCache(studentId, epaId);
 
           return prev.filter((id) => id !== epaId);
         }
@@ -1209,30 +1298,7 @@ export default function RaterFormsPage() {
   const submitEPAs = useCallback((): void => {
     if (selectedEPAs.length === 0) return;
 
-    const cacheKey = `form-progress-${studentId}`;
-    const cachedData = localStorage.getItem(cacheKey);
-
-    if (cachedData) {
-      try {
-        const formProgress = JSON.parse(cachedData);
-
-        if (formProgress.responses) {
-          Object.keys(formProgress.responses).forEach((epaKey) => {
-            if (!selectedEPAs.includes(Number(epaKey))) delete formProgress.responses[epaKey];
-          });
-        }
-
-        if (formProgress.textInputs) {
-          Object.keys(formProgress.textInputs).forEach((epaKey) => {
-            if (!selectedEPAs.includes(Number(epaKey))) delete formProgress.textInputs[epaKey];
-          });
-        }
-
-        localStorage.setItem(cacheKey, JSON.stringify(formProgress));
-      } catch (error) {
-        console.error('Error updating cached JSON:', error);
-      }
-    }
+    pruneProgressCacheToSelectedEpas(studentId, selectedEPAs);
 
     setCurrentEPA(selectedEPAs[0]);
     setSelectionCollapsed(true);
@@ -1300,14 +1366,7 @@ export default function RaterFormsPage() {
       aggregateByKF(mergedResponses, questionMapping),
     );
 
-    const localData = cachedJSON
-      ? { ...cachedJSON }
-      : {
-          metadata: { student_id: formRequest.student_id, rater_id: formRequest.completed_by },
-          response: {} as Responses,
-        };
-
-    localData.response = sortedAggregatedResponses as unknown as Responses;
+    const localData = buildSubmissionData(cachedJSON, formRequest, sortedAggregatedResponses);
 
     const { error: updateError } = await supabase.from('form_requests').update({ active_status: false }).eq('id', formRequest.id);
     if (updateError) {
@@ -1316,28 +1375,13 @@ export default function RaterFormsPage() {
       return;
     }
 
-    let responseError;
-    if (isEditMode && existingResponseId) {
-      const { error } = await supabase
-        .from('form_responses')
-        .update({
-          response: localData,
-          professionalism,
-        })
-        .eq('response_id', existingResponseId);
-      responseError = error;
-
-      if (!error) {
-        console.log('Updated existing response:', existingResponseId);
-      }
-    } else {
-      const { error } = await supabase.from('form_responses').insert({
-        request_id: formRequest.id,
-        response: localData,
-        professionalism,
-      });
-      responseError = error;
-    }
+    const responseError = await upsertFormResponse(
+      isEditMode,
+      existingResponseId,
+      formRequest.id,
+      localData,
+      professionalism,
+    );
 
     if (responseError) {
       console.error('Error submitting form:', responseError.message);
@@ -1345,17 +1389,7 @@ export default function RaterFormsPage() {
       return;
     }
 
-    try {
-      if (formRequest?.email) {
-        await sendRaterEmail({
-          to: formRequest.email,
-          studentName: formRequest.display_name ?? 'Student',
-        });
-        console.log('Rater notification email sent');
-      }
-    } catch (err: unknown) {
-      console.error('Error sending rater notification email:', err);
-    }
+    await sendRaterNotificationEmail(formRequest);
 
     localStorage.removeItem(`form-progress-${formRequest.id}`);
     localStorage.removeItem(`form-progress-${studentId}`);

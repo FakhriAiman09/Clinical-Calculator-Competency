@@ -43,6 +43,14 @@ interface EPABoxProps {
   onCommentDeleted?: () => void;
 }
 
+interface LlmActionButtonProps {
+  llmFeedback: string | null;
+  stopping: boolean;
+  regenerating: boolean;
+  onStop: () => void;
+  onRetry: () => void;
+}
+
 const supabase = createClient();
 
 // ── fetchData helpers ───────────���───────────────��──────────────────────────
@@ -134,6 +142,70 @@ function buildGraphData(
   return { graphData, lifetimeScores };
 }
 
+function renderLlmFeedbackContent(llmFeedback: string | null): React.ReactNode {
+  if (!llmFeedback) {
+    return (
+      <p className='text-muted mb-0'>
+        <span className='spinner-border spinner-border-sm me-2' role='status' aria-hidden='true' />
+        <em>Generating Feedback…</em>
+      </p>
+    );
+  }
+
+  if (llmFeedback.startsWith('_error:')) {
+    return (
+      <div>
+        <p className='text-warning mb-2'>
+          <i className='bi bi-exclamation-triangle me-2' />
+          {llmFeedback.slice('_error:'.length)}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+      {llmFeedback}
+    </ReactMarkdown>
+  );
+}
+
+function LlmActionButton({ llmFeedback, stopping, regenerating, onStop, onRetry }: LlmActionButtonProps) {
+  if (llmFeedback === null) {
+    return (
+      <button
+        className='btn btn-sm btn-outline-danger d-flex align-items-center gap-1 d-print-none'
+        onClick={onStop}
+        disabled={stopping}
+        title='Stop generation and restore previous feedback'
+      >
+        {stopping ? (
+          <span className='spinner-border spinner-border-sm' role='status' aria-hidden='true' />
+        ) : (
+          <i className='bi bi-stop-circle' aria-hidden='true' />
+        )}
+        {stopping ? 'Stopping…' : 'Stop'}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      className='btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 d-print-none'
+      onClick={onRetry}
+      disabled={regenerating}
+      title='Retry AI summary using the scores saved at report creation time'
+    >
+      {regenerating ? (
+        <span className='spinner-border spinner-border-sm' role='status' aria-hidden='true' />
+      ) : (
+        <i className='bi bi-arrow-clockwise' aria-hidden='true' />
+      )}
+      {regenerating ? 'Requesting…' : 'Retry'}
+    </button>
+  );
+}
+
 // ── EPABox ──────────────────────────────────────────────────────────────────
 
 const EPABox: React.FC<EPABoxProps> = ({
@@ -146,12 +218,7 @@ const EPABox: React.FC<EPABoxProps> = ({
   isAdmin = false,
   onCommentDeleted,
 }) => {
-  const [expanded, setExpanded] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.matchMedia('print').matches;
-    }
-    return false;
-  });
+  const [expanded, setExpanded] = useState(() => globalThis.window?.matchMedia('print').matches ?? false);
 
   const wasAutoExpandedRef = useRef(false);
 
@@ -170,12 +237,12 @@ const EPABox: React.FC<EPABoxProps> = ({
       }
     };
 
-    window.addEventListener('beforeprint', handleBeforePrint);
-    window.addEventListener('afterprint', handleAfterPrint);
+    globalThis.window.addEventListener('beforeprint', handleBeforePrint);
+    globalThis.window.addEventListener('afterprint', handleAfterPrint);
 
     return () => {
-      window.removeEventListener('beforeprint', handleBeforePrint);
-      window.removeEventListener('afterprint', handleAfterPrint);
+      globalThis.window.removeEventListener('beforeprint', handleBeforePrint);
+      globalThis.window.removeEventListener('afterprint', handleAfterPrint);
     };
   }, [expanded]);
 
@@ -282,9 +349,7 @@ const EPABox: React.FC<EPABoxProps> = ({
       .eq('id', reportId)
       .single();
 
-    if (stoppedRef.current) return;
-    if (!data?.llm_feedback) return;
-    if (data.llm_feedback === 'Generating...') return;
+    if (stoppedRef.current || !data?.llm_feedback || data.llm_feedback === 'Generating...') return;
 
     const extracted = getRelevantFeedbackMarkdown(data.llm_feedback, epaId, { includeErrors: true });
     if (extracted) {
@@ -295,8 +360,7 @@ const EPABox: React.FC<EPABoxProps> = ({
   }, [reportId, epaId]);
 
   useEffect(() => {
-    if (!expanded) return;
-    if (llmFeedback && llmFeedback !== 'Generating...') return;
+    if (!expanded || (llmFeedback && llmFeedback !== 'Generating...')) return;
 
     const interval = setInterval(pollForLlmFeedback, 5000);
     return () => clearInterval(interval);
@@ -488,56 +552,16 @@ const EPABox: React.FC<EPABoxProps> = ({
         <div className='mb-4'>
           <div className='d-flex align-items-center justify-content-between border-bottom pb-1 mb-2'>
             <h6 className='fw-bold mb-0'>AI Summary &amp; Recommendations</h6>
-            {llmFeedback === null ? (
-              <button
-                className='btn btn-sm btn-outline-danger d-flex align-items-center gap-1 d-print-none'
-                onClick={handleStop}
-                disabled={stopping}
-                title='Stop generation and restore previous feedback'
-              >
-                {stopping ? (
-                  <span className='spinner-border spinner-border-sm' role='status' aria-hidden='true' />
-                ) : (
-                  <i className='bi bi-stop-circle' aria-hidden='true' />
-                )}
-                {stopping ? 'Stopping…' : 'Stop'}
-              </button>
-            ) : (
-              <button
-                className='btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 d-print-none'
-                onClick={handleRegenerate}
-                disabled={regenerating}
-                title='Retry AI summary using the scores saved at report creation time'
-              >
-                {regenerating ? (
-                  <span className='spinner-border spinner-border-sm' role='status' aria-hidden='true' />
-                ) : (
-                  <i className='bi bi-arrow-clockwise' aria-hidden='true' />
-                )}
-                {regenerating ? 'Requesting…' : 'Retry'}
-              </button>
-            )}
+            <LlmActionButton
+              llmFeedback={llmFeedback}
+              stopping={stopping}
+              regenerating={regenerating}
+              onStop={handleStop}
+              onRetry={handleRegenerate}
+            />
           </div>
           <div className='border rounded p-3 bg-body-secondary scrollable-box markdown-preview'>
-            {llmFeedback ? (
-              llmFeedback.startsWith('_error:') ? (
-                <div>
-                  <p className='text-warning mb-2'>
-                    <i className='bi bi-exclamation-triangle me-2' />
-                    {llmFeedback.slice('_error:'.length)}
-                  </p>
-                </div>
-              ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                  {llmFeedback}
-                </ReactMarkdown>
-              )
-            ) : (
-              <p className='text-muted mb-0'>
-                <span className='spinner-border spinner-border-sm me-2' role='status' aria-hidden='true' />
-                <em>Generating Feedback…</em>
-              </p>
-            )}
+            {renderLlmFeedbackContent(llmFeedback)}
           </div>
         </div>
       </div>

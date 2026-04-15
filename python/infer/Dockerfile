@@ -24,10 +24,10 @@ ENV INFER_LOGS_PATH=/home/appuser/logs
 
 RUN python -m pip install --upgrade pip
 
-COPY requirements.ubuntu.txt .
+COPY --chmod=444 requirements.ubuntu.txt .
 RUN python -m pip install -r requirements.ubuntu.txt
 
-COPY --chown=appuser:appuser --chmod=555 inference.py listener.py list_models.py ./
+COPY --chown=appuser:appuser --chmod=444 inference.py listener.py list_models.py ./
 
 RUN mkdir -p /home/appuser/models /home/appuser/svm-models /home/appuser/logs \
     && chown -R appuser:appuser /home/appuser /app \

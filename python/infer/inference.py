@@ -80,7 +80,7 @@ def svm_infer(models: dict[str, svm.SVC], data: dict[str, list[bool]]) -> dict[s
   _t0 = time.time()
 
   def get_class(kf, response: list[bool]) -> int:
-    model_key = 'mcq_kf' + re.sub(r'\.', '_', kf)
+    model_key = 'mcq_kf' + kf.replace('.', '_')
     return models[model_key].predict([response])[0]
 
   result = {k: get_class(k, v) for k, v in data.items()}
