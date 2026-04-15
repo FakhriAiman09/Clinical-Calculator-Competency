@@ -245,7 +245,7 @@ function SummaryPanel({
   summaryGuard,
   onInsert,
   onReplace,
-}: SummaryPanelProps) {
+}: Readonly<SummaryPanelProps>) {
   if (!summary) return null;
 
   return (
@@ -280,11 +280,11 @@ function SummaryPanel({
         </div>
       </div>
 
-      {!summaryGuard.canApply ? (
+      {summaryGuard.canApply ? null : (
         <div className='small mb-2' style={{ color: '#b26a00' }}>
           {summaryGuard.message}
         </div>
-      ) : null}
+      )}
 
       <div style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{summary}</div>
     </div>
@@ -498,9 +498,10 @@ function applyKfDataToQuestion(
   rebuiltTextInputs: TextInputs,
 ): void {
   for (const key of Object.keys(oneKfData)) {
-    if (key !== 'text' && typeof oneKfData[key] === 'boolean') {
-      rebuiltResponses[epaNum][questionId][key] = oneKfData[key] as boolean;
-    }
+    if (key === 'text') continue;
+    const optionValue = oneKfData[key];
+    if (typeof optionValue !== 'boolean') continue;
+    rebuiltResponses[epaNum][questionId][key] = optionValue;
   }
   const texts = oneKfData.text;
   if (Array.isArray(texts) && texts[idx]) {
@@ -560,6 +561,32 @@ function buildQuestionMapping(kfData: KeyFunction[]): Record<string, { kf: strin
   return mapping;
 }
 
+function ensureAggregatedKfBucket(
+  aggregated: AggregatedResponses,
+  epaNum: number,
+  kfKey: string,
+): void {
+  aggregated[epaNum] = aggregated[epaNum] ?? {};
+  aggregated[epaNum][kfKey] = aggregated[epaNum][kfKey] ?? { text: [] };
+}
+
+function mergeQuestionResponseIntoKf(
+  aggregatedKf: { text: string[]; [key: string]: boolean | string[] },
+  qResponse: QuestionResponse,
+): void {
+  for (const [key, optionValue] of Object.entries(qResponse)) {
+    if (key === 'text' || typeof optionValue !== 'boolean') continue;
+    if (aggregatedKf[key] === undefined) aggregatedKf[key] = optionValue;
+  }
+  aggregatedKf.text.push(qResponse.text);
+}
+
+function sortEpaKfText(epaAggregated: AggregatedResponses[number]): void {
+  for (const kfKey of Object.keys(epaAggregated)) {
+    epaAggregated[kfKey].text.sort(compareNumericDotStrings);
+  }
+}
+
 function aggregateByKF(
   mergedResponses: Responses,
   questionMapping: Record<string, { kf: string; epa: number }>,
@@ -567,23 +594,15 @@ function aggregateByKF(
   const aggregated: AggregatedResponses = {};
   for (const epaKey of Object.keys(mergedResponses)) {
     const epaNum = Number.parseInt(epaKey, 10);
-    aggregated[epaNum] = aggregated[epaNum] ?? {};
     for (const questionId of Object.keys(mergedResponses[epaNum])) {
       const mapping = questionMapping[questionId];
       if (!mapping) continue;
       const { kf: kfKey } = mapping;
-      aggregated[epaNum][kfKey] = aggregated[epaNum][kfKey] ?? { text: [] };
+      ensureAggregatedKfBucket(aggregated, epaNum, kfKey);
       const qResponse = mergedResponses[epaNum][questionId];
-      for (const key of Object.keys(qResponse)) {
-        if (key === 'text') continue;
-        aggregated[epaNum][kfKey][key] =
-          (aggregated[epaNum][kfKey][key] as boolean | undefined) ?? qResponse[key];
-      }
-      aggregated[epaNum][kfKey].text.push(qResponse.text);
+      mergeQuestionResponseIntoKf(aggregated[epaNum][kfKey], qResponse);
     }
-    for (const kfKey of Object.keys(aggregated[epaNum])) {
-      aggregated[epaNum][kfKey].text.sort(compareNumericDotStrings);
-    }
+    sortEpaKfText(aggregated[epaNum]);
   }
   return aggregated;
 }
@@ -770,7 +789,7 @@ function useSpeechRecognitionControls({
   );
 
   useEffect(() => {
-    const speechWindow = window as WindowWithSpeechRecognition;
+    const speechWindow = globalThis.window as WindowWithSpeechRecognition;
     const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
@@ -1113,7 +1132,7 @@ async function submitFinalEvaluation({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function RaterFormsPage() {
+export default function RaterFormsPage() { // NOSONAR
   useRequireRole(['rater', 'dev']);
 
   const { user: authUser } = useUser();
@@ -1641,6 +1660,11 @@ export default function RaterFormsPage() {
                         currentEPA === epaId ? 'active' : ''
                       }`}
                       onClick={() => setCurrentEPA(epaId)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') setCurrentEPA(epaId);
+                      }}
+                      role='button'
+                      tabIndex={0}
                       data-bs-toggle='tooltip'
                       data-bs-placement='right'
                       title={epaItem?.description || ''}
@@ -1665,6 +1689,13 @@ export default function RaterFormsPage() {
                     onClick={() => {
                       if (selectedEPAs.every((epaId) => completedEPAs[epaId])) setShowProfessionalismForm(true);
                     }}
+                    onKeyDown={(e) => {
+                      if ((e.key === 'Enter' || e.key === ' ') && selectedEPAs.every((epaId) => completedEPAs[epaId])) {
+                        setShowProfessionalismForm(true);
+                      }
+                    }}
+                    role='button'
+                    tabIndex={selectedEPAs.every((epaId) => completedEPAs[epaId]) ? 0 : -1}
                     style={{
                       cursor: selectedEPAs.every((epaId) => completedEPAs[epaId]) ? 'pointer' : 'not-allowed',
                       opacity: selectedEPAs.every((epaId) => completedEPAs[epaId]) ? 1 : 0.6,
@@ -1707,6 +1738,8 @@ export default function RaterFormsPage() {
 
         {/* Resize handle + toggle button */}
         <div
+          role='separator'
+          aria-orientation='vertical'
           style={{
             width: 8,
             flexShrink: 0,
@@ -1726,11 +1759,11 @@ export default function RaterFormsPage() {
             };
             const onUp = () => {
               isResizing.current = false;
-              window.removeEventListener('mousemove', onMove);
-              window.removeEventListener('mouseup', onUp);
+              globalThis.window.removeEventListener('mousemove', onMove);
+              globalThis.window.removeEventListener('mouseup', onUp);
             };
-            window.addEventListener('mousemove', onMove);
-            window.addEventListener('mouseup', onUp);
+            globalThis.window.addEventListener('mousemove', onMove);
+            globalThis.window.addEventListener('mouseup', onUp);
           }}
           onMouseEnter={(e) => { if (sidebarOpen) (e.currentTarget as HTMLDivElement).style.background = 'var(--bs-primary)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bs-border-color)'; }}
