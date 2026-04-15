@@ -6,6 +6,7 @@ import EPAModal from './EPAModal';
 import ToggleControl from '@/components/(StudentComponents)/ToggleControl';
 import { createClient } from '@/utils/supabase/client';
 import { useUser } from '@/context/UserContext';
+import { getEpaLevelFromScores } from '@/utils/epa-scoring';
 
 const supabase = createClient();
 
@@ -167,14 +168,7 @@ const StudentDashboard: React.FC = () => {
 
   const getEPADevLevel = (kfList: KeyFunction[]): number | null => {
     const scores = kfList.map(getAverage).filter((v): v is number => v !== null);
-    if (scores.length < 3) return null;
-    const allGreen = scores.every((v) => v === devLevelMap.entrustable);
-    const avg = Math.floor(scores.reduce((a, b) => a + b, 0) / scores.length);
-    return allGreen
-      ? devLevelMap.entrustable
-      : avg === devLevelMap.entrustable
-      ? devLevelMap.developing
-      : avg;
+    return getEpaLevelFromScores(scores);
   };
 
   if (loading) return <div>Loading...</div>;

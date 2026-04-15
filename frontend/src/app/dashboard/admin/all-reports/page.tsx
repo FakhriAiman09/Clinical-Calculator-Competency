@@ -7,6 +7,12 @@ import { useRequireRole } from '@/utils/useRequiredRole';
 import dynamic from 'next/dynamic';
 import DownloadPDFButton from '@/components/(StudentComponents)/PrintPDFButton';
 import { sendResubmissionEmail } from './admin-email-api/send-email-admin.server';
+import {
+  formatReportTimeWindowLabel,
+  getReportTimeWindowMonths,
+  REPORT_TIME_WINDOWS,
+  type ReportTimeWindow,
+} from '@/utils/epa-scoring';
 
 const EPABox = dynamic(() => import('@/components/(StudentComponents)/EPABox'), { ssr: false });
 
@@ -103,7 +109,7 @@ type FormFlagSummary = {
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
 
 function formatTimeWindowLabel(timeWindow: StudentReport['time_window']): string {
-  return `${parseInt(timeWindow, 10)} months`;
+  return formatReportTimeWindowLabel(timeWindow);
 }
 
 function getDisplayReportTitle(title: string): string {
@@ -334,6 +340,7 @@ export default function AdminAllReportsPage() {
   const [kfDescriptions, setKfDescriptions] = useState<Record<string, string[]> | null>(null);
 
   const [title, setTitle] = useState<string>('');
+  const [reportTimeWindow, setReportTimeWindow] = useState<ReportTimeWindow>(3);
   const [formResults, setFormResults] = useState<FormResult[]>([]);
   const [editingEPA, setEditingEPA] = useState<number | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
@@ -621,7 +628,7 @@ export default function AdminAllReportsPage() {
     if (!selectedStudent) return;
     await supabase.rpc('generate_report', {
       student_id_input: selectedStudent.id,
-      time_range_input: 1200, // all data from beginning
+      time_range_input: reportTimeWindow,
       report_title: title.trim() || 'Admin Generated',
     });
     setTitle('');
@@ -669,7 +676,7 @@ export default function AdminAllReportsPage() {
       // 2. Fetch form_results within the report's time window
       const reportDate = new Date(selectedReport.created_at);
       const cutoff = new Date(selectedReport.created_at);
-      cutoff.setMonth(cutoff.getMonth() - parseInt(selectedReport.time_window));
+      cutoff.setMonth(cutoff.getMonth() - getReportTimeWindowMonths(selectedReport.time_window));
 
       const { data: results } = await supabase
         .from('form_results')
@@ -1086,6 +1093,22 @@ export default function AdminAllReportsPage() {
               <input type='text' className='form-control' value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
 
+            <div className='d-print-none'>
+              <label className='form-label'>Time Window</label>
+              <div className='btn-group d-flex' role='group' aria-label='Report time window'>
+                {REPORT_TIME_WINDOWS.map((value) => (
+                  <button
+                    key={value}
+                    type='button'
+                    className={`btn btn-outline-primary${reportTimeWindow === value ? ' active' : ''}`}
+                    onClick={() => setReportTimeWindow(value)}
+                  >
+                    Last {value} mo
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <button className='btn btn-success' onClick={handleGenerate} disabled={!selectedStudent}>
               Generate Report
             </button>
@@ -1324,7 +1347,7 @@ export default function AdminAllReportsPage() {
                 <EPABox
                   key={`epabox-${epaId}-${selectedStudent.id}-${selectedReport?.id}`}
                   epaId={epaId}
-                  timeRange={parseInt(selectedReport.time_window) as 3 | 6 | 12}
+                  timeRange={getReportTimeWindowMonths(selectedReport.time_window)}
                   kfDescriptions={kfDescriptions}
                   studentId={selectedStudent.id}
                   reportId={selectedReport.id}

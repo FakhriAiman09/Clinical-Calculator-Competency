@@ -8,6 +8,7 @@ import { useUser } from '@/context/UserContext';
 import dynamic from 'next/dynamic';
 import DownloadPDFButton from '@/components/(StudentComponents)/PrintPDFButton';
 import ReportGenerationForm from '@/components/(StudentComponents)/ReportGenerationForm';
+import { formatReportTimeWindowLabel, getReportTimeWindowMonths } from '@/utils/epa-scoring';
 
 const EPABox = dynamic(() => import('@/components/(StudentComponents)/EPABox'), { ssr: false });
 
@@ -24,17 +25,6 @@ interface StudentReport {
 }
 
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
-
-function getTimeWindowMonths(timeWindow: string): 3 | 6 | 12 {
-  const parsed = parseInt(timeWindow, 10);
-  if (parsed === 6 || parsed === 12) return parsed;
-  return 3;
-}
-
-function formatTimeWindowLabel(timeWindow: string): string {
-  const months = getTimeWindowMonths(timeWindow);
-  return `Last ${months} months`;
-}
 
 function getDisplayReportTitle(title: string): string {
   const trimmed = title.trim();
@@ -73,7 +63,7 @@ export default function StudentReportPage() {
       (data ?? []).map((report) => ({
         ...report,
         title: getDisplayReportTitle(report.title),
-        time_window: formatTimeWindowLabel(report.time_window),
+        time_window: formatReportTimeWindowLabel(report.time_window),
       }))
     );
     setLoadingReports(false);
@@ -297,7 +287,7 @@ export default function StudentReportPage() {
             <EPABox
               key={`epabox-${epaId}-${user.id}-${selectedReport.id}`}
               epaId={epaId}
-              timeRange={getTimeWindowMonths(selectedReport.time_window)}
+              timeRange={getReportTimeWindowMonths(selectedReport.time_window)}
               kfDescriptions={kfDescriptions}
               studentId={user.id}
               reportId={selectedReport.id}

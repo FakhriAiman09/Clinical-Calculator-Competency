@@ -9,6 +9,7 @@ import 'highlight.js/styles/github.css';
 import LineGraph from '@/components/(StudentComponents)/LineGraph';
 import HalfCircleGauge from '@/components/(StudentComponents)/HalfCircleGauge';
 import { createClient } from '@/utils/supabase/client';
+import { DEV_LEVEL_LABELS, getEpaLevelFromScores } from '@/utils/epa-scoring';
 
 export type DevLevel = 0 | 1 | 2 | 3 | null;
 
@@ -333,9 +334,7 @@ const EPABox: React.FC<EPABoxProps> = ({
     if (targetReport) {
       const { kfs, epaKfScores } = extractKfAveragesFromReport(targetReport.kf_avg_data, epaId);
       setKfAverages(kfs);
-      setEpaAvgFromKFs(
-        epaKfScores.length > 0 ? Math.floor(epaKfScores.reduce((a, b) => a + b, 0) / epaKfScores.length) : null
-      );
+      setEpaAvgFromKFs(getEpaLevelFromScores(epaKfScores));
       // Only save a completed feedback value — never 'Generating...' or null.
       const rawFeedback = getRawFeedback(targetReport.llm_feedback);
       if (rawFeedback) rawLlmFeedbackRef.current = rawFeedback;
@@ -507,7 +506,7 @@ const EPABox: React.FC<EPABoxProps> = ({
               <li className='list-group-item bg-transparent'>
                 Lifetime Average:{' '}
                 {lifetimeAverage !== null
-                  ? `${['Remedial', 'Early-Developing', 'Developing', 'Entrustable'][Math.floor(lifetimeAverage)]}`
+                  ? `${DEV_LEVEL_LABELS[Math.floor(lifetimeAverage)]}`
                   : '—'}
               </li>
             </ul>
@@ -535,7 +534,7 @@ const EPABox: React.FC<EPABoxProps> = ({
                     <td>
                       {avg === undefined
                         ? '—'
-                        : `${['Remedial', 'Early-Developing', 'Developing', 'Entrustable'][Math.floor(avg)]}`}
+                        : `${DEV_LEVEL_LABELS[Math.floor(avg)]}`}
                     </td>
                   </tr>
                 );

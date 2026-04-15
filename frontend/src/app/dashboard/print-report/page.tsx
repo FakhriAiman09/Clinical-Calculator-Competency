@@ -7,13 +7,19 @@ import { getEPAKFDescs } from '@/utils/get-epa-data';
 import { useRequireRole } from '@/utils/useRequiredRole';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {
+  DEV_LEVEL_LABELS,
+  formatReportTimeWindowLabel,
+  getEpaLevelFromScores,
+  getReportTimeWindowMonths,
+} from '@/utils/epa-scoring';
 
 const LOGO_SRC = "data:image/jpeg;base64,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";
 
 const supabase = createClient();
 
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
-const DEV_LABELS = ['Remedial', 'Early-Developing', 'Developing', 'Entrustable'];
+const DEV_LABELS = DEV_LEVEL_LABELS;
 const devLabel = (val: number | null | undefined) =>
   val == null ? '—' : DEV_LABELS[Math.floor(val)] ?? '—';
 
@@ -50,7 +56,7 @@ interface StudentReport {
   id: string;
   user_id: string;
   title: string;
-  time_window: '3m' | '6m' | '12m';
+  time_window: string;
   report_data: Record<string, number>;
   kf_avg_data: Record<string, number> | null;
   llm_feedback: string | null;
@@ -297,7 +303,7 @@ function PrintReportContent() {
     setLoading(true);
     setReady(false);
 
-    const timeRange = parseInt(report.time_window);
+    const timeRange = getReportTimeWindowMonths(report.time_window);
     // Use report creation date as reference so old reports show the correct time window,
     // not a window ending today.
     const cutoff = new Date(report.created_at);
@@ -339,7 +345,7 @@ function PrintReportContent() {
       );
 
       const { kfAverages, epaKfScores } = getKfAveragesForEpa(report, epaId);
-      const epaAverage = getAverageScore(epaKfScores);
+      const epaAverage = getEpaLevelFromScores(epaKfScores);
       const lifetimeAverage = getAverageScore(assessments.map((assessment) => assessment.devLevel));
       const relevantFeedback = getRelevantFeedback(feedbackObj, epaId);
       const recentAssessments = getRecentAssessments(assessments, cutoff, reportCreatedAt);
@@ -521,6 +527,12 @@ function PrintReportContent() {
             <div className="cover-meta-item">
               <div className="cover-meta-label">Report Generated</div>
               <div className="cover-meta-value">{reportDate}</div>
+            </div>
+            <div className="cover-meta-item">
+              <div className="cover-meta-label">Time Window</div>
+              <div className="cover-meta-value">
+                {selectedReport ? formatReportTimeWindowLabel(selectedReport.time_window) : ''}
+              </div>
             </div>
             <div className="cover-meta-item">
               <div className="cover-meta-label">Printed</div>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, FormEvent } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import { REPORT_TIME_WINDOWS, type ReportTimeWindow } from '@/utils/epa-scoring';
 
 const supabase = createClient();
 
@@ -15,6 +16,7 @@ const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, 
   const [loading, setLoading] = useState<boolean>(false);
   const [success, setSuccess] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [timeWindow, setTimeWindow] = useState<ReportTimeWindow>(3);
 
   useEffect(() => {
     if (success) {
@@ -34,7 +36,7 @@ const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, 
     try {
       const { error } = await supabase.rpc('generate_report', {
         student_id_input: studentId,
-        time_range_input: 1200, // all data from beginning
+        time_range_input: timeWindow,
         report_title: title.trim(),
       });
 
@@ -77,6 +79,23 @@ const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, 
             required
             disabled={loading}
           />
+        </div>
+
+        <div className='mb-3'>
+          <label className='form-label'>Report Time Window</label>
+          <div className='btn-group d-flex flex-wrap' role='group' aria-label='Report time window'>
+            {REPORT_TIME_WINDOWS.map((value) => (
+              <button
+                key={value}
+                type='button'
+                className={`btn btn-outline-primary${timeWindow === value ? ' active' : ''}`}
+                onClick={() => setTimeWindow(value)}
+                disabled={loading}
+              >
+                Last {value} mo
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className='d-flex justify-content-between align-items-center mt-4'>
