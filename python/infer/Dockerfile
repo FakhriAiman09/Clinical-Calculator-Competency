@@ -18,16 +18,20 @@ RUN adduser \
     appuser
 
 ENV HOME=/home/appuser
+ENV DEBERTA_MODEL_PATH=/home/appuser/models/deberta
+ENV SVM_MODELS_PATH=/home/appuser/svm-models
+ENV INFER_LOGS_PATH=/home/appuser/logs
 
 RUN python -m pip install --upgrade pip
 
 COPY requirements.ubuntu.txt .
 RUN python -m pip install -r requirements.ubuntu.txt
 
-COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser --chmod=555 inference.py listener.py list_models.py ./
 
-RUN chown -R appuser:appuser /home/appuser && chmod -R 755 /home/appuser
-RUN chown -R appuser:appuser /app && chmod -R 755 /app
+RUN mkdir -p /home/appuser/models /home/appuser/svm-models /home/appuser/logs \
+    && chown -R appuser:appuser /home/appuser /app \
+    && chmod -R 755 /home/appuser
 
 # Install openssh-client for Railway SSH file transfers
 USER root

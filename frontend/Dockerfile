@@ -16,12 +16,9 @@ ENV SMTP_PASS=$SMTP_PASS
 WORKDIR /usr/src/app
 
 RUN chmod -R 755 /usr/src/app && chown -R node:node /usr/src/app
-# Dependencies installation stage
-FROM base AS deps
-
 ################################################################################
 # Create a stage for installing production dependecies.
-FROM base as deps
+FROM base AS deps
 # Copy package.json and package-lock.json to install dependencies
 COPY package.json package-lock.json ./
 
@@ -31,10 +28,10 @@ RUN npm ci --omit=dev
 FROM deps AS build
 
 COPY package.json package-lock.json ./
+COPY next.config.ts tsconfig.json next-env.d.ts ./
+COPY public ./public
+COPY src ./src
 RUN npm ci
-
-# Copy the rest of the source files into the image.
-COPY . .
 
 # Run the build command
 RUN npm run build
