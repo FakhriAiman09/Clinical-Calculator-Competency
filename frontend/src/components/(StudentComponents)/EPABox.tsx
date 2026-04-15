@@ -11,38 +11,9 @@ import HalfCircleGauge from '@/components/(StudentComponents)/HalfCircleGauge';
 import { createClient } from '@/utils/supabase/client';
 import { DEV_LEVEL_LABELS, getEpaLevelFromScores } from '@/utils/epa-scoring';
 import { getRawFeedback, getRelevantFeedbackMarkdown } from '@/utils/report-feedback';
+import { extractCommentTextsForEpa, type SupabaseRow } from '@/utils/report-response';
 
 export type DevLevel = 0 | 1 | 2 | 3 | null;
-
-interface KeyFunctionResponse {
-  text?: string[];
-  [key: string]: boolean | string[] | undefined;
-}
-
-interface EPAResponse {
-  [kfId: string]: KeyFunctionResponse;
-}
-
-interface FullResponseStructure {
-  response?: {
-    [epaId: string]: EPAResponse;
-  };
-}
-
-interface FormResponsesInner {
-  response?: FullResponseStructure;
-  form_requests: {
-    student_id: string;
-    clinical_settings?: string;
-  };
-}
-
-interface SupabaseRow {
-  response_id: string;
-  created_at: string;
-  results: Record<string, number>;
-  form_responses: FormResponsesInner;
-}
 
 interface Assessment {
   epaId: number;
@@ -76,25 +47,6 @@ const supabase = createClient();
 
 // ── fetchData helpers ───────────���───────────────��──────────────────────────
 
-function extractCommentsFromFormRow(
-  formResponse: FormResponsesInner,
-  epaStr: string,
-  responseId: string,
-): CommentEntry[] {
-  const commentBlock = formResponse.response?.response?.[epaStr];
-  if (!commentBlock) return [];
-  const entries: CommentEntry[] = [];
-  for (const kfObj of Object.values(commentBlock)) {
-    if (!kfObj || typeof kfObj !== 'object' || !('text' in kfObj)) continue;
-    const texts = (kfObj as KeyFunctionResponse).text;
-    if (!Array.isArray(texts)) continue;
-    for (const t of texts) {
-      if (typeof t === 'string' && t.trim() !== '') entries.push({ text: t, responseId });
-    }
-  }
-  return entries;
-}
-
 function parseRowsIntoAssessmentsAndComments(
   resultData: SupabaseRow[] | null,
   studentId: string,
@@ -123,7 +75,9 @@ function parseRowsIntoAssessmentsAndComments(
 
       if (!commentExtractedForThisRow) {
         commentExtractedForThisRow = true;
-        parsedComments.push(...extractCommentsFromFormRow(formResponse, epaStr, responseId));
+        parsedComments.push(
+          ...extractCommentTextsForEpa(formResponse, epaStr).map((text) => ({ text, responseId }))
+        );
       }
     }
   }

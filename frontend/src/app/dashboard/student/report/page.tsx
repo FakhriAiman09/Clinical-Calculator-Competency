@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { getEPAKFDescs } from '@/utils/get-epa-data';
+import { groupKfDescriptions } from '@/utils/report-response';
 import { useRequireRole } from '@/utils/useRequiredRole';
 import { useUser } from '@/context/UserContext';
 import dynamic from 'next/dynamic';
@@ -76,14 +77,7 @@ export default function StudentReportPage() {
   useEffect(() => {
     getEPAKFDescs().then((descs) => {
       if (descs?.kf_desc) {
-        const grouped: Record<string, string[]> = {};
-        for (const key in descs.kf_desc) {
-          const [epaIdRaw] = key.split('-');
-          const epaId = String(parseInt(epaIdRaw, 10));
-          if (!grouped[epaId]) grouped[epaId] = [];
-          grouped[epaId].push(descs.kf_desc[key]);
-        }
-        setKfDescriptions(grouped);
+        setKfDescriptions(groupKfDescriptions(descs.kf_desc));
       }
     });
   }, []);

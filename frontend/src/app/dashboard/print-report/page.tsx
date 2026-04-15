@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { getEPAKFDescs } from '@/utils/get-epa-data';
+import { groupKfDescriptions } from '@/utils/report-response';
 import { useRequireRole } from '@/utils/useRequiredRole';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -232,14 +233,7 @@ function PrintReportContent() {
     (async () => {
       const descs = await getEPAKFDescs();
       if (descs?.kf_desc) {
-        const grouped: Record<string, string[]> = {};
-        for (const key in descs.kf_desc) {
-          const [epaIdRaw] = key.split('-');
-          const epaId = String(parseInt(epaIdRaw, 10));
-          if (!grouped[epaId]) grouped[epaId] = [];
-          grouped[epaId].push(descs.kf_desc[key]);
-        }
-        setKfDescriptions(grouped);
+        setKfDescriptions(groupKfDescriptions(descs.kf_desc));
       }
       if (descs?.epa_desc) {
         setEpaDescriptions(descs.epa_desc as Record<string, string>);

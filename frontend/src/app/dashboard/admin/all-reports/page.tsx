@@ -21,6 +21,12 @@ import {
   type FaultReason,
   type FormFlagSummary,
 } from '@/utils/comment-quality';
+import {
+  collectCommentsPerEpa,
+  extractCommentTextsForEpa,
+  groupKfDescriptions,
+  type SupabaseRow,
+} from '@/utils/report-response';
 
 const EPABox = dynamic(() => import('@/components/(StudentComponents)/EPABox'), { ssr: false });
 
@@ -57,36 +63,6 @@ interface FormRequestWithRater {
   } | null;
 }
 
-interface KeyFunctionResponse {
-  text?: string[];
-  [key: string]: boolean | string[] | undefined;
-}
-
-interface EPAResponse {
-  [kfId: string]: KeyFunctionResponse;
-}
-
-interface FullResponseStructure {
-  response?: {
-    [epaId: string]: EPAResponse;
-  };
-}
-
-interface FormResponsesInner {
-  response?: FullResponseStructure;
-  form_requests: {
-    student_id: string;
-    clinical_settings?: string;
-  };
-}
-
-interface SupabaseRow {
-  response_id: string;
-  created_at: string;
-  results: Record<string, number>;
-  form_responses: FormResponsesInner;
-}
-
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
 
 function formatTimeWindowLabel(timeWindow: StudentReport['time_window']): string {
@@ -103,35 +79,6 @@ function getDisplayReportTitle(title: string): string {
   }
 
   return trimmed.slice(0, -matchedSuffix.length).trim() || title;
-}
-
-function collectCommentsPerEpa(
-  resultData: SupabaseRow[] | null,
-  selectedStudentId: string,
-  reportCreatedAt: Date,
-): Record<number, string[]> {
-  const perEPAComments: Record<number, string[]> = {};
-  for (const epa of REPORT_EPAS) perEPAComments[epa] = [];
-  for (const row of resultData ?? []) {
-    if (new Date(row.created_at) > reportCreatedAt) continue;
-    const fr = row.form_responses;
-    if (fr?.form_requests?.student_id !== selectedStudentId) continue;
-    const responseRoot = fr.response?.response;
-    if (!responseRoot) continue;
-    for (const epaId of REPORT_EPAS) {
-      const commentBlock = responseRoot[String(epaId)];
-      if (!commentBlock) continue;
-      Object.values(commentBlock).forEach((kfObj) => {
-        if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
-          const texts = (kfObj as KeyFunctionResponse).text;
-          if (Array.isArray(texts)) {
-            perEPAComments[epaId].push(...texts.filter((t) => typeof t === 'string' && t.trim() !== ''));
-          }
-        }
-      });
-    }
-  }
-  return perEPAComments;
 }
 
 export default function AdminAllReportsPage() {
@@ -259,17 +206,7 @@ export default function AdminAllReportsPage() {
 
       if (formResponse.response?.response) {
         const epaKey = String(editingEPA);
-        const commentBlock = formResponse.response.response[epaKey];
-        if (commentBlock) {
-          Object.values(commentBlock).forEach((kfObj) => {
-            if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
-              const texts = (kfObj as KeyFunctionResponse).text;
-              if (Array.isArray(texts)) {
-                parsedComments.push(...texts.filter((t) => typeof t === 'string' && t.trim() !== ''));
-              }
-            }
-          });
-        }
+        parsedComments.push(...extractCommentTextsForEpa(formResponse, epaKey));
       }
     }
     setComments(parsedComments);
@@ -443,14 +380,7 @@ export default function AdminAllReportsPage() {
   useEffect(() => {
     getEPAKFDescs().then((descs) => {
       if (descs?.kf_desc) {
-        const grouped: Record<string, string[]> = {};
-        for (const key in descs.kf_desc) {
-          const [epaIdRaw] = key.split('-');
-          const epaId = String(parseInt(epaIdRaw, 10));
-          if (!grouped[epaId]) grouped[epaId] = [];
-          grouped[epaId].push(descs.kf_desc[key]);
-        }
-        setKfDescriptions(grouped);
+        setKfDescriptions(groupKfDescriptions(descs.kf_desc));
       }
     });
   }, []);
@@ -573,19 +503,7 @@ export default function AdminAllReportsPage() {
 
       if (formResponse.response?.response) {
         const epaKey = String(editingEPA);
-        const commentBlock = formResponse.response.response[epaKey];
-        if (commentBlock) {
-          Object.values(commentBlock).forEach((kfObj) => {
-            if (kfObj && typeof kfObj === 'object' && 'text' in kfObj) {
-              const texts = (kfObj as KeyFunctionResponse).text;
-              if (Array.isArray(texts)) {
-                commentsByResponse[row.response_id].push(
-                  ...texts.filter((t) => typeof t === 'string' && t.trim() !== '')
-                );
-              }
-            }
-          });
-        }
+        commentsByResponse[row.response_id].push(...extractCommentTextsForEpa(formResponse, epaKey));
       }
     }
 
@@ -698,7 +616,7 @@ export default function AdminAllReportsPage() {
       const reportCreatedAt = new Date(selectedReport.created_at);
 
       // 3) Collect comments per EPA (scoped to report date)
-      const perEPAComments = collectCommentsPerEpa(resultData, selectedStudent.id, reportCreatedAt);
+      const perEPAComments = collectCommentsPerEpa(resultData, selectedStudent.id, reportCreatedAt, REPORT_EPAS);
 
       // 4) Analyze each EPA
       const summaries: Record<number, EPACheckSummary> = {};
