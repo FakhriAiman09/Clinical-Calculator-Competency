@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState, type Dispatch, type SetStateAction } from 'react';
 
 import { getHistoricalMCQs } from '@/utils/get-epa-data';
 import type { Tables } from '@/utils/supabase/database.types';
@@ -34,10 +34,12 @@ export async function enrichHistoryWithUpdaterDetails(
   });
 }
 
-type MCQsInformationState = {
-  get: Tables<'mcqs_options'>[] | null;
-  set: (mcqs: Tables<'mcqs_options'>[] | null) => void;
+export type ModalState<T> = {
+  get: T;
+  set: Dispatch<SetStateAction<T>>;
 };
+
+export type MCQsInformationState = ModalState<Tables<'mcqs_options'>[] | null>;
 
 type UseEditModalHistoryParams = {
   accordionID: string;
@@ -114,4 +116,46 @@ export async function submitChangeAndRefresh(
 ) {
   await submitChange();
   await refreshHistoricalMCQs(mcqsInformation);
+}
+
+type UseEditModalControllerParams = {
+  modalID: string;
+  mcqsInformation: MCQsInformationState;
+  canFetchHistory: boolean;
+  getHistoryText: (mcqsMetaRow: Tables<'mcqs_options'>) => string;
+  getUpdaterDetails: (id: string) => Promise<UpdaterDetails>;
+  resetModalState: () => void;
+  submitChange: () => Promise<unknown>;
+};
+
+export function useEditModalController({
+  modalID,
+  mcqsInformation,
+  canFetchHistory,
+  getHistoryText,
+  getUpdaterDetails,
+  resetModalState,
+  submitChange,
+}: UseEditModalControllerParams) {
+  const accordionID = useId();
+  const { history, loadingHistory } = useEditModalHistory({
+    accordionID,
+    modalID,
+    mcqsInformation,
+    canFetchHistory,
+    getHistoryText,
+    getUpdaterDetails,
+    resetModalState,
+  });
+
+  const handleSubmit = useCallback(async () => {
+    await submitChangeAndRefresh(submitChange, mcqsInformation);
+  }, [mcqsInformation, submitChange]);
+
+  return {
+    accordionID,
+    handleSubmit,
+    history,
+    loadingHistory,
+  };
 }

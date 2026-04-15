@@ -1,6 +1,6 @@
 'use client';
 
-import { cache, useCallback, useId, type Dispatch, type SetStateAction } from 'react';
+import { cache, useCallback } from 'react';
 
 import type { Tables } from '@/utils/supabase/database.types';
 import type { MCQ } from '@/utils/types';
@@ -8,50 +8,40 @@ import type { MCQ } from '@/utils/types';
 import { getUpdaterDetails, submitNewQuestion } from './actions';
 import { renderQuestion } from './render-spans';
 import EditModalLayout from './edit-modal-layout';
-import { submitChangeAndRefresh, useEditModalHistory } from './utils';
+import { type MCQsInformationState, type ModalState, useEditModalController } from './utils';
 
 const getCachedUpdaterDetails = cache(getUpdaterDetails);
+
+type EditQuestionModalProps = {
+  mcqsInformation: MCQsInformationState;
+  questionMCQ: ModalState<MCQ | null>;
+  newQuestionText: ModalState<string | null>;
+};
 
 export default function EditQuestionModal({
   mcqsInformation,
   questionMCQ,
   newQuestionText,
-}: {
-  mcqsInformation: {
-    get: Tables<'mcqs_options'>[] | null;
-    set: Dispatch<SetStateAction<Tables<'mcqs_options'>[] | null>>;
-  };
-  questionMCQ: {
-    get: MCQ | null;
-    set: Dispatch<SetStateAction<MCQ | null>>;
-  };
-  newQuestionText: {
-    get: string | null;
-    set: Dispatch<SetStateAction<string | null>>;
-  };
-}) {
-  const accordionID = useId();
-
+}: EditQuestionModalProps) {
   const getQuestionHistoryText = useCallback(
     (mcqsMetaRow: Tables<'mcqs_options'>) =>
       (mcqsMetaRow.data as MCQ[]).find((mcq) => mcq.options[Object.keys(questionMCQ.get!.options)[0]])!.question,
     [questionMCQ.get]
   );
   const resetQuestionModal = useCallback(() => questionMCQ.set(null), [questionMCQ]);
-
-  const { history, loadingHistory } = useEditModalHistory({
-    accordionID,
-    modalID: 'edit-question-modal',
-    mcqsInformation,
+  const submitQuestionChange = useCallback(
+    () => submitNewQuestion(questionMCQ.get!, newQuestionText.get!),
+    [newQuestionText, questionMCQ]
+  );
+  const { accordionID, handleSubmit, history, loadingHistory } = useEditModalController({
     canFetchHistory: Boolean(questionMCQ.get),
     getHistoryText: getQuestionHistoryText,
     getUpdaterDetails: getCachedUpdaterDetails,
+    mcqsInformation,
+    modalID: 'edit-question-modal',
     resetModalState: resetQuestionModal,
+    submitChange: submitQuestionChange,
   });
-
-  const handleSubmit = async () => {
-    await submitChangeAndRefresh(() => submitNewQuestion(questionMCQ.get!, newQuestionText.get!), mcqsInformation);
-  };
 
   const submitDisabled = !questionMCQ.get || !newQuestionText.get || newQuestionText.get === questionMCQ.get.question;
 

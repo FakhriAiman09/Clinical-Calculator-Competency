@@ -1,6 +1,6 @@
 'use client';
 
-import { cache, useCallback, useId, type Dispatch, type SetStateAction } from 'react';
+import { cache, useCallback } from 'react';
 
 import type { Tables } from '@/utils/supabase/database.types';
 import type { MCQ } from '@/utils/types';
@@ -8,9 +8,17 @@ import type { MCQ } from '@/utils/types';
 import { getUpdaterDetails, submitNewOption } from './actions';
 import { renderOption, renderQuestion } from './render-spans';
 import EditModalLayout from './edit-modal-layout';
-import { submitChangeAndRefresh, useEditModalHistory } from './utils';
+import { type MCQsInformationState, type ModalState, useEditModalController } from './utils';
 
 const getCachedUpdaterDetails = cache(getUpdaterDetails);
+
+type EditOptionModalProps = {
+  mcqsInformation: MCQsInformationState;
+  optionMCQ: ModalState<MCQ | null>;
+  optionKey: ModalState<string | null>;
+  optionText: ModalState<string | null>;
+  newOptionText: ModalState<string | null>;
+};
 
 export default function EditOptionModal({
   mcqsInformation,
@@ -18,50 +26,23 @@ export default function EditOptionModal({
   optionKey,
   optionText,
   newOptionText,
-}: {
-  mcqsInformation: {
-    get: Tables<'mcqs_options'>[] | null;
-    set: Dispatch<SetStateAction<Tables<'mcqs_options'>[] | null>>;
-  };
-  optionMCQ: {
-    get: MCQ | null;
-    set: Dispatch<SetStateAction<MCQ | null>>;
-  };
-  optionKey: {
-    get: string | null;
-    set: Dispatch<SetStateAction<string | null>>;
-  };
-  optionText: {
-    get: string | null;
-    set: Dispatch<SetStateAction<string | null>>;
-  };
-  newOptionText: {
-    get: string | null;
-    set: Dispatch<SetStateAction<string | null>>;
-  };
-}) {
-  const accordionID = useId();
-
+}: EditOptionModalProps) {
   const getOptionHistoryText = useCallback(
     (mcqsMetaRow: Tables<'mcqs_options'>) =>
       (mcqsMetaRow.data as MCQ[]).find((mcq) => mcq.options[optionKey.get!])!.options[optionKey.get!],
     [optionKey.get]
   );
   const resetOptionModal = useCallback(() => optionKey.set(null), [optionKey]);
-
-  const { history, loadingHistory } = useEditModalHistory({
-    accordionID,
-    modalID: 'edit-option-modal',
-    mcqsInformation,
+  const submitOptionChange = useCallback(() => submitNewOption(optionKey.get!, newOptionText.get!), [newOptionText, optionKey]);
+  const { accordionID, handleSubmit, history, loadingHistory } = useEditModalController({
     canFetchHistory: Boolean(optionKey.get),
     getHistoryText: getOptionHistoryText,
     getUpdaterDetails: getCachedUpdaterDetails,
+    mcqsInformation,
+    modalID: 'edit-option-modal',
     resetModalState: resetOptionModal,
+    submitChange: submitOptionChange,
   });
-
-  const handleSubmit = async () => {
-    await submitChangeAndRefresh(() => submitNewOption(optionKey.get!, newOptionText.get!), mcqsInformation);
-  };
 
   const submitDisabled =
     !optionMCQ.get || !optionKey.get || !optionText.get || !newOptionText.get || newOptionText.get === optionText.get;
