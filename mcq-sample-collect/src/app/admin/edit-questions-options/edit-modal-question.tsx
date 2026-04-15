@@ -1,7 +1,6 @@
 'use client';
 
 import { cache, useCallback, useEffect, useId, useState, type Dispatch, type SetStateAction } from 'react';
-import React from 'react';
 
 import { getHistoricalMCQs } from '@/utils/get-epa-data';
 import type { Tables } from '@/utils/supabase/database.types';
@@ -10,7 +9,7 @@ import type { MCQ, changeHistoryInstance } from '@/utils/types';
 import { getUpdaterDetails, submitNewQuestion } from './actions';
 import { renderQuestion } from './render-spans';
 import EditModalChangesList from './edit-modal-changes-list';
-import { filterHistory } from './utils';
+import { enrichHistoryWithUpdaterDetails, filterHistory } from './utils';
 
 const getCachedUpdaterDetails = cache(getUpdaterDetails);
 
@@ -66,20 +65,7 @@ export default function EditQuestionModal({
         .question,
     })) satisfies changeHistoryInstance[];
 
-    // Fetch updater for each history instance
-    const updaterIDs = Array.from(new Set(history?.map((h) => h.updated_by)));
-    const updaterDetails = await Promise.all(
-      updaterIDs?.map(async (id) => await getCachedUpdaterDetails(id ?? '')) ?? []
-    );
-
-    history = history.map((h) => {
-      const updater = updaterDetails?.find((u) => u?.id === h.updated_by);
-      return {
-        ...h,
-        updater_display_name: updater?.display_name,
-        updater_email: updater?.email,
-      } satisfies changeHistoryInstance;
-    });
+    history = await enrichHistoryWithUpdaterDetails(history, getCachedUpdaterDetails);
 
     setQuestionHistory(history);
     setLoadingHistory(false);

@@ -14,9 +14,16 @@
 
 .admin-dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   width: 100%;
+}
+
+@media (min-width: 992px) {
+  .admin-dashboard-grid {
+    grid-template-columns: minmax(280px, 29%) minmax(0, 1fr);
+    align-items: start;
+  }
 }
 
 .stats-overview-grid {
