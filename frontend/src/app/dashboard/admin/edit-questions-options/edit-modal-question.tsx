@@ -47,14 +47,9 @@ export default function EditQuestionModal({
 
   return (
     <EditModalLayout
-      accordionID={accordionID}
-      changesLabel='question'
-      history={history}
-      loadingHistory={loadingHistory}
-      modalID='edit-question-modal'
-      submitDisabled={submitDisabled}
-      title='Edit question'
-      onSubmit={handleSubmit}
+      changes={{ accordionID, history, label: 'question', loading: loadingHistory }}
+      modal={{ id: 'edit-question-modal', title: 'Edit question' }}
+      submit={{ disabled: submitDisabled, onClick: handleSubmit }}
     >
       <p>
         <strong>Old question:</strong>

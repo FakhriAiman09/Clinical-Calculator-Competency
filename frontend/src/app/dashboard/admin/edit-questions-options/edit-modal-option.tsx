@@ -49,14 +49,9 @@ export default function EditOptionModal({
 
   return (
     <EditModalLayout
-      accordionID={accordionID}
-      changesLabel='option'
-      history={history}
-      loadingHistory={loadingHistory}
-      modalID='edit-option-modal'
-      submitDisabled={submitDisabled}
-      title='Edit option'
-      onSubmit={handleSubmit}
+      changes={{ accordionID, history, label: 'option', loading: loadingHistory }}
+      modal={{ id: 'edit-option-modal', title: 'Edit option' }}
+      submit={{ disabled: submitDisabled, onClick: handleSubmit }}
     >
       <p>
         <strong>Question:</strong>
