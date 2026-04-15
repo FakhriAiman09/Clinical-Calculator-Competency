@@ -1,19 +1,36 @@
-export function RemedialIcon({ size }: { size: string }) {
+import type { ReactNode } from 'react';
+
+type IconProps = Readonly<{ size: string }>;
+
+type IconFrameProps = Readonly<{
+  size: string;
+  children: ReactNode;
+}>;
+
+function IconFrame({ size, children }: IconFrameProps) {
   return (
     <svg xmlns='http://www.w3.org/2000/svg' width={size} height={size} viewBox='0 0 102 102' fill='currentColor'>
+      {children}
+    </svg>
+  );
+}
+
+export function RemedialIcon({ size }: IconProps) {
+  return (
+    <IconFrame size={size}>
       <path
         d='M96.4,92.3H5.7c-0.7,0-1.4-0.4-1.7-1s-0.4-1.4,0-2l45.4-78.6c0.7-1.2,2.8-1.2,3.5,0l45.4,78.6c0.4,0.6,0.4,1.4,0,2
 	S97.1,92.3,96.4,92.3z M9.1,88.3h83.8L51,15.7L9.1,88.3z'
       />
       <path d='M55.8,42.1c0-2.4-2.2-4.3-4.8-4.3c-2.7,0-4.8,1.9-4.8,4.3L48,64.8c0,1.5,1.3,2.7,3,2.7s3-1.2,3-2.7L55.8,42.1z' />
       <circle cx='51' cy='76.8' r='4.8' />
-    </svg>
+    </IconFrame>
   );
 }
 
-export function EarlyDevelopingIcon({ size }: { size: string }) {
+export function EarlyDevelopingIcon({ size }: IconProps) {
   return (
-    <svg xmlns='http://www.w3.org/2000/svg' width={size} height={size} viewBox='0 0 102 102' fill='currentColor'>
+    <IconFrame size={size}>
       <path
         d='M90.7,88.3H53V67.6c1.4,0.5,3,0.7,4.7,0.7c2.7,0,5.6-0.6,8.4-1.8C72.2,64,76.4,59.3,77,54.7c0.1-0.7-0.2-1.4-0.8-1.8
 	c-3.7-2.8-10-3-16.1-0.5c-2.8,1.2-5.2,2.9-7.1,4.8c0-4-3.1-10.8-8.7-14c-5.7-3.3-11.8-4.4-15.9-2.2c-0.6,0.3-1,1-1.1,1.7
@@ -21,13 +38,13 @@ export function EarlyDevelopingIcon({ size }: { size: string }) {
 	 M61.7,56.1c4-1.7,8.3-1.9,11-0.7c-1,2.8-4.1,5.8-8.2,7.5c-4,1.7-8.4,1.9-11,0.7C54.5,60.7,57.6,57.8,61.7,56.1z M38.2,52.7
 	c-3.7-2.4-6.3-5.8-6.8-8.7c2.9-0.8,7.1,0.1,10.8,2.5c3.7,2.4,6.3,5.8,6.8,8.7C46.1,56,41.9,55.1,38.2,52.7z'
       />
-    </svg>
+    </IconFrame>
   );
 }
 
-export function DevelopingIcon({ size }: { size: string }) {
+export function DevelopingIcon({ size }: IconProps) {
   return (
-    <svg xmlns='http://www.w3.org/2000/svg' width={size} height={size} viewBox='0 0 102 102' fill='currentColor'>
+    <IconFrame size={size}>
       <path
         d='M90.7,88.3H53v-5.7l6.7-4.3c1.1,0.4,2.3,0.7,3.6,0.7c3,0,6.4-1.1,9.6-3.1c5-3.2,8.1-8,7.9-12.2c0-0.7-0.4-1.3-1.1-1.7
 	c-3.7-2-9.4-1.2-14.4,2c-4.5,2.9-7.4,7.1-7.8,11L53,77.9V63.4l6.7-4.3c1.1,0.4,2.3,0.7,3.6,0.7c3,0,6.4-1,9.6-3.1
@@ -43,13 +60,13 @@ export function DevelopingIcon({ size }: { size: string }) {
 	c3.2,2,5.4,4.9,5.9,7.4C38,75.4,34.4,74.6,31.3,72.6z M42.5,28c0-6.2,3.4-11.8,8.5-14.1c5.1,2.3,8.5,7.9,8.5,14.1
 	c0,6-6.3,13.7-8.5,13.7C48.6,41.7,42.5,34,42.5,28z'
       />
-    </svg>
+    </IconFrame>
   );
 }
 
-export function EntrustableIcon({ size }: { size: string }) {
+export function EntrustableIcon({ size }: IconProps) {
   return (
-    <svg xmlns='http://www.w3.org/2000/svg' width={size} height={size} viewBox='0 0 102 102' fill='currentColor'>
+    <IconFrame size={size}>
       <path
         d='M51,91.2c-0.5,0-1-0.2-1.4-0.6c-0.3-0.3-31.6-30.5-38.7-37.7C6.2,48.2,3.7,42,3.7,35.5c0-13.6,11.1-24.7,24.7-24.7
 	c11.6,0,16.4,6.3,21.5,12.9c0.4,0.5,0.8,1,1.2,1.6c0.4-0.5,0.8-1,1.2-1.6c5.1-6.7,9.9-12.9,21.5-12.9c13.6,0,24.7,11.1,24.7,24.7
@@ -58,6 +75,6 @@ export function EntrustableIcon({ size }: { size: string }) {
 	c-9.6,0-13.4,5-18.3,11.4c-0.9,1.2-1.8,2.4-2.8,3.6c-0.4,0.5-0.9,0.7-1.5,0.7l0,0c-0.6,0-1.2-0.3-1.5-0.7c-1-1.2-1.9-2.4-2.8-3.6
 	C41.8,19.8,38,14.8,28.3,14.8z'
       />
-    </svg>
+    </IconFrame>
   );
 }
