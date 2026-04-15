@@ -39,11 +39,29 @@ export function annotateScores(text: string): string {
 /* Strip CSV artifacts: surrounding quotes and trailing commas */
 export function sanitize(value: string | null | undefined): string {
   if (!value) return '';
-  return value
-    .replace(/^["']|["']$/g, '')   // remove surrounding quotes
-    .replace(/,+$/, '')             // remove trailing commas
-    .replace(/["]{2,}/g, '"')       // collapse escaped CSV double-quotes
-    .trim();
+  let text = value.trim();
+
+  if (text.length >= 2) {
+    const first = text[0];
+    const last = text[text.length - 1];
+    if ((first === '"' || first === "'") && first === last) {
+      text = text.slice(1, -1);
+    }
+  }
+
+  while (text.endsWith(',')) {
+    text = text.slice(0, -1);
+  }
+
+  let collapsed = '';
+  for (let i = 0; i < text.length; i += 1) {
+    collapsed += text[i];
+    if (text[i] === '"') {
+      while (text[i + 1] === '"') i += 1;
+    }
+  }
+
+  return collapsed.trim();
 }
 
 /* ─── Types ─────────────────────────────────────────────── */

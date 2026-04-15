@@ -10,13 +10,11 @@ import path from 'path';
 
 type LogLevel = 'ERROR' | 'WARN' | 'INFO';
 
-function getLogPath(): string {
-  // In production (Vercel/Docker), write to /tmp since the filesystem is read-only
-  const logsDir =
-    process.env.LOG_DIR ||
-    (process.env.VERCEL || process.env.NODE_ENV === 'production'
-      ? '/tmp/logs'
-      : path.join(process.cwd(), 'logs'));
+function getLogPath(): string | null {
+  const logsDir = process.env.LOG_DIR || (process.env.NODE_ENV === 'production' ? null : path.join(process.cwd(), 'logs'));
+
+  if (!logsDir) return null;
+
   return path.join(logsDir, 'error.log');
 }
 
@@ -36,6 +34,8 @@ function formatEntry(level: LogLevel, message: string, context?: Record<string, 
 function write(level: LogLevel, message: string, context?: Record<string, unknown>) {
   try {
     const logPath = getLogPath();
+    if (!logPath) return;
+
     ensureLogDir(logPath);
     const entry = formatEntry(level, message, context);
     fs.appendFileSync(logPath, entry, { encoding: 'utf8' });
