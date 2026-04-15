@@ -85,12 +85,13 @@ const DemoEPABox: React.FC<DemoEPABoxProps> = ({
   return (
     <div className={`card mb-3 shadow-sm ${flagged ? 'border-danger' : ''}`} style={{ borderRadius: '0.75rem' }}>
       {/* Header */}
-      <div
-        className='card-header d-flex justify-content-between align-items-center'
-        style={{ cursor: 'pointer', borderRadius: '0.75rem 0.75rem 0 0' }}
-        onClick={() => setExpanded((p) => !p)}
-      >
-        <div className='d-flex align-items-center gap-3'>
+      <div className='card-header d-flex justify-content-between align-items-center' style={{ borderRadius: '0.75rem 0.75rem 0 0' }}>
+        <button
+          type='button'
+          className='d-flex align-items-center gap-3 flex-grow-1 border-0 bg-transparent p-0 text-start'
+          aria-expanded={expanded}
+          onClick={() => setExpanded((p) => !p)}
+        >
           <div className='d-flex align-items-center gap-2 fw-semibold'>
             <span
               className='badge text-white'
@@ -112,11 +113,11 @@ const DemoEPABox: React.FC<DemoEPABoxProps> = ({
               {check.topReason ? ` · ${check.topReason}` : ''}
             </span>
           )}
-        </div>
+        </button>
         <div className='d-flex align-items-center gap-2'>
           <button
             className='btn btn-sm btn-outline-primary d-print-none'
-            onClick={(e) => { e.stopPropagation(); onEditClick(); }}
+            onClick={onEditClick}
           >
             Edit EPA {epaId}
           </button>

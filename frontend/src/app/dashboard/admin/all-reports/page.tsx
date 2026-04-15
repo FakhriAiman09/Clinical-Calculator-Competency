@@ -1242,18 +1242,18 @@ export default function AdminAllReportsPage() {
                 ))}
               </div>
             </div>
-            <ul className='list-group report-list-shell report-list-scroll'>
+            <div className='list-group report-list-shell report-list-scroll'>
               {filteredReports.map((r) => (
-                <li
+                <button
+                  type='button'
                   key={r.id}
                   className={`list-group-item list-group-item-action report-row ${selectedReport?.id === r.id ? 'active' : ''}`}
                   onClick={() => handleReportSelect(r)}
-                  style={{ cursor: 'pointer' }}
                 >
                   {r.title} – {new Date(r.created_at).toLocaleDateString()}
-                </li>
+                </button>
               ))}
-            </ul>
+            </div>
           </div>
         )}
       </div>

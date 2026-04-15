@@ -327,12 +327,15 @@ function LoginForm() {
           role='dialog'
           aria-modal='true'
           aria-labelledby='forgotModalTitle'
-          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowForgotModal(false);
-          }}
         >
-          <div className='modal-dialog modal-dialog-centered' style={{ maxWidth: '420px' }}>
+          <button
+            type='button'
+            className='position-absolute top-0 start-0 w-100 h-100 border-0 p-0'
+            style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+            aria-label='Close password reset modal'
+            onClick={() => setShowForgotModal(false)}
+          />
+          <div className='modal-dialog modal-dialog-centered position-relative' style={{ maxWidth: '420px' }}>
             <div className='modal-content'>
               <div className='modal-header border-0 pb-0'>
                 <h5 className='modal-title' id='forgotModalTitle'>
