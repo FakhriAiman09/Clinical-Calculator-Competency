@@ -37,7 +37,15 @@ function formatTimeWindowLabel(timeWindow: string): string {
 }
 
 function getDisplayReportTitle(title: string): string {
-  return title.replace(/\s*\((3m|6m|12m)\)\s*$/i, '').trim() || title;
+  const trimmed = title.trim();
+  const suffixes = ['(3m)', '(6m)', '(12m)'];
+  const matchedSuffix = suffixes.find((suffix) => trimmed.toLowerCase().endsWith(suffix));
+
+  if (!matchedSuffix) {
+    return trimmed || title;
+  }
+
+  return trimmed.slice(0, -matchedSuffix.length).trim() || title;
 }
 
 export default function StudentReportPage() {
