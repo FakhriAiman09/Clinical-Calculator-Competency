@@ -1,7 +1,6 @@
 'use client';
 
 import { cache, useCallback, useEffect, useId, useState, type Dispatch, type SetStateAction } from 'react';
-import React from 'react';
 
 import { getHistoricalMCQs } from '@/utils/get-epa-data';
 import type { Tables } from '@/utils/supabase/database.types';
@@ -13,6 +12,30 @@ import EditModalChangesList from './edit-modal-changes-list';
 import { filterHistory } from './utils';
 
 const getCachedUpdaterDetails = cache(getUpdaterDetails);
+
+function buildQuestionHistory(mcqRows: Tables<'mcqs_options'>[], selectedQuestion: MCQ) {
+  const key = Object.keys(selectedQuestion.options)[0];
+
+  return mcqRows.map((mcqsMetaRow) => ({
+    updated_at: new Date(mcqsMetaRow.updated_at),
+    updated_by: mcqsMetaRow.updated_by ?? 'unknown updater',
+    text: (mcqsMetaRow.data as MCQ[]).find((mcq) => mcq.options[key])!.question,
+  })) satisfies changeHistoryInstance[];
+}
+
+async function attachUpdaterDetails(history: changeHistoryInstance[]) {
+  const updaterIDs = Array.from(new Set(history.map((entry) => entry.updated_by)));
+  const updaterDetails = await Promise.all(updaterIDs.map(async (id) => getCachedUpdaterDetails(id ?? '')));
+
+  return history.map((entry) => {
+    const updater = updaterDetails.find((u) => u?.id === entry.updated_by);
+    return {
+      ...entry,
+      updater_display_name: updater?.display_name,
+      updater_email: updater?.email,
+    } satisfies changeHistoryInstance;
+  });
+}
 
 export default function EditQuestionModal({
   mcqsInformation,
@@ -38,12 +61,16 @@ export default function EditQuestionModal({
   const accordionID = useId();
 
   useEffect(() => {
-    // add event listener when modal is closed
-    document.getElementById('edit-question-modal')?.addEventListener('hide.bs.modal', () => {
+    const modal = document.getElementById('edit-question-modal');
+    const onModalClose = () => {
       questionMCQ.set(null);
       if (document.getElementById(`${accordionID}-list`)?.classList.contains('show'))
         document.getElementById(`${accordionID}-list-button`)?.click();
-    });
+    };
+
+    // add event listener when modal is closed
+    modal?.addEventListener('hide.bs.modal', onModalClose);
+    return () => modal?.removeEventListener('hide.bs.modal', onModalClose);
   }, [accordionID, questionMCQ]);
 
   // on change of selected option, get historical change data
@@ -58,30 +85,10 @@ export default function EditQuestionModal({
       return;
     }
 
-    // Fetch historical changes for the selected question
-    let history = mcqsInformation.get.map((mcqsMetaRow) => ({
-      updated_at: new Date(mcqsMetaRow.updated_at),
-      updated_by: mcqsMetaRow.updated_by ?? 'unknown updater',
-      text: (mcqsMetaRow.data as MCQ[]).find((mcq) => mcq.options[Object.keys(questionMCQ.get!.options)[0]])!
-        .question,
-    })) satisfies changeHistoryInstance[];
+    const history = buildQuestionHistory(mcqsInformation.get, questionMCQ.get);
+    const enrichedHistory = await attachUpdaterDetails(history);
 
-    // Fetch updater for each history instance
-    const updaterIDs = Array.from(new Set(history?.map((h) => h.updated_by)));
-    const updaterDetails = await Promise.all(
-      updaterIDs?.map(async (id) => await getCachedUpdaterDetails(id ?? '')) ?? []
-    );
-
-    history = history.map((h) => {
-      const updater = updaterDetails?.find((u) => u?.id === h.updated_by);
-      return {
-        ...h,
-        updater_display_name: updater?.display_name,
-        updater_email: updater?.email,
-      } satisfies changeHistoryInstance;
-    });
-
-    setQuestionHistory(history);
+    setQuestionHistory(enrichedHistory);
     setLoadingHistory(false);
   }, [mcqsInformation.get, questionMCQ.get]);
 

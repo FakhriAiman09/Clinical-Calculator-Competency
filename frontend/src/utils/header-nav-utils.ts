@@ -20,6 +20,7 @@ export function getNavItemsByRole(role: NavRoleState): NavItem[] {
 
   if (role.userRoleAuthorized || role.userRoleDev) {
     links.push(
+      { href: '/dashboard', label: 'Dashboard' },
       { href: '/dashboard/admin/userList', label: 'Manage Users' },
       { href: '/dashboard/admin/all-reports', label: 'All Reports' },
       { href: '/dashboard/admin/edit-questions-options', label: 'Edit Questions' },

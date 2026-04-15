@@ -4,6 +4,35 @@ import { getLatestMCQs } from '@/utils/get-epa-data';
 import { createClient } from '@/utils/supabase/server';
 import type { MCQ } from '@/utils/types';
 
+type UpdaterDetails = {
+  id: string;
+  display_name: string | null;
+  email: string | null;
+};
+
+async function insertMCQSnapshot(newMCQs: MCQ[], errorLabel: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.schema('public').from('mcqs_options').insert({ data: newMCQs });
+
+  if (error) {
+    console.error(errorLabel, error);
+    return false;
+  }
+
+  return true;
+}
+
+async function loadLatestMCQs(): Promise<MCQ[] | null> {
+  const mcqs = await getLatestMCQs();
+
+  if (!mcqs) {
+    console.error('No MCQs found');
+    return null;
+  }
+
+  return mcqs;
+}
+
 /**
  * Fetches the display name and email of a user by their Supabase ID.
  * Used to show who last updated an MCQ question or option.
@@ -12,7 +41,7 @@ import type { MCQ } from '@/utils/types';
  */
 export async function getUpdaterDetails(
   id: string
-): Promise<{ id: string; display_name: string | null; email: string } | null> {
+): Promise<UpdaterDetails | null> {
   const supabase = await createClient();
 
   const { data: profileData, error: fetchProfileError } = await supabase
@@ -32,11 +61,13 @@ export async function getUpdaterDetails(
 
   if (!emailData || emailData.length === 0) console.error('No email data found for updater ID:', id);
 
-  return {
+  const updaterDetails: UpdaterDetails = {
     id,
     display_name: profileData?.display_name ?? null,
     email: emailData ?? null,
   };
+
+  return updaterDetails;
 }
 
 /**
@@ -46,23 +77,21 @@ export async function getUpdaterDetails(
  * @param {string} newText - The new text for the option.
  */
 export async function submitNewOption(key: string, newText: string) {
-  const supabase = await createClient();
+  const mcqs = await loadLatestMCQs();
+  if (!mcqs) return;
 
-  const mcqs = await getLatestMCQs();
-
-  if (!mcqs) {
-    console.error('No MCQs found');
-    return;
-  }
-
-  const newMCQs = mcqs.map((mcq) => {
-    if (mcq.options[key]) mcq.options[key] = newText;
-    return mcq;
+  const updatedMCQs = mcqs.map((mcq) => {
+    if (!mcq.options[key]) return mcq;
+    return {
+      ...mcq,
+      options: {
+        ...mcq.options,
+        [key]: newText,
+      },
+    };
   });
 
-  const { error } = await supabase.schema('public').from('mcqs_options').insert({ data: newMCQs });
-
-  if (error) console.error('Error updating MCQ option:', error);
+  await insertMCQSnapshot(updatedMCQs, 'Error updating MCQ option:');
 }
 
 /**
@@ -72,21 +101,16 @@ export async function submitNewOption(key: string, newText: string) {
  * @param {string} newText - The new question text.
  */
 export async function submitNewQuestion(mcq: MCQ, newText: string) {
-  const supabase = await createClient();
+  const mcqs = await loadLatestMCQs();
+  if (!mcqs) return;
 
-  const mcqs = await getLatestMCQs();
-
-  if (!mcqs) {
-    console.error('No MCQs found');
-    return;
-  }
-
-  const newMCQs = mcqs.map((m) => {
-    if (m.question === mcq.question) m.question = newText;
-    return m;
+  const updatedMCQs = mcqs.map((current) => {
+    if (current.question !== mcq.question) return current;
+    return {
+      ...current,
+      question: newText,
+    };
   });
 
-  const { error } = await supabase.schema('public').from('mcqs_options').insert({ data: newMCQs });
-
-  if (error) console.error('Error updating MCQ question:', error);
+  await insertMCQSnapshot(updatedMCQs, 'Error updating MCQ question:');
 }
