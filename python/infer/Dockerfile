@@ -27,10 +27,10 @@ RUN python -m pip install --upgrade pip
 COPY --chmod=444 requirements.ubuntu.txt .
 RUN python -m pip install -r requirements.ubuntu.txt
 
-COPY --chown=appuser:appuser --chmod=444 inference.py listener.py list_models.py ./
+COPY --chown=root:root --chmod=444 inference.py listener.py list_models.py ./
 
 RUN mkdir -p /home/appuser/models /home/appuser/svm-models /home/appuser/logs \
-    && chown -R appuser:appuser /home/appuser /app \
+    && chown -R appuser:appuser /home/appuser \
     && chmod -R 755 /home/appuser
 
 # Install openssh-client for Railway SSH file transfers
