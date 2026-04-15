@@ -13,6 +13,14 @@ import {
   REPORT_TIME_WINDOWS,
   type ReportTimeWindow,
 } from '@/utils/epa-scoring';
+import {
+  analyzeCommentsQuality,
+  detectFaultReasons,
+  reasonLabel,
+  type EPACheckSummary,
+  type FaultReason,
+  type FormFlagSummary,
+} from '@/utils/comment-quality';
 
 const EPABox = dynamic(() => import('@/components/(StudentComponents)/EPABox'), { ssr: false });
 
@@ -79,33 +87,6 @@ interface SupabaseRow {
   form_responses: FormResponsesInner;
 }
 
-type FaultReason =
-  | 'TOO_SHORT'
-  | 'GENERIC'
-  | 'NO_CONTENT'
-  | 'ALL_CAPS'
-  | 'REPEATED'
-  | 'PROFANITY'
-  | 'LOW_SIGNAL';
-
-type FlaggedComment = {
-  text: string;
-  reasons: FaultReason[];
-};
-
-type EPACheckSummary = {
-  totalComments: number;
-  flaggedComments: number;
-  reasonCounts: Record<FaultReason, number>;
-  examples: FlaggedComment[]; // small sample for admin preview
-};
-
-type FormFlagSummary = {
-  totalComments: number;
-  flaggedComments: number;
-  topReason: FaultReason | null;
-};
-
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
 
 function formatTimeWindowLabel(timeWindow: StudentReport['time_window']): string {
@@ -122,182 +103,6 @@ function getDisplayReportTitle(title: string): string {
   }
 
   return trimmed.slice(0, -matchedSuffix.length).trim() || title;
-}
-
-/** -------------------- Comment-quality heuristics (local, no LLM) -------------------- */
-function normalize(s: string) {
-  if (!s || typeof s !== 'string') return '';
-  return s
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/[“”]/g, '"')
-    .replace(/[’]/g, "'");
-}
-
-function isMostlyPunctOrEmpty(s: string) {
-  const t = s.trim();
-  if (!t) return true;
-  const letters = t.replace(/[^a-zA-Z]/g, '').length;
-  return letters === 0; // e.g. "..." "??" "—"
-}
-
-function isRepeatedCharSpam(s: string) {
-  // e.g. "goooood", "!!!!!", "aaaaaa"
-  return /(.)\1{5,}/.test(s);
-}
-
-function isRepeatedWordSpam(s: string) {
-  // e.g. "good good good good"
-  return /\b(\w+)\b(?:\s+\1\b){3,}/i.test(s);
-}
-
-function detectFaultReasons(textRaw: string): FaultReason[] {
-  const text = normalize(textRaw);
-  const lower = text.toLowerCase();
-
-  const reasons: FaultReason[] = [];
-
-  if (isMostlyPunctOrEmpty(text)) reasons.push('NO_CONTENT');
-
-  // Too short (low signal)
-  const words = text.split(' ').filter(Boolean);
-  const wordCount = words.length;
-  if (wordCount > 0 && wordCount <= 3) reasons.push('TOO_SHORT');
-
-  // Detail signals used by multiple heuristics.
-  // This helps avoid flagging comments that contain concrete clinical context.
-  const hasClinicalSpecificity =
-    /\b(diagnos(?:is|es|tic)|treat(?:ment|ments)|management|assessment|differential|investigation|screening|interpret(?:ing|ation)?|results?|plan|follow-?up|risk|symptom|history|exam|test(?:s)?|finding(?:s)?|intervention(?:s)?)\b/i.test(
-      lower
-    );
-  const hasConnector =
-    /\b(because|so that|however|but|improve|suggest|recommend|next time|specific|example|when|therefore|due to)\b/i.test(
-      lower
-    );
-  const hasDetailSignal = hasConnector || hasClinicalSpecificity || wordCount >= 12;
-
-  // All caps (shouting) - only if enough letters
-  const letters = text.replace(/[^a-zA-Z]/g, '');
-  if (letters.length >= 10 && letters === letters.toUpperCase()) reasons.push('ALL_CAPS');
-
-  // Generic / unhelpful (English only)
-  const genericExact = new Set([
-    'good',
-    'nice',
-    'ok',
-    'okay',
-    'great',
-    'excellent',
-    'well done',
-    'n/a',
-    'na',
-    'none',
-    'no comment',
-    'nothing',
-    'all good',
-    'looks good',
-    'fine',
-  ]);
-  if (genericExact.has(lower)) reasons.push('GENERIC');
-
-  // Very generic templates
-  const genericContains = [
-    'good job',
-    'keep it up',
-    'keep up the good work',
-    'great work',
-    'nice work',
-    'doing well',
-    'no issues',
-    'nothing to add',
-  ];
-  if (genericContains.some((p) => lower.includes(p))) {
-    const tooVagueTemplate = !hasDetailSignal || (wordCount < 8 && !hasClinicalSpecificity);
-    if (tooVagueTemplate) reasons.push('GENERIC');
-  }
-
-  // Profanity (simple heuristic list; extend as needed)
-  const profanity = ['fuck', 'shit', 'bitch', 'asshole', 'bastard', 'dick', 'cunt'];
-  if (profanity.some((w) => new RegExp(`\\b${w}\\b`, 'i').test(lower))) reasons.push('PROFANITY');
-
-  // Repetition spam
-  if (isRepeatedCharSpam(text) || isRepeatedWordSpam(text)) reasons.push('REPEATED');
-
-  // Low-signal: praise without any detail indicators
-  const praiseWords = ['good', 'great', 'nice', 'excellent', 'well done', 'amazing'];
-  const hasPraise = praiseWords.some((w) => lower.includes(w));
-  if (hasPraise && !hasDetailSignal && wordCount <= 10) reasons.push('LOW_SIGNAL');
-
-  return Array.from(new Set(reasons));
-}
-
-export function analyzeCommentsQuality(
-  comments: string[]
-): { flagged: FlaggedComment[]; total: number; reasonCounts: Record<FaultReason, number> } {
-  const flagged: FlaggedComment[] = [];
-
-  const baseCounts: Record<FaultReason, number> = {
-    NO_CONTENT: 0,
-    TOO_SHORT: 0,
-    GENERIC: 0,
-    ALL_CAPS: 0,
-    REPEATED: 0,
-    PROFANITY: 0,
-    LOW_SIGNAL: 0,
-  };
-
-  // detect repeated identical comments across the list
-  const seen: { text: string; count: number }[] = [];
-  const cleanKey = (x: string) => normalize(x).toLowerCase().replace(/[^a-z0-9\s]/g, '');
-  const isSame = (a: string, b: string) => cleanKey(a) === cleanKey(b);
-
-  for (const c of comments) {
-    const idx = seen.findIndex((x) => isSame(x.text, c));
-    if (idx >= 0) seen[idx].count += 1;
-    else seen.push({ text: c, count: 1 });
-  }
-
-  const repeatedSet = new Set(seen.filter((x) => x.count >= 3).map((x) => cleanKey(x.text)));
-
-  for (const raw of comments) {
-    const text = normalize(raw);
-    const reasons = detectFaultReasons(text);
-
-    const key = cleanKey(text);
-    if (repeatedSet.has(key)) reasons.push('REPEATED');
-
-    const unique = Array.from(new Set(reasons));
-    if (unique.length > 0) {
-      flagged.push({ text, reasons: unique });
-      unique.forEach((r) => {
-        baseCounts[r] += 1;
-      });
-    }
-  }
-
-  return { flagged, total: comments.length, reasonCounts: baseCounts };
-}
-
-/** Labels that show exactly what the flag means (your request) */
-export function reasonLabel(r: FaultReason) {
-  switch (r) {
-    case 'NO_CONTENT':
-      return 'No content / empty';
-    case 'TOO_SHORT':
-      return 'Comment too short';
-    case 'GENERIC':
-      return 'Generic / unhelpful';
-    case 'ALL_CAPS':
-      return 'All caps';
-    case 'REPEATED':
-      return 'Repeated comment';
-    case 'PROFANITY':
-      return 'Contains profanity';
-    case 'LOW_SIGNAL':
-      return 'Low signal (not specific)';
-    default:
-      return r;
-  }
 }
 
 function collectCommentsPerEpa(
