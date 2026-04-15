@@ -727,53 +727,47 @@ async function sendRaterNotificationEmail(formRequest: FormRequest): Promise<voi
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-export default function RaterFormsPage() {
-  useRequireRole(['rater', 'dev']);
-
-  const { user: authUser } = useUser();
-  const { model: aiModel, incrementUsage } = useAIPreferences(authUser?.id);
-
-  const [epas, setEPAs] = useState<EPA[]>([]);
-  const [kfData, setKFData] = useState<KeyFunction[]>([]);
-  const [selectedEPAs, setSelectedEPAs] = useState<number[]>([]);
-  const [completedEPAs, setCompletedEPAs] = useState<{ [epa: number]: boolean }>({});
-  const [currentEPA, setCurrentEPA] = useState<number | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [selectionCollapsed, setSelectionCollapsed] = useState<boolean>(false);
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  const [sidebarWidth, setSidebarWidth] = useState<number>(280);
-  const isResizing = useRef(false);
-  const [formRequest, setFormRequest] = useState<FormRequest | null>(null);
-  const [responses, setResponses] = useState<Responses>({});
-  const [cachedJSON, setCachedJSON] = useState<{
-    metadata: { student_id: string; rater_id: string };
-    response: Responses;
-  } | null>(null);
-
-  const [textInputs, setTextInputs] = useState<TextInputs>({});
-  const [professionalism, setProfessionalism] = useState<string>('');
-  const [showProfessionalismForm, setShowProfessionalismForm] = useState<boolean>(false);
-  const [saveStatus, setSaveStatus] = useState<string>('');
-  const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
-  const [submittingFinal, setSubmittingFinal] = useState(false);
-
-  const [existingResponseId, setExistingResponseId] = useState<string | null>(null);
-  const [isEditMode, setIsEditMode] = useState<boolean>(false);
-
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const studentId = searchParams?.get('id') ?? '';
-
-  // =========================================================
-  // VOICE TO TEXT
-  // =========================================================
+function useSpeechRecognitionControls({
+  setProfessionalism,
+  setTextInputs,
+  setSaveStatus,
+}: {
+  setProfessionalism: React.Dispatch<React.SetStateAction<string>>;
+  setTextInputs: React.Dispatch<React.SetStateAction<TextInputs>>;
+  setSaveStatus: React.Dispatch<React.SetStateAction<string>>;
+}) {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const activeTargetRef = useRef<ActiveTarget>(null);
 
   const [listeningByField, setListeningByField] = useState<Record<string, boolean>>({});
   const [statusByField, setStatusByField] = useState<Record<string, string>>({});
+
+  const showSpeechNotSupportedMessage = useCallback(() => {
+    setSaveStatus('Speech-to-text not supported. Use Chrome/Edge.');
+    setTimeout(() => setSaveStatus(''), 5000);
+  }, [setSaveStatus]);
+
+  const toggleRecognitionForTarget = useCallback(
+    (target: Exclude<ActiveTarget, null>, isListening: boolean) => {
+      const recognition = recognitionRef.current;
+      if (!recognition) {
+        showSpeechNotSupportedMessage();
+        return;
+      }
+
+      try {
+        if (isListening) {
+          recognition.stop();
+          return;
+        }
+
+        stopRecognitionSafely(recognition);
+        activeTargetRef.current = target;
+        recognition.start();
+      } catch {}
+    },
+    [showSpeechNotSupportedMessage]
+  );
 
   useEffect(() => {
     const speechWindow = window as WindowWithSpeechRecognition;
@@ -862,55 +856,57 @@ export default function RaterFormsPage() {
     return () => {
       stopRecognitionSafely(recognition);
     };
-  }, []);
+  }, [setProfessionalism, setSaveStatus, setTextInputs]);
 
-  const toggleDictation = (epaId: number, questionId: string) => {
-    const key = makeFieldKey(epaId, questionId);
-    toggleRecognitionForTarget({ type: 'epa', epaId, questionId }, !!listeningByField[key]);
-  };
+  const toggleDictation = useCallback(
+    (epaId: number, questionId: string) => {
+      const key = makeFieldKey(epaId, questionId);
+      toggleRecognitionForTarget({ type: 'epa', epaId, questionId }, !!listeningByField[key]);
+    },
+    [listeningByField, toggleRecognitionForTarget]
+  );
 
-  const toggleProfessionalismDictation = () => {
+  const toggleProfessionalismDictation = useCallback(() => {
     toggleRecognitionForTarget(
       { type: 'professionalism' },
       !!listeningByField[professionalismFieldKey]
     );
-  };
+  }, [listeningByField, toggleRecognitionForTarget]);
 
-  // =========================
-  // AI SUMMARY
-  // =========================
+  return {
+    listeningByField,
+    statusByField,
+    toggleDictation,
+    toggleProfessionalismDictation,
+  };
+}
+
+function useAISummaryControls({
+  textInputs,
+  professionalism,
+  kfData,
+  responses,
+  aiModel,
+  incrementUsage,
+  setSaveStatus,
+  setTextInputs,
+  setProfessionalism,
+}: {
+  textInputs: TextInputs;
+  professionalism: string;
+  kfData: KeyFunction[];
+  responses: Responses;
+  aiModel: string;
+  incrementUsage: () => Promise<void>;
+  setSaveStatus: React.Dispatch<React.SetStateAction<string>>;
+  setTextInputs: React.Dispatch<React.SetStateAction<TextInputs>>;
+  setProfessionalism: React.Dispatch<React.SetStateAction<string>>;
+}) {
   const [summaryByField, setSummaryByField] = useState<Record<string, string>>({});
   const [summarizingByField, setSummarizingByField] = useState<Record<string, boolean>>({});
   const [summaryErrorByField, setSummaryErrorByField] = useState<Record<string, string>>({});
 
-  const showSpeechNotSupportedMessage = useCallback(() => {
-    setSaveStatus('Speech-to-text not supported. Use Chrome/Edge.');
-    setTimeout(() => setSaveStatus(''), 5000);
-  }, []);
-
-  const toggleRecognitionForTarget = useCallback(
-    (target: Exclude<ActiveTarget, null>, isListening: boolean) => {
-      const recognition = recognitionRef.current;
-      if (!recognition) {
-        showSpeechNotSupportedMessage();
-        return;
-      }
-
-      try {
-        if (isListening) {
-          recognition.stop();
-          return;
-        }
-
-        stopRecognitionSafely(recognition);
-        activeTargetRef.current = target;
-        recognition.start();
-      } catch {}
-    },
-    [showSpeechNotSupportedMessage]
-  );
-
-  const requestAISummary = async (epaId: number, questionId: string) => {
+  const requestAISummary = useCallback(async (epaId: number, questionId: string) => {
     const key = makeFieldKey(epaId, questionId);
     const text = (textInputs[epaId]?.[questionId] ?? '').trim();
 
@@ -944,9 +940,9 @@ export default function RaterFormsPage() {
     } finally {
       setSummarizingByField((prev) => ({ ...prev, [key]: false }));
     }
-  };
+  }, [aiModel, incrementUsage, kfData, responses, textInputs]);
 
-  const requestProfessionalismSummary = async () => {
+  const requestProfessionalismSummary = useCallback(async () => {
     const key = professionalismFieldKey;
     const text = professionalism.trim();
 
@@ -971,9 +967,9 @@ export default function RaterFormsPage() {
     } finally {
       setSummarizingByField((prev) => ({ ...prev, [key]: false }));
     }
-  };
+  }, [aiModel, incrementUsage, professionalism]);
 
-  const insertSummaryIntoTextarea = (epaId: number, questionId: string) => {
+  const insertSummaryIntoTextarea = useCallback((epaId: number, questionId: string) => {
     const key = makeFieldKey(epaId, questionId);
     const summary = (summaryByField[key] ?? '').trim();
     const kf = kfData.find((item) => item.epa === epaId && item.questionId === questionId)?.kf ?? null;
@@ -992,9 +988,9 @@ export default function RaterFormsPage() {
     });
 
     setSaveStatus('Saving...');
-  };
+  }, [kfData, setSaveStatus, setTextInputs, summaryByField]);
 
-  const replaceTextareaWithSummary = (epaId: number, questionId: string) => {
+  const replaceTextareaWithSummary = useCallback((epaId: number, questionId: string) => {
     const key = makeFieldKey(epaId, questionId);
     const summary = (summaryByField[key] ?? '').trim();
     const kf = kfData.find((item) => item.epa === epaId && item.questionId === questionId)?.kf ?? null;
@@ -1010,18 +1006,18 @@ export default function RaterFormsPage() {
 
     setSaveStatus('Saving...');
     setSummaryByField((prev) => ({ ...prev, [key]: '' }));
-  };
+  }, [kfData, setSaveStatus, setTextInputs, summaryByField]);
 
-  const insertProfessionalismSummary = () => {
+  const insertProfessionalismSummary = useCallback(() => {
     const key = professionalismFieldKey;
     const summary = (summaryByField[key] ?? '').trim();
     if (!getSummaryGuard(summary, 'professionalism').canApply) return;
 
     setProfessionalism((prev) => (prev ? prev.trimEnd() + '\n\n' : '') + `${summary}\n`);
     setSaveStatus('Saving...');
-  };
+  }, [setProfessionalism, setSaveStatus, summaryByField]);
 
-  const replaceProfessionalismWithSummary = () => {
+  const replaceProfessionalismWithSummary = useCallback(() => {
     const key = professionalismFieldKey;
     const summary = (summaryByField[key] ?? '').trim();
     if (!getSummaryGuard(summary, 'professionalism').canApply) return;
@@ -1029,7 +1025,165 @@ export default function RaterFormsPage() {
     setProfessionalism(`${summary}\n`);
     setSaveStatus('Saving...');
     setSummaryByField((prev) => ({ ...prev, [key]: '' }));
+  }, [setProfessionalism, setSaveStatus, summaryByField]);
+
+  return {
+    summaryByField,
+    summarizingByField,
+    summaryErrorByField,
+    requestAISummary,
+    requestProfessionalismSummary,
+    insertSummaryIntoTextarea,
+    replaceTextareaWithSummary,
+    insertProfessionalismSummary,
+    replaceProfessionalismWithSummary,
   };
+}
+
+async function submitFinalEvaluation({
+  formRequest,
+  submittingFinal,
+  responses,
+  textInputs,
+  kfData,
+  cachedJSON,
+  professionalism,
+  isEditMode,
+  existingResponseId,
+  studentId,
+  router,
+  setSubmittingFinal,
+  setSubmitSuccess,
+}: {
+  formRequest: FormRequest | null;
+  submittingFinal: boolean;
+  responses: Responses;
+  textInputs: TextInputs;
+  kfData: KeyFunction[];
+  cachedJSON: { metadata: { student_id: string; rater_id: string }; response: Responses } | null;
+  professionalism: string;
+  isEditMode: boolean;
+  existingResponseId: string | null;
+  studentId: string;
+  router: { push: (path: string) => void };
+  setSubmittingFinal: React.Dispatch<React.SetStateAction<boolean>>;
+  setSubmitSuccess: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
+  if (!formRequest || submittingFinal) return;
+
+  setSubmittingFinal(true);
+
+  const mergedResponses = mergeTextInputsIntoResponses(responses, textInputs);
+  const questionMapping = buildQuestionMapping(kfData);
+  const sortedAggregatedResponses = sortAggregatedByEpaAndKf(
+    aggregateByKF(mergedResponses, questionMapping),
+  );
+
+  const localData = buildSubmissionData(cachedJSON, formRequest, sortedAggregatedResponses);
+
+  const { error: updateError } = await supabase.from('form_requests').update({ active_status: false }).eq('id', formRequest.id);
+  if (updateError) {
+    console.error('Error updating form request status:', updateError.message);
+    setSubmittingFinal(false);
+    return;
+  }
+
+  const responseError = await upsertFormResponse(
+    isEditMode,
+    existingResponseId,
+    formRequest.id,
+    localData,
+    professionalism,
+  );
+
+  if (responseError) {
+    console.error('Error submitting form:', responseError.message);
+    setSubmittingFinal(false);
+    return;
+  }
+
+  await sendRaterNotificationEmail(formRequest);
+
+  localStorage.removeItem(`form-progress-${formRequest.id}`);
+  localStorage.removeItem(`form-progress-${studentId}`);
+  setSubmitSuccess(true);
+
+  setTimeout(() => router.push('/dashboard'), 2000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function RaterFormsPage() {
+  useRequireRole(['rater', 'dev']);
+
+  const { user: authUser } = useUser();
+  const { model: aiModel, incrementUsage } = useAIPreferences(authUser?.id);
+
+  const [epas, setEPAs] = useState<EPA[]>([]);
+  const [kfData, setKFData] = useState<KeyFunction[]>([]);
+  const [selectedEPAs, setSelectedEPAs] = useState<number[]>([]);
+  const [completedEPAs, setCompletedEPAs] = useState<{ [epa: number]: boolean }>({});
+  const [currentEPA, setCurrentEPA] = useState<number | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [selectionCollapsed, setSelectionCollapsed] = useState<boolean>(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(280);
+  const isResizing = useRef(false);
+  const [formRequest, setFormRequest] = useState<FormRequest | null>(null);
+  const [responses, setResponses] = useState<Responses>({});
+  const [cachedJSON, setCachedJSON] = useState<{
+    metadata: { student_id: string; rater_id: string };
+    response: Responses;
+  } | null>(null);
+
+  const [textInputs, setTextInputs] = useState<TextInputs>({});
+  const [professionalism, setProfessionalism] = useState<string>('');
+  const [showProfessionalismForm, setShowProfessionalismForm] = useState<boolean>(false);
+  const [saveStatus, setSaveStatus] = useState<string>('');
+  const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
+  const [submittingFinal, setSubmittingFinal] = useState(false);
+
+  const [existingResponseId, setExistingResponseId] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const studentId = searchParams?.get('id') ?? '';
+
+  // =========================================================
+  // VOICE TO TEXT
+  // =========================================================
+  const {
+    listeningByField,
+    statusByField,
+    toggleDictation,
+    toggleProfessionalismDictation,
+  } = useSpeechRecognitionControls({ setProfessionalism, setTextInputs, setSaveStatus });
+
+  // =========================
+  // AI SUMMARY
+  // =========================
+  const {
+    summaryByField,
+    summarizingByField,
+    summaryErrorByField,
+    requestAISummary,
+    requestProfessionalismSummary,
+    insertSummaryIntoTextarea,
+    replaceTextareaWithSummary,
+    insertProfessionalismSummary,
+    replaceProfessionalismWithSummary,
+  } = useAISummaryControls({
+    textInputs,
+    professionalism,
+    kfData,
+    responses,
+    aiModel,
+    incrementUsage,
+    setSaveStatus,
+    setTextInputs,
+    setProfessionalism,
+  });
 
   // =========================================================
   // AUTOSAVE
@@ -1355,48 +1509,35 @@ export default function RaterFormsPage() {
     [saveProgress, moveToNextEPA]
   );
 
-  async function finalSubmit() {
-    if (!formRequest || submittingFinal) return;
-
-    setSubmittingFinal(true);
-
-    const mergedResponses = mergeTextInputsIntoResponses(responses, textInputs);
-    const questionMapping = buildQuestionMapping(kfData);
-    const sortedAggregatedResponses = sortAggregatedByEpaAndKf(
-      aggregateByKF(mergedResponses, questionMapping),
-    );
-
-    const localData = buildSubmissionData(cachedJSON, formRequest, sortedAggregatedResponses);
-
-    const { error: updateError } = await supabase.from('form_requests').update({ active_status: false }).eq('id', formRequest.id);
-    if (updateError) {
-      console.error('Error updating form request status:', updateError.message);
-      setSubmittingFinal(false);
-      return;
-    }
-
-    const responseError = await upsertFormResponse(
+  const finalSubmit = useCallback(async () => {
+    await submitFinalEvaluation({
+      formRequest,
+      submittingFinal,
+      responses,
+      textInputs,
+      kfData,
+      cachedJSON,
+      professionalism,
       isEditMode,
       existingResponseId,
-      formRequest.id,
-      localData,
-      professionalism,
-    );
-
-    if (responseError) {
-      console.error('Error submitting form:', responseError.message);
-      setSubmittingFinal(false);
-      return;
-    }
-
-    await sendRaterNotificationEmail(formRequest);
-
-    localStorage.removeItem(`form-progress-${formRequest.id}`);
-    localStorage.removeItem(`form-progress-${studentId}`);
-    setSubmitSuccess(true);
-
-    setTimeout(() => router.push('/dashboard'), 2000);
-  }
+      studentId,
+      router,
+      setSubmittingFinal,
+      setSubmitSuccess,
+    });
+  }, [
+    cachedJSON,
+    existingResponseId,
+    formRequest,
+    isEditMode,
+    kfData,
+    professionalism,
+    responses,
+    router,
+    studentId,
+    submittingFinal,
+    textInputs,
+  ]);
 
   return (
     <>
