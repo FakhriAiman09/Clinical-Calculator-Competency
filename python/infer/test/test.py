@@ -3,36 +3,148 @@
 '''12 unit tests for inference.py and listener.py'''
 
 import json
+import sys
+import types
 import unittest
 from unittest.mock import MagicMock, patch, mock_open
 
-import numpy as np
+# Lightweight dependency stubs so tests can import inference/listener in CI
+# without installing full ML runtime packages.
+if 'supabase' not in sys.modules:
+  supabase_module = types.ModuleType('supabase')
+
+  class _SupabaseClient:  # pragma: no cover - marker type only
+    pass
+
+  supabase_module.Client = _SupabaseClient
+  sys.modules['supabase'] = supabase_module
+
+if 'torch' not in sys.modules:
+  torch_stub = types.ModuleType('torch')
+
+  class _NoGrad:
+    def __enter__(self):
+      return None
+
+    def __exit__(self, exc_type, exc, tb):
+      return False
+
+  torch_stub.no_grad = lambda: _NoGrad()
+  sys.modules['torch'] = torch_stub
+
+if 'transformers' not in sys.modules:
+  transformers_stub = types.ModuleType('transformers')
+
+  class _AutoTokenizer:
+    @staticmethod
+    def from_pretrained(*args, **kwargs):
+      return MagicMock()
+
+  class _AutoModelForSequenceClassification:
+    @staticmethod
+    def from_pretrained(*args, **kwargs):
+      return MagicMock()
+
+  transformers_stub.AutoTokenizer = _AutoTokenizer
+  transformers_stub.AutoModelForSequenceClassification = _AutoModelForSequenceClassification
+  sys.modules['transformers'] = transformers_stub
+
+if 'google' not in sys.modules:
+  google_module = types.ModuleType('google')
+  genai_module = types.ModuleType('google.genai')
+  genai_types_module = types.ModuleType('google.genai.types')
+
+  class _GenerateContentResponse:  # pragma: no cover - marker type only
+    pass
+
+  class _GenerateContentConfig:  # pragma: no cover - marker type only
+    def __init__(self, *args, **kwargs):
+      self.args = args
+      self.kwargs = kwargs
+
+  class _Client:  # pragma: no cover - marker type only
+    pass
+
+  genai_types_module.GenerateContentResponse = _GenerateContentResponse
+  genai_types_module.GenerateContentConfig = _GenerateContentConfig
+  genai_module.types = genai_types_module
+  genai_module.Client = _Client
+  google_module.genai = genai_module
+
+  sys.modules['google'] = google_module
+  sys.modules['google.genai'] = genai_module
+  sys.modules['google.genai.types'] = genai_types_module
+
+if 'sklearn' not in sys.modules:
+  sklearn_module = types.ModuleType('sklearn')
+  svm_module = types.ModuleType('sklearn.svm')
+
+  class _SVC:  # pragma: no cover - marker type only
+    pass
+
+  svm_module.SVC = _SVC
+  sklearn_module.svm = svm_module
+  sys.modules['sklearn'] = sklearn_module
+  sys.modules['sklearn.svm'] = svm_module
+
+if 'dotenv' not in sys.modules:
+  dotenv_module = types.ModuleType('dotenv')
+  dotenv_module.load_dotenv = lambda *args, **kwargs: None
+  sys.modules['dotenv'] = dotenv_module
+
+# test_benchmark.py injects a lightweight 'inference' stub into sys.modules.
+# When running this file in the same pytest invocation, drop that stub so we
+# import the real inference.py module for listener/inference tests.
+existing_inference = sys.modules.get('inference')
+if existing_inference is not None and not getattr(existing_inference, '__file__', None):
+  sys.modules.pop('inference', None)
 
 import inference  # pylint: disable=import-error
 import listener   # pylint: disable=import-error
 
 
 # ---------------------------------------------------------------------------
-# inference.bert_infer  (2 tests)
+# inference.deberta_infer  (2 tests)
 # ---------------------------------------------------------------------------
 
-class TestBertInfer(unittest.TestCase):
-  '''Unit tests for bert_infer() in inference.py'''
+class _FakeLogits:
+  def __init__(self, rows):
+    self.rows = rows
+
+  def sum(self, dim=0):
+    if dim != 0:
+      raise ValueError('Only dim=0 is supported in this fake tensor')
+    cols = [sum(row[i] for row in self.rows) for i in range(len(self.rows[0]))]
+    return _FakeVector(cols)
+
+
+class _FakeVector:
+  def __init__(self, values):
+    self.values = values
+
+  def argmax(self):
+    return max(range(len(self.values)), key=lambda i: self.values[i])
+
+
+class TestDebertaInfer(unittest.TestCase):
+  '''Unit tests for deberta_infer() in inference.py'''
 
   def test_output_keys_match_input_keys(self):
-    '''bert_infer should return a dict whose keys are identical to the input keys.'''
+    '''deberta_infer should return a dict whose keys are identical to the input keys.'''
+    mock_tokenizer = MagicMock(return_value={})
     mock_model = MagicMock()
-    mock_model.predict.return_value = np.array([[0.1, 0.9]])
+    mock_model.return_value = types.SimpleNamespace(logits=_FakeLogits([[0.1, 0.9]]))
     data = {'1.1': ['sentence a'], '1.2': ['sentence b']}
-    result = inference.bert_infer(mock_model, data)
+    result = inference.deberta_infer((mock_tokenizer, mock_model), data)
     self.assertEqual(set(result.keys()), set(data.keys()))
 
   def test_picks_class_with_highest_summed_score(self):
-    '''bert_infer should return the index of the column with the highest summed prediction.'''
+    '''deberta_infer should return the index of the column with the highest summed prediction.'''
+    mock_tokenizer = MagicMock(return_value={})
     mock_model = MagicMock()
     # Two rows summed → [0.3, 1.7] → class 1
-    mock_model.predict.return_value = np.array([[0.1, 0.9], [0.2, 0.8]])
-    result = inference.bert_infer(mock_model, {'kf': ['s1', 's2']})
+    mock_model.return_value = types.SimpleNamespace(logits=_FakeLogits([[0.1, 0.9], [0.2, 0.8]]))
+    result = inference.deberta_infer((mock_tokenizer, mock_model), {'kf': ['s1', 's2']})
     self.assertEqual(result['kf'], 1)
 
 
@@ -54,17 +166,17 @@ class TestSvmInfer(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# inference.load_bert_model  (1 test)
+# inference.load_deberta_model  (1 test)
 # ---------------------------------------------------------------------------
 
-class TestLoadBertModel(unittest.TestCase):
-  '''Unit tests for load_bert_model() in inference.py'''
+class TestLoadDebertaModel(unittest.TestCase):
+  '''Unit tests for load_deberta_model() in inference.py'''
 
   @patch('inference.os.path.exists', return_value=False)
   def test_raises_file_not_found_when_path_missing(self, mock_exists):
-    '''load_bert_model should raise FileNotFoundError when the path does not exist.'''
+    '''load_deberta_model should raise FileNotFoundError when the path does not exist.'''
     with self.assertRaises(FileNotFoundError):
-      inference.load_bert_model('nonexistent/path')
+      inference.load_deberta_model('nonexistent/path')
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +224,10 @@ class TestGenerateReportSummary(unittest.TestCase):
 
     result = inference.generate_report_summary({'1.1': 1.0}, mock_gemini)
     self.assertIn('Error', result)
-    self.assertEqual(mock_gemini.models.generate_content.call_count, 3)
+    self.assertEqual(
+      mock_gemini.models.generate_content.call_count,
+      3 * len(inference._GEMINI_MODELS),  # pylint: disable=protected-access
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +238,7 @@ class TestWaitForModels(unittest.TestCase):
   '''Unit tests for wait_for_models() in listener.py'''
 
   @patch('listener.time.sleep')
-  @patch('listener.os.path.exists', return_value=False)
+  @patch('listener.Path.exists', return_value=False)
   def test_raises_timeout_error_when_models_never_appear(self, mock_exists, mock_sleep):
     '''wait_for_models should raise TimeoutError once the deadline passes with no models found.'''
     import itertools
@@ -136,7 +251,7 @@ class TestWaitForModels(unittest.TestCase):
   @patch('listener.time.sleep')
   @patch('listener.time.time', return_value=0)
   @patch('listener.os.listdir', return_value=['model.pkl'])
-  @patch('listener.os.path.exists', return_value=True)
+  @patch('listener.Path.exists', return_value=True)
   def test_returns_without_sleeping_when_both_models_present(self, mock_exists, mock_listdir,
                                                               mock_time, mock_sleep):
     '''wait_for_models should return immediately without sleeping when models are already on disk.'''
@@ -158,19 +273,19 @@ class TestHandleNewResponse(unittest.TestCase):
     }}}
 
   @patch('listener.svm_infer', return_value={'1.1': 2})
-  @patch('listener.bert_infer', return_value={'1.1': 0})
-  def test_weighted_average_is_bert_025_plus_svm_075(self, mock_bert, mock_svm):
-    '''handle_new_response result should equal bert*0.25 + svm*0.75 for each key.'''
+  @patch('listener.deberta_infer', return_value={'1.1': 0})
+  def test_weighted_average_is_deberta_025_plus_svm_075(self, mock_deberta, mock_svm):
+    '''handle_new_response result should equal deberta*0.25 + svm*0.75 for each key.'''
     mock_supabase = MagicMock()
     listener.handle_new_response(self._make_payload(), MagicMock(), {}, mock_supabase)
 
     inserted = mock_supabase.table().insert.call_args[0][0]
-    # bert=0, svm=2 → 0*0.25 + 2*0.75 = 1.5
+    # deberta=0, svm=2 → 0*0.25 + 2*0.75 = 1.5
     self.assertAlmostEqual(inserted['results']['1.1'], 1.5)
 
   @patch('listener.svm_infer', return_value={'1.1': 1})
-  @patch('listener.bert_infer', return_value={'1.1': 1})
-  def test_inserts_row_with_correct_response_id(self, mock_bert, mock_svm):
+  @patch('listener.deberta_infer', return_value={'1.1': 1})
+  def test_inserts_row_with_correct_response_id(self, mock_deberta, mock_svm):
     '''handle_new_response should insert into form_results with the payload response_id.'''
     mock_supabase = MagicMock()
     listener.handle_new_response(self._make_payload(), MagicMock(), {}, mock_supabase)
@@ -213,7 +328,7 @@ class TestHandleNewReport(unittest.TestCase):
     listener.handle_new_report({'data': {'record': {'id': 'rpt-2'}}}, MagicMock(), mock_supabase)
 
     update_calls = [str(c) for c in mock_supabase.table().update.call_args_list]
-    self.assertTrue(any('Error' in c for c in update_calls))
+    self.assertTrue(any('_error' in c for c in update_calls))
 
 
 if __name__ == '__main__':
