@@ -10,8 +10,6 @@ import { sendResubmissionEmail } from './admin-email-api/send-email-admin.server
 import {
   formatReportTimeWindowLabel,
   getReportTimeWindowMonths,
-  REPORT_TIME_WINDOWS,
-  type ReportTimeWindow,
 } from '@/utils/epa-scoring';
 import {
   analyzeCommentsQuality,
@@ -92,7 +90,6 @@ export default function AdminAllReportsPage() {
   const [kfDescriptions, setKfDescriptions] = useState<Record<string, string[]> | null>(null);
 
   const [title, setTitle] = useState<string>('');
-  const [reportTimeWindow, setReportTimeWindow] = useState<ReportTimeWindow>(3);
   const [formResults, setFormResults] = useState<FormResult[]>([]);
   const [editingEPA, setEditingEPA] = useState<number | null>(null);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
@@ -369,7 +366,7 @@ export default function AdminAllReportsPage() {
     if (!selectedStudent) return;
     await supabase.rpc('generate_report', {
       student_id_input: selectedStudent.id,
-      time_range_input: reportTimeWindow,
+      time_range_input: 12,
       report_title: title.trim() || 'Admin Generated',
     });
     setTitle('');
@@ -818,22 +815,6 @@ export default function AdminAllReportsPage() {
             <div className='flex-grow-1 d-print-none'>
               <label className='form-label'>Report Title</label>
               <input type='text' className='form-control' value={title} onChange={(e) => setTitle(e.target.value)} />
-            </div>
-
-            <div className='d-print-none'>
-              <label className='form-label'>Time Window</label>
-              <div className='btn-group d-flex' role='group' aria-label='Report time window'>
-                {REPORT_TIME_WINDOWS.map((value) => (
-                  <button
-                    key={value}
-                    type='button'
-                    className={`btn btn-outline-primary${reportTimeWindow === value ? ' active' : ''}`}
-                    onClick={() => setReportTimeWindow(value)}
-                  >
-                    Last {value} mo
-                  </button>
-                ))}
-              </div>
             </div>
 
             <button className='btn btn-success' onClick={handleGenerate} disabled={!selectedStudent}>
