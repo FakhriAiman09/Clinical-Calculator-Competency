@@ -34,7 +34,7 @@ const ReportGenerationForm: React.FC<ReportGenerationFormProps> = ({ studentId, 
     try {
       const { error } = await supabase.rpc('generate_report', {
         student_id_input: studentId,
-        time_range_input: 1200,
+        time_range_input: 12,
         report_title: title.trim(),
       });
 

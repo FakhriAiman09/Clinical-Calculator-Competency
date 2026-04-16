@@ -50,7 +50,7 @@ export default function StudentReportPage() {
   const [loadingReport, setLoadingReport] = useState(false);
   const [kfDescriptions, setKfDescriptions] = useState<Record<string, string[]> | null>(null);
   const [reportSearch, setReportSearch] = useState('');
-  const [timeFilter, setTimeFilter] = useState<3 | 6 | 12>(3);
+  const [timeFilter, setTimeFilter] = useState<3 | 6 | 12>(12);
   const [retryingAll, setRetryingAll] = useState(false);
 
   const fetchReports = useCallback(async (userId: string) => {

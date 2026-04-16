@@ -100,7 +100,7 @@ export default function AdminAllReportsPage() {
   const [comments, setComments] = useState<string[]>([]);
   const [formFlagsByResponse, setFormFlagsByResponse] = useState<Record<string, FormFlagSummary>>({});
   const [reportSearch, setReportSearch] = useState('');
-  const [timeFilter, setTimeFilter] = useState<3 | 6 | 12>(3);
+  const [timeFilter, setTimeFilter] = useState<3 | 6 | 12>(12);
 
   // Comment-quality checks per EPA
   const [epaChecks, setEpaChecks] = useState<Record<number, EPACheckSummary>>({});
