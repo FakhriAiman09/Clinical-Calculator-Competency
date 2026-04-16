@@ -54,12 +54,12 @@ function AdminFlagSummary({ comments }: { comments: string[] }) {
     React.createElement(
       'ul',
       null,
-      ...result.flagged.slice(0, 3).map((entry) =>
+      ...result.flagged.slice(0, 3).map((entry, entryIndex) =>
         React.createElement(
           'li',
-          { key: `${entry.text}-${entry.reasons.join('-')}` },
-          ...entry.reasons.map((reason) =>
-            React.createElement('span', { key: `${entry.text}-${reason}` }, reasonLabel(reason))
+          { key: `${entryIndex}-${entry.text}-${entry.reasons.join('-')}` },
+          ...entry.reasons.map((reason, reasonIndex) =>
+            React.createElement('span', { key: `${entryIndex}-${reasonIndex}-${entry.text}-${reason}` }, reasonLabel(reason))
           )
         )
       )
@@ -180,7 +180,7 @@ describe('Functional requirement: admin flagged comments', () => {
     expect(screen.getByText('All caps')).toBeInTheDocument();
 
     if (result.reasonCounts.REPEATED > 0) {
-      expect(screen.getByText('Repeated comment')).toBeInTheDocument();
+      expect(screen.getAllByText('Repeated comment').length).toBeGreaterThan(0);
     }
   });
 });

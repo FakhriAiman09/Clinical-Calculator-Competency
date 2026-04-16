@@ -1,6 +1,20 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+
+const mockFrom = jest.fn(() => ({
+  select: jest.fn(async () => ({ data: [], error: null })),
+  insert: jest.fn(async () => ({ data: null, error: null })),
+  update: jest.fn(() => ({ eq: jest.fn(async () => ({ data: null, error: null })) })),
+  delete: jest.fn(() => ({ eq: jest.fn(async () => ({ data: null, error: null })) })),
+}));
+
+jest.mock('@/utils/supabase/client', () => ({
+  createClient: jest.fn(() => ({
+    from: mockFrom,
+  })),
+}));
+
 import Notifications from '@/components/(AdminComponents)/notifications';
 
 describe('AdminNotifications Component (.ts version)', () => {
