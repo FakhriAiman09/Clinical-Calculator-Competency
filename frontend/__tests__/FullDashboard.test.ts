@@ -115,6 +115,12 @@ describe('UnlistedStudentForm (.ts version)', () => {
   test('shows validation error', async () => {
     render(React.createElement(UnlistedStudentForm, mockProps));
 
+    await waitFor(() => {
+      expect(mockFrom).toHaveBeenCalledWith('user_roles');
+      expect(mockFrom).toHaveBeenCalledWith('profiles');
+      expect(mockFrom).toHaveBeenCalledWith('clinical_settings');
+    });
+
     fireEvent.click(screen.getByText('Submit'));
 
     expect(screen.getByText('All fields are required.')).toBeInTheDocument();

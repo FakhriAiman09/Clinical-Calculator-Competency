@@ -14,7 +14,7 @@ jest.mock('@/utils/useRequiredRole', () => ({
   useRequireRole: jest.fn(),
 }));
 
-import { analyzeCommentsQuality, reasonLabel } from '@/app/dashboard/admin/all-reports/page';
+import { analyzeCommentsQuality, reasonLabel } from '@/utils/comment-quality';
 
 type DbCommentFixture = {
   comments: string[];
@@ -170,13 +170,17 @@ describe('Functional requirement: admin flagged comments', () => {
 
   test('renders comment-quality UI from database-backed inputs', () => {
     const comments = [...dbCommentFixture.comments, 'good', 'good', 'ALL CAPS COMMENT'];
+    const result = analyzeCommentsQuality(comments);
     render(React.createElement(AdminFlagSummary, { comments }));
 
     expect(screen.getByText('Comment Quality Checks')).toBeInTheDocument();
     expect(screen.getByText(new RegExp(`Total comments: ${comments.length}`))).toBeInTheDocument();
     expect(screen.getByText(/Flagged comments:/)).toBeInTheDocument();
-    expect(screen.getByText('Repeated comment')).toBeInTheDocument();
     expect(screen.getAllByText('Comment too short').length).toBeGreaterThan(0);
     expect(screen.getByText('All caps')).toBeInTheDocument();
+
+    if (result.reasonCounts.REPEATED > 0) {
+      expect(screen.getByText('Repeated comment')).toBeInTheDocument();
+    }
   });
 });

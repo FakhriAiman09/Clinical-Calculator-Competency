@@ -1560,7 +1560,7 @@ export default function RaterFormsPage() { // NOSONAR
 
   return (
     <>
-      <style jsx>{`
+      <style>{`
         .save-status-container {
           position: relative;
           height: 0;

@@ -1,10 +1,11 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import UnlistedStudentForm from '@/components/(RaterComponents)/UnlistedStudentForm';
 import { createClient } from '@/utils/supabase/client';
 
-let mockSupabase: { from: jest.Mock };
+let UnlistedStudentForm: typeof import('@/components/(RaterComponents)/UnlistedStudentForm').default;
+
+const mockSupabase: { from: jest.Mock } = { from: jest.fn() };
 
 // Mock the Supabase client used inside the component
 jest.mock('@/utils/supabase/client', () => ({
@@ -40,10 +41,9 @@ describe('UnlistedStudentForm Component (.ts version)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSupabase = {
-      from: jest.fn(),
-    };
+    mockSupabase.from = jest.fn();
     (createClient as jest.Mock).mockReturnValue(mockSupabase);
+    UnlistedStudentForm = require('@/components/(RaterComponents)/UnlistedStudentForm').default;
 
     // Default mocked database behavior
     mockSupabase.from.mockImplementation((table: string) => {
@@ -124,9 +124,11 @@ describe('UnlistedStudentForm Component (.ts version)', () => {
   test('shows error message when required fields are missing', async () => {
     render(React.createElement(UnlistedStudentForm, mockProps));
 
-    // Wait for initial fetch so state updates settle
+    // Wait for initial fetch so state updates settle before interacting.
     await waitFor(() => {
       expect(mockSupabase.from).toHaveBeenCalledWith('user_roles');
+      expect(mockSupabase.from).toHaveBeenCalledWith('profiles');
+      expect(mockSupabase.from).toHaveBeenCalledWith('clinical_settings');
     });
 
     fireEvent.click(screen.getByText('Submit'));
@@ -253,6 +255,7 @@ describe('UnlistedStudentForm Component (.ts version)', () => {
 
     render(React.createElement(UnlistedStudentForm, mockProps));
 
+    // Wait for initial fetch so async state updates complete before interacting.
     await waitFor(() => {
       expect(mockSupabase.from).toHaveBeenCalledWith('user_roles');
       expect(mockSupabase.from).toHaveBeenCalledWith('profiles');

@@ -17,9 +17,16 @@ import { logger } from '@/utils/logger';
 
 // Tests for writing structured error logs.
 describe('Functional requirement: error log file', () => {
+  let consoleErrorSpy: jest.SpyInstance;
+
   // Clear mock history before each test.
   beforeEach(() => {
     jest.clearAllMocks();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   // Should create log folder (if needed) and append one ERROR log line with context.

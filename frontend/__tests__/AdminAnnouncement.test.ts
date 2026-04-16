@@ -1,7 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import AdminSettingsButtons from '@/components/(AdminComponents)/AdminSettingsButtons';
+
+let AdminSettingsButtons: typeof import('@/components/(AdminComponents)/AdminSettingsButtons').default;
 
 /*
   ==========================================
@@ -31,7 +32,7 @@ const mockInsert = jest.fn();
 const mockUpdateEq = jest.fn();
 const mockDeleteEq = jest.fn();
 
-const mockFrom = jest.fn(() => ({
+var mockFrom = jest.fn(() => ({
   select: mockSelect,
   insert: mockInsert,
   update: jest.fn(() => ({
@@ -60,6 +61,7 @@ describe('AdminSettingsButtons Component (.ts version)', () => {
   ];
 
   beforeEach(() => {
+    AdminSettingsButtons = require('@/components/(AdminComponents)/AdminSettingsButtons').default;
     mockSettings = [...initialSettings];
     mockSupabaseError = null;
     jest.clearAllMocks();
@@ -86,7 +88,7 @@ describe('AdminSettingsButtons Component (.ts version)', () => {
       });
     });
 
-    mockUpdateEq.mockImplementation((id: string) => {
+    mockUpdateEq.mockImplementation((_column: string, id: string) => {
       if (!mockSupabaseError) {
         mockSettings = mockSettings.map((item) =>
           item.id === id ? { ...item, setting: 'General Hospital' } : item
@@ -99,7 +101,7 @@ describe('AdminSettingsButtons Component (.ts version)', () => {
       });
     });
 
-    mockDeleteEq.mockImplementation((id: string) => {
+    mockDeleteEq.mockImplementation((_column: string, id: string) => {
       if (!mockSupabaseError) {
         mockSettings = mockSettings.filter((item) => item.id !== id);
       }
@@ -152,7 +154,8 @@ describe('AdminSettingsButtons Component (.ts version)', () => {
     fireEvent.click(screen.getByText('Add Setting'));
 
     await waitFor(() => {
-      expect(mockSettings.length).toBe(3);
+      expect(mockInsert).toHaveBeenCalled();
+      expect(screen.getByDisplayValue('Pharmacy')).toBeInTheDocument();
     });
 
     expect(mockSettings[2].setting).toBe('Pharmacy');
@@ -169,7 +172,8 @@ describe('AdminSettingsButtons Component (.ts version)', () => {
     fireEvent.blur(input);
 
     await waitFor(() => {
-      expect(mockSettings[0].setting).toBe('General Hospital');
+      expect(mockUpdateEq).toHaveBeenCalledWith('id', '1');
+      expect(screen.getByDisplayValue('General Hospital')).toBeInTheDocument();
     });
   });
 
@@ -187,7 +191,8 @@ describe('AdminSettingsButtons Component (.ts version)', () => {
     fireEvent.click(deleteButtons[0]);
 
     await waitFor(() => {
-      expect(mockSettings.length).toBe(1);
+      expect(mockDeleteEq).toHaveBeenCalledWith('id', '1');
+      expect(mockSettings).toHaveLength(1);
     });
 
     expect(mockSettings[0].setting).toBe('Clinic');

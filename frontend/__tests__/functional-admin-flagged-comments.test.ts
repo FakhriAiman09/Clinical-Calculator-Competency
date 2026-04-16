@@ -8,7 +8,7 @@ jest.mock('@/utils/useRequiredRole', () => ({
   useRequireRole: jest.fn(),
 }));
 
-import { analyzeCommentsQuality, reasonLabel } from '@/app/dashboard/admin/all-reports/page';
+import { analyzeCommentsQuality, reasonLabel } from '@/utils/comment-quality';
 
 // Test suite for admin comment quality analysis and flag labeling
 // analyzeCommentsQuality: detects repeated, generic, or low-quality comments

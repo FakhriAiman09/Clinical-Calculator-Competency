@@ -28,7 +28,16 @@ import { getLatestMCQs } from '@/utils/get-epa-data';
 const getLatestMCQsMock = getLatestMCQs as jest.Mock;
 
 describe('getUpdaterDetails', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  let consoleErrorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
 
   test('returns updater details when both profile and email found', async () => {
     profileSelectMock.mockResolvedValueOnce({
@@ -70,7 +79,16 @@ describe('getUpdaterDetails', () => {
 });
 
 describe('submitNewOption', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  let consoleErrorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
 
   test('does nothing when no MCQs are found', async () => {
     getLatestMCQsMock.mockResolvedValueOnce(null);
@@ -110,7 +128,16 @@ describe('submitNewOption', () => {
 });
 
 describe('submitNewQuestion', () => {
-  beforeEach(() => { jest.clearAllMocks(); });
+  let consoleErrorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
 
   test('does nothing when no MCQs are found', async () => {
     getLatestMCQsMock.mockResolvedValueOnce(null);

@@ -2,11 +2,12 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { useUser } from '@/context/UserContext';
-import StudentDashboard from '@/components/(StudentComponents)/studentDashboard';
 
-let mockSupabaseFrom: jest.Mock;
-let mockSupabaseSelect: jest.Mock;
-let mockSupabaseFilter: jest.Mock;
+let StudentDashboard: typeof import('@/components/(StudentComponents)/studentDashboard').default;
+
+var mockSupabaseFilter: jest.Mock;
+var mockSupabaseSelect: jest.Mock;
+var mockSupabaseFrom: jest.Mock;
 
 jest.mock('@/context/UserContext');
 
@@ -32,6 +33,7 @@ describe('StudentDashboard Component (.ts version)', () => {
   let consoleErrorSpy: jest.SpyInstance;
 
   beforeEach(() => {
+    StudentDashboard = require('@/components/(StudentComponents)/studentDashboard').default;
     jest.clearAllMocks();
 
     (useUser as jest.Mock).mockReturnValue({

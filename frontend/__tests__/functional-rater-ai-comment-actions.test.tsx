@@ -114,9 +114,14 @@ import RaterFormsPage from '@/app/dashboard/rater/form/RaterFormsPage';
 
 // Test suite for AI comment actions in the rater form.
 describe('Functional requirement: rater AI comment actions', () => {
+  let consoleErrorSpy: jest.SpyInstance;
+  let consoleLogSpy: jest.SpyInstance;
+
   // Reset mocks and browser globals before each test.
   beforeEach(() => {
     jest.clearAllMocks();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     localStorage.clear();
     Object.defineProperty(global, 'fetch', {
       value: jest.fn(async () => ({
@@ -140,6 +145,11 @@ describe('Functional requirement: rater AI comment actions', () => {
       },
       writable: true,
     });
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+    consoleLogSpy.mockRestore();
   });
 
   // Shared helper: open one EPA, enter a comment, generate AI summary, return textarea.

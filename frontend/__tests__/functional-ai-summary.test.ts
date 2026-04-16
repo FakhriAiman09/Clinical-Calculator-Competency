@@ -16,9 +16,14 @@ const fetchMock = jest.fn<FetchMockSignature>();
 
 // Tests for the AI summary API.
 describe('Functional AI summary route tests', () => {
+  let consoleErrorSpy: jest.SpyInstance;
+  let consoleLogSpy: jest.SpyInstance;
+
   // Reset mocks and test env values before each test.
   beforeEach(() => {
     jest.clearAllMocks();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     process.env.OPENROUTER_SITE_URL = 'http://localhost:3000';
     process.env.OPENROUTER_SITE_NAME = 'CCC-Rater';
     process.env.OPENROUTER_API_KEY = 'openrouter-key';
@@ -26,6 +31,11 @@ describe('Functional AI summary route tests', () => {
       value: fetchMock,
       writable: true,
     });
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+    consoleLogSpy.mockRestore();
   });
 
   // Should return 400 if text is missing.

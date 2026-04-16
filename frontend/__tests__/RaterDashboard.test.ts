@@ -1,43 +1,48 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import RaterDashboard from '@/components/(RaterComponents)/NeedRatingList';
 import { useUser } from '@/context/UserContext';
 import { mockFormRequests } from '../__mocks__/mockFormRequest';
+
+let RaterDashboard: typeof import('@/components/(RaterComponents)/NeedRatingList').default;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockSupabaseData: any;
 let mockSupabaseError: { message: string } | null = null;
 
-const resolveSupabaseResponse = () =>
-  Promise.resolve({
+function resolveSupabaseResponse() {
+  return Promise.resolve({
     data: mockSupabaseData,
     error: mockSupabaseError,
   });
+}
 
-const createEqChain = () => ({
-  eq: jest.fn(resolveSupabaseResponse),
-});
+function createEqChain() {
+  return {
+    eq: jest.fn(resolveSupabaseResponse),
+  };
+}
 
-const createFromResult = () => ({
-  select: jest.fn().mockReturnThis(),
-  eq: jest.fn(createEqChain),
-});
+function createFromResult() {
+  return {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn(createEqChain),
+  };
+}
 
-const createRpcResponse = () =>
-  Promise.resolve({
+function createRpcResponse() {
+  return Promise.resolve({
     data: mockSupabaseData,
     error: null,
   });
-
-const createMockSupabaseClient = () => ({
-  from: jest.fn(createFromResult),
-  rpc: jest.fn(createRpcResponse),
-});
+}
 
 jest.mock('@/context/UserContext');
 
 jest.mock('@/utils/supabase/client', () => ({
-  createClient: jest.fn(createMockSupabaseClient),
+  createClient: jest.fn(() => ({
+    from: jest.fn(createFromResult),
+    rpc: jest.fn(createRpcResponse),
+  })),
 }));
 
 jest.mock('next/navigation', () => ({
@@ -50,6 +55,7 @@ jest.mock('next/navigation', () => ({
 
 describe('RaterDashboard Component (.ts version)', () => {
   beforeEach(() => {
+    RaterDashboard = require('@/components/(RaterComponents)/NeedRatingList').default;
     mockSupabaseData = mockFormRequests;
     mockSupabaseError = null;
 

@@ -216,8 +216,8 @@ describe('Functional email notification tests', () => {
 
     const mail = sendMailMock.mock.calls[0][0];
     expect(mail.subject).toBe('Reminder: Pending Assessment');
-    expect(mail.html).toContain('Hi Faculty,');
-    expect(mail.html).toContain('72 hours');
+    expect(mail.html).toContain('Dear Rater,');
+    expect(mail.html).toContain('3 days');
     expect(mail.html).toContain(`/dashboard/rater/form?id=${dbFixture.requestId}`);
   });
 

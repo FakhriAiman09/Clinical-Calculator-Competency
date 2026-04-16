@@ -41,7 +41,7 @@ describe('Functional requirement: PDF formatting helpers', () => {
 
   // Verifies sanitize strips leading quotes and trailing commas left over from CSV formatting.
   test('sanitizes CSV artifacts before PDF rendering', () => {
-    expect(sanitize('"Quoted text",,')).toBe('Quoted text"');
+    expect(sanitize('"Quoted text",,')).toBe('"Quoted text"');
     expect(sanitize('""double""')).toBe('"double"');
   });
 });

@@ -256,6 +256,9 @@ import RaterFormsPage from '@/app/dashboard/rater/form/RaterFormsPage';
 // Test suite
 // ----------------------------------------------------------------
 describe('Functional requirement: rater EPA 3 evaluation via speech-to-text and AI assistant', () => {
+  let consoleErrorSpy: jest.SpyInstance;
+  let consoleLogSpy: jest.SpyInstance;
+
   beforeAll(async () => {
     // Install SpeechRecognition mock on window before any component mounts.
     Object.defineProperty(window, 'SpeechRecognition', {
@@ -269,6 +272,8 @@ describe('Functional requirement: rater EPA 3 evaluation via speech-to-text and 
 
   beforeEach(() => {
     jest.clearAllMocks();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     localStorage.clear();
     mockRecognitionInstance = null;
 
@@ -293,6 +298,11 @@ describe('Functional requirement: rater EPA 3 evaluation via speech-to-text and 
       },
       writable: true,
     });
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+    consoleLogSpy.mockRestore();
   });
 
   // ----------------------------------------------------------------
