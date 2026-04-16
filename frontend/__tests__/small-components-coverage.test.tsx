@@ -25,6 +25,16 @@ jest.mock('next/font/google', () => ({
   Inter: () => ({ className: 'mocked-inter' }),
 }));
 
+jest.mock('@/context/UserContext', () => ({
+  __esModule: true,
+  UserProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+jest.mock('@/context/ThemeContext', () => ({
+  __esModule: true,
+  ThemeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 jest.mock('@/components/Header/header', () => ({
   __esModule: true,
   default: () => <div data-testid='mock-header'>Header</div>,
