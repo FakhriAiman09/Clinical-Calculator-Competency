@@ -99,7 +99,7 @@ type WindowWithSpeechRecognition = Window & {
   webkitSpeechRecognition?: SpeechRecognitionConstructor;
 };
 
-function compareNumericDotStrings(a: string, b: string): number {
+export function compareNumericDotStrings(a: string, b: string): number {
   const partsA = a.split('.').map(Number);
   const partsB = b.split('.').map(Number);
   for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
@@ -116,7 +116,7 @@ function isKFMismatchSummary(summary: string): boolean {
   return /^Not related to .+\.$/.test(summary.trim());
 }
 
-function getSummaryGuard(summary: string, kf?: string | null) {
+export function getSummaryGuard(summary: string, kf?: string | null) {
   const trimmed = summary.trim();
   if (!trimmed) {
     return { canApply: false, message: '' };
@@ -148,28 +148,28 @@ function getSummaryGuard(summary: string, kf?: string | null) {
 
 const professionalismFieldKey = 'professionalism';
 
-function makeFieldKey(epaId: number, questionId: string) {
+export function makeFieldKey(epaId: number, questionId: string) {
   return `${epaId}::${questionId}`;
 }
 
-function getTargetFieldKey(target: ActiveTarget) {
+export function getTargetFieldKey(target: ActiveTarget) {
   if (!target) return null;
   return target.type === 'professionalism'
     ? professionalismFieldKey
     : makeFieldKey(target.epaId, target.questionId);
 }
 
-function stopRecognitionSafely(recognition: { stop: () => void }) {
+export function stopRecognitionSafely(recognition: { stop: () => void }) {
   try {
     recognition.stop();
   } catch {}
 }
 
-function appendTranscript(existing: string, transcript: string) {
+export function appendTranscript(existing: string, transcript: string) {
   return (existing ? existing.trimEnd() + ' ' : '') + transcript.trim();
 }
 
-function getErrorMessage(error: unknown, fallback: string) {
+export function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
@@ -235,7 +235,7 @@ type CommentEditorProps = DictationStatusProps & {
   onToggleDictation: () => void;
 };
 
-function getProfessionalismSubmitLabel(submittingFinal: boolean, isEditMode: boolean) {
+export function getProfessionalismSubmitLabel(submittingFinal: boolean, isEditMode: boolean) {
   if (!submittingFinal) return isEditMode ? 'Update Evaluation' : 'Submit Final Evaluation';
   return isEditMode ? 'Updating...' : 'Submitting...';
 }
@@ -479,7 +479,7 @@ function ProfessionalismSection({
 
 // ─── Module-level helpers (keep complexity of nested functions low) ──────────
 
-function buildKfToQuestionsMap(kfData: KeyFunction[]): Record<string, KeyFunction[]> {
+export function buildKfToQuestionsMap(kfData: KeyFunction[]): Record<string, KeyFunction[]> {
   const map: Record<string, KeyFunction[]> = {};
   for (const kf of kfData) {
     const key = `${kf.epa}.${kf.kf}`;
@@ -515,7 +515,7 @@ function ensureResponseBucket(epaNum: number, rebuiltResponses: Responses, rebui
   rebuiltTextInputs[epaNum] = rebuiltTextInputs[epaNum] ?? {};
 }
 
-function rebuildResponsesFromAggregated(
+export function rebuildResponsesFromAggregated(
   aggregatedResponses: Record<string, Record<string, Record<string, unknown>>>,
   kfToQuestions: Record<string, KeyFunction[]>,
 ): { rebuiltResponses: Responses; rebuiltTextInputs: TextInputs } {
@@ -539,7 +539,7 @@ function rebuildResponsesFromAggregated(
   return { rebuiltResponses, rebuiltTextInputs };
 }
 
-function mergeTextInputsIntoResponses(
+export function mergeTextInputsIntoResponses(
   responses: Responses,
   textInputs: TextInputs,
 ): Responses {
@@ -555,7 +555,7 @@ function mergeTextInputsIntoResponses(
   return merged;
 }
 
-function buildQuestionMapping(kfData: KeyFunction[]): Record<string, { kf: string; epa: number }> {
+export function buildQuestionMapping(kfData: KeyFunction[]): Record<string, { kf: string; epa: number }> {
   const mapping: Record<string, { kf: string; epa: number }> = {};
   for (const q of kfData) mapping[q.questionId] = { kf: q.kf, epa: q.epa };
   return mapping;
@@ -587,7 +587,7 @@ function sortEpaKfText(epaAggregated: AggregatedResponses[number]): void {
   }
 }
 
-function aggregateByKF(
+export function aggregateByKF(
   mergedResponses: Responses,
   questionMapping: Record<string, { kf: string; epa: number }>,
 ): AggregatedResponses {
@@ -607,7 +607,7 @@ function aggregateByKF(
   return aggregated;
 }
 
-function sortAggregatedByEpaAndKf(aggregated: AggregatedResponses): AggregatedResponses {
+export function sortAggregatedByEpaAndKf(aggregated: AggregatedResponses): AggregatedResponses {
   const sorted: AggregatedResponses = {};
   Object.keys(aggregated)
     .map(Number)
@@ -621,7 +621,7 @@ function sortAggregatedByEpaAndKf(aggregated: AggregatedResponses): AggregatedRe
   return sorted;
 }
 
-async function callAISummaryAPI(
+export async function callAISummaryAPI(
   body: Record<string, unknown>,
 ): Promise<{ summary: string }> {
   const res = await fetch('/api/ai/summary', {
@@ -650,7 +650,7 @@ function clearSummaryErrorAfterDelay(
   }, 3000);
 }
 
-function removeEpaFromProgressCache(studentId: string, epaId: number): void {
+export function removeEpaFromProgressCache(studentId: string, epaId: number): void {
   const cachedData = localStorage.getItem(`form-progress-${studentId}`);
   if (!cachedData) return;
 
@@ -664,7 +664,7 @@ function removeEpaFromProgressCache(studentId: string, epaId: number): void {
   }
 }
 
-function pruneProgressCacheToSelectedEpas(studentId: string, selectedEPAs: number[]): void {
+export function pruneProgressCacheToSelectedEpas(studentId: string, selectedEPAs: number[]): void {
   const cacheKey = `form-progress-${studentId}`;
   const cachedData = localStorage.getItem(cacheKey);
   if (!cachedData) return;
@@ -690,7 +690,7 @@ function pruneProgressCacheToSelectedEpas(studentId: string, selectedEPAs: numbe
   }
 }
 
-function buildSubmissionData(
+export function buildSubmissionData(
   cachedJSON: { metadata: { student_id: string; rater_id: string }; response: Responses } | null,
   formRequest: FormRequest,
   sortedAggregatedResponses: AggregatedResponses,
@@ -706,7 +706,7 @@ function buildSubmissionData(
   return localData;
 }
 
-async function upsertFormResponse(
+export async function upsertFormResponse(
   isEditMode: boolean,
   existingResponseId: string | null,
   formRequestId: string,
@@ -732,7 +732,7 @@ async function upsertFormResponse(
   return error;
 }
 
-async function sendRaterNotificationEmail(formRequest: FormRequest): Promise<void> {
+export async function sendRaterNotificationEmail(formRequest: FormRequest): Promise<void> {
   if (!formRequest.email) return;
 
   try {
@@ -1059,7 +1059,7 @@ function useAISummaryControls({
   };
 }
 
-async function submitFinalEvaluation({
+export async function submitFinalEvaluation({
   formRequest,
   submittingFinal,
   responses,

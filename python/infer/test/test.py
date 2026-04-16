@@ -260,6 +260,44 @@ class TestWaitForModels(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# listener small helpers / guards  (5 tests)
+# ---------------------------------------------------------------------------
+
+class TestListenerHelpers(unittest.TestCase):
+  '''Unit tests for listener helper functions and update guards.'''
+
+  def test_get_env_returns_first_non_empty_alias(self):
+    with patch.dict('listener.os.environ', {'SECOND': 'value'}, clear=True):
+      self.assertEqual(listener.get_env('FIRST', 'SECOND'), 'value')
+
+  def test_get_env_returns_empty_string_when_missing(self):
+    with patch.dict('listener.os.environ', {}, clear=True):
+      self.assertEqual(listener.get_env('A', 'B'), '')
+
+  def test_handle_updated_report_ignores_non_generating_feedback(self):
+    payload = {'data': {'record': {'llm_feedback': 'done'}, 'old_record': {'llm_feedback': 'old'}}}
+    with patch('listener.handle_new_report') as mock_handle:
+      listener.handle_updated_report(payload, MagicMock(), MagicMock())
+    mock_handle.assert_not_called()
+
+  def test_handle_updated_report_ignores_null_or_existing_generating_old_feedback(self):
+    payloads = [
+      {'data': {'record': {'llm_feedback': listener.GENERATING_PLACEHOLDER}, 'old_record': {'llm_feedback': None}}},
+      {'data': {'record': {'llm_feedback': listener.GENERATING_PLACEHOLDER}, 'old_record': {'llm_feedback': listener.GENERATING_PLACEHOLDER}}},
+    ]
+    for payload in payloads:
+      with patch('listener.handle_new_report') as mock_handle:
+        listener.handle_updated_report(payload, MagicMock(), MagicMock())
+      mock_handle.assert_not_called()
+
+  def test_handle_updated_report_calls_handle_new_report_on_manual_regeneration(self):
+    payload = {'data': {'record': {'llm_feedback': listener.GENERATING_PLACEHOLDER, 'id': 'r1'}, 'old_record': {'llm_feedback': 'old text'}}}
+    with patch('listener.handle_new_report') as mock_handle:
+      listener.handle_updated_report(payload, MagicMock(), MagicMock())
+    mock_handle.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # listener.handle_new_response  (2 tests)
 # ---------------------------------------------------------------------------
 
@@ -293,6 +331,31 @@ class TestHandleNewResponse(unittest.TestCase):
     mock_supabase.table.assert_called_with('form_results')
     inserted = mock_supabase.table().insert.call_args[0][0]
     self.assertEqual(inserted['response_id'], 'test-id-123')
+
+  @patch('listener.svm_infer', return_value={'1.1': 2})
+  @patch('listener.deberta_infer', return_value={'1.1': 2})
+  def test_handle_updated_response_uses_upsert(self, mock_deberta, mock_svm):
+    '''handle_updated_response should upsert into form_results instead of insert.'''
+    mock_supabase = MagicMock()
+    listener.handle_updated_response(self._make_payload(), MagicMock(), {}, mock_supabase)
+
+    mock_supabase.table.assert_called_with('form_results')
+    upserted = mock_supabase.table().upsert.call_args[0][0]
+    self.assertEqual(upserted['response_id'], 'test-id-123')
+
+  @patch('listener.deberta_infer', side_effect=RuntimeError('boom'))
+  def test_handle_new_response_logs_exception(self, mock_deberta):
+    '''handle_new_response should swallow exceptions and log them.'''
+    with patch.object(listener.error_log, 'exception') as mock_error:
+      listener.handle_new_response(self._make_payload(), MagicMock(), {}, MagicMock())
+    mock_error.assert_called_once()
+
+  @patch('listener.deberta_infer', side_effect=RuntimeError('boom'))
+  def test_handle_updated_response_logs_exception(self, mock_deberta):
+    '''handle_updated_response should swallow exceptions and log them.'''
+    with patch.object(listener.error_log, 'exception') as mock_error:
+      listener.handle_updated_response(self._make_payload(), MagicMock(), {}, MagicMock())
+    mock_error.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -329,6 +392,45 @@ class TestHandleNewReport(unittest.TestCase):
 
     update_calls = [str(c) for c in mock_supabase.table().update.call_args_list]
     self.assertTrue(any('_error' in c for c in update_calls))
+
+  @patch('listener.generate_report_summary', return_value='{"1.1": "good"}')
+  def test_successful_summary_written_to_llm_feedback(self, mock_summary):
+    '''handle_new_report should persist successful Gemini feedback as-is.'''
+    mock_supabase = self._make_supabase_with_data(kf_avg_data={'1.1': 2.0})
+    listener.handle_new_report({'data': {'record': {'id': 'rpt-ok'}}}, MagicMock(), mock_supabase)
+
+    update_calls = mock_supabase.table().update.call_args_list
+    self.assertTrue(any('{"1.1": "good"}' in str(call) for call in update_calls))
+
+  @patch('listener.generate_report_summary', return_value='Error generating feedback: timeout')
+  def test_summary_error_string_is_mapped_to_error_json(self, mock_summary):
+    '''handle_new_report should wrap generator error strings in stored _error JSON.'''
+    mock_supabase = self._make_supabase_with_data(kf_avg_data={'1.1': 2.0})
+    listener.handle_new_report({'data': {'record': {'id': 'rpt-err'}}}, MagicMock(), mock_supabase)
+
+    update_calls = mock_supabase.table().update.call_args_list
+    self.assertTrue(any('_error' in str(call) for call in update_calls))
+
+  def test_exception_maps_503_to_friendly_message(self):
+    '''503-like exceptions should be converted to the temporary-unavailable message.'''
+    mock_supabase = self._make_supabase_with_data(kf_avg_data={'1.1': 2.0})
+    with patch('listener.generate_report_summary', side_effect=RuntimeError('503 high demand')):
+      listener.handle_new_report({'data': {'record': {'id': 'rpt-503'}}}, MagicMock(), mock_supabase)
+
+    update_calls = mock_supabase.table().update.call_args_list
+    self.assertTrue(any('temporarily unavailable' in str(call) for call in update_calls))
+
+  def test_exception_maps_429_to_friendly_message(self):
+    mock_supabase = self._make_supabase_with_data(kf_avg_data={'1.1': 2.0})
+    with patch('listener.generate_report_summary', side_effect=RuntimeError('429 RESOURCE_EXHAUSTED')):
+      listener.handle_new_report({'data': {'record': {'id': 'rpt-429'}}}, MagicMock(), mock_supabase)
+    self.assertTrue(any('usage limit was reached' in str(call) for call in mock_supabase.table().update.call_args_list))
+
+  def test_exception_maps_401_to_friendly_message(self):
+    mock_supabase = self._make_supabase_with_data(kf_avg_data={'1.1': 2.0})
+    with patch('listener.generate_report_summary', side_effect=RuntimeError('401 API_KEY invalid')):
+      listener.handle_new_report({'data': {'record': {'id': 'rpt-401'}}}, MagicMock(), mock_supabase)
+    self.assertTrue(any('authentication error' in str(call) for call in mock_supabase.table().update.call_args_list))
 
 
 if __name__ == '__main__':
