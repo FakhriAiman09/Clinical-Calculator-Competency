@@ -115,6 +115,7 @@ export default function AdminAllReportsPage() {
   // Comment deletion / score recalculation state
   const [commentDeleted, setCommentDeleted] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
+  const [retryingAll, setRetryingAll] = useState(false);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -391,6 +392,16 @@ export default function AdminAllReportsPage() {
     await supabase.from('form_results').update({ results: target.results }).eq('response_id', selectedFormId);
     setSaving(false);
     setSelectedFormId(null);
+  };
+
+  const handleRetryAll = async () => {
+    if (!selectedReport) return;
+    setRetryingAll(true);
+    await supabase
+      .from('student_reports')
+      .update({ llm_feedback: 'Generating...' })
+      .eq('id', selectedReport.id);
+    setRetryingAll(false);
   };
 
   const recalculateReport = useCallback(async () => {
@@ -986,7 +997,22 @@ export default function AdminAllReportsPage() {
         <div className='pb-3 p-4 mb-5'>
           <div className='d-flex justify-content-between align-items-center mb-3 d-print-none'>
             <h3 className='m-0'>{selectedReport.title}</h3>
-            <DownloadPDFButton studentId={selectedStudent?.id} reportId={selectedReport?.id} returnUrl="/dashboard/admin/all-reports" />
+            <div className='d-flex align-items-center gap-2'>
+              <button
+                className='btn btn-sm btn-outline-secondary d-flex align-items-center gap-1'
+                onClick={handleRetryAll}
+                disabled={retryingAll}
+                title='Retry AI summaries for all EPAs using scores saved at report creation time'
+              >
+                {retryingAll ? (
+                  <span className='spinner-border spinner-border-sm' role='status' aria-hidden='true' />
+                ) : (
+                  <i className='bi bi-arrow-clockwise' aria-hidden='true' />
+                )}
+                {retryingAll ? 'Requesting…' : 'Retry All Summaries'}
+              </button>
+              <DownloadPDFButton studentId={selectedStudent?.id} reportId={selectedReport?.id} returnUrl="/dashboard/admin/all-reports" />
+            </div>
           </div>
 
           <hr className='d-print-none' />

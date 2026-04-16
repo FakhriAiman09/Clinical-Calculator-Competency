@@ -185,6 +185,75 @@ function getRecentAssessments(assessments: Assessment[], cutoff: Date, reportCre
   });
 }
 
+/* ─── Progress Graph Component ─────────────────────────── */
+function ProgressGraph({ assessments }: { assessments: Assessment[] }) {
+  const monthlyMap: Record<string, number[]> = {};
+  for (const a of assessments) {
+    const d = new Date(a.date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!monthlyMap[key]) monthlyMap[key] = [];
+    monthlyMap[key].push(a.devLevel);
+  }
+
+  const points = Object.entries(monthlyMap)
+    .map(([month, vals]) => ({
+      month,
+      avg: vals.reduce((a, b) => a + b, 0) / vals.length,
+      label: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  if (points.length === 0) return null;
+
+  const W = 500, H = 90;
+  const PAD = { left: 36, right: 10, top: 8, bottom: 22 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+
+  const xScale = (i: number) =>
+    PAD.left + (points.length === 1 ? chartW / 2 : (i / (points.length - 1)) * chartW);
+  const yScale = (v: number) => PAD.top + chartH - (v / 3) * chartH;
+
+  const pathD = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(1)} ${yScale(p.avg).toFixed(1)}`)
+    .join(' ');
+
+  const levelColors = ['#dc2626', '#d97706', '#16a34a', '#059669'];
+  const levelLabels = ['R', 'ED', 'D', 'E'];
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
+      {[0, 1, 2, 3].map((level) => (
+        <g key={level}>
+          <line x1={PAD.left} y1={yScale(level)} x2={W - PAD.right} y2={yScale(level)} stroke="#e5e7eb" strokeWidth="0.75" />
+          <text x={PAD.left - 4} y={yScale(level) + 3} textAnchor="end" fontSize="7" fill="#9ca3af">
+            {levelLabels[level]}
+          </text>
+        </g>
+      ))}
+      {points.length > 1 && (
+        <path d={pathD} fill="none" stroke="#2563eb" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      )}
+      {points.map((p, i) => (
+        <circle
+          key={i}
+          cx={xScale(i)}
+          cy={yScale(p.avg)}
+          r="3.5"
+          fill={levelColors[Math.floor(p.avg)]}
+          stroke="white"
+          strokeWidth="1"
+        />
+      ))}
+      {points.map((p, i) => (
+        <text key={i} x={xScale(i)} y={H - 4} textAnchor="middle" fontSize="6.5" fill="#6b7280">
+          {p.label}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
 /* ─── Badge Component ───────────────────────────────────── */
 function DevBadge({ value }: { value: number | null | undefined }) {
   if (value == null) return <span className="badge-none">No data</span>;
@@ -626,6 +695,14 @@ function PrintReportContent() {
               </div>
             </div>
 
+            {/* Progress Graph */}
+            {epa.assessments.length > 0 && (
+              <div className="content-block">
+                <div className="block-heading">Assessment Progress</div>
+                <ProgressGraph assessments={epa.assessments} />
+              </div>
+            )}
+
             {/* Key Functions */}
             {(kfDescriptions[String(epa.epaId)] ?? []).length > 0 && (
               <div className="content-block">
@@ -674,6 +751,9 @@ function PrintReportContent() {
             {/* AI Feedback — only rendered when feedback exists */}
             {epa.llmFeedback && (
               <div className="content-block ai-block">
+                <div className="ai-epa-label">
+                  EPA {epa.epaId} &mdash; {sanitize(epa.title)}
+                </div>
                 <div className="ai-block-header">
                   <span className="ai-icon">&#10022;</span>
                   <span className="block-heading ai-block-title">
@@ -1227,6 +1307,16 @@ const styles = `
   .comment-item:last-child { border-bottom: none; }
 
   /* ══════════ AI BLOCK ══════════ */
+  .ai-epa-label {
+    font-size: 9pt;
+    font-weight: 700;
+    color: var(--navy);
+    background: var(--navy-pale);
+    padding: 5pt 10pt;
+    border-radius: 4px;
+    margin-bottom: 8pt;
+    letter-spacing: -0.01em;
+  }
   .ai-block {
     background: #f8faff;
     border: 1px solid #c7d5f0;
@@ -1381,10 +1471,10 @@ const styles = `
       page-break-after: always !important;
     }
 
-    /* EPAs flow continuously — no forced page break */
+    /* Each EPA starts on a fresh page so long AI summaries never bleed into the next EPA */
     .rpt-epa-page {
-      break-before: auto !important;
-      page-break-before: auto !important;
+      break-before: page !important;
+      page-break-before: always !important;
     }
 
     /* Force colors in print */
@@ -1418,10 +1508,10 @@ const styles = `
     .epa-banner { break-after: avoid !important; page-break-after: avoid !important; }
     .stats-row { break-after: avoid !important; page-break-after: avoid !important; }
 
-    /* AI block: allow it to start on a new page if it doesn't fit */
+    /* AI block: always starts on a new page so it never splits mid-page after other content */
     .ai-block {
-      break-before: auto !important;
-      page-break-before: auto !important;
+      break-before: page !important;
+      page-break-before: always !important;
       break-inside: auto !important;
       page-break-inside: auto !important;
     }
