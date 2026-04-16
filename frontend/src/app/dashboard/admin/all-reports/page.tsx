@@ -277,13 +277,11 @@ export default function AdminAllReportsPage() {
   }, [selectedFormId]);
 
   // Handler to send resubmission email
-  const handleSendResubmissionEmail = async () => {
-    if (!formRequestData || !selectedStudent) {
-      setEmailStatus({ type: 'error', message: 'Missing required data to send email' });
-      return;
-    }
-
-    if (!formRequestData.profiles?.email) {
+  const handleSendResubmissionEmail = async (
+    student: Student,
+    requestData: FormRequestWithRater,
+  ) => {
+    if (!requestData.profiles?.email) {
       setEmailStatus({ type: 'error', message: 'Rater email not found' });
       return;
     }
@@ -329,9 +327,9 @@ export default function AdminAllReportsPage() {
       }
 
       await sendResubmissionEmail({
-        to: formRequestData.profiles.email,
-        raterName: formRequestData.profiles.display_name ?? undefined,
-        studentName: selectedStudent.display_name,
+        to: requestData.profiles.email,
+        raterName: requestData.profiles.display_name ?? undefined,
+        studentName: student.display_name,
         requestId: formResponse.request_id,
         responseId: selectedFormId || undefined,
         flaggedReasons: flaggedReasons.length > 0 ? flaggedReasons : undefined,
@@ -456,12 +454,7 @@ export default function AdminAllReportsPage() {
     return formResults.filter((f) => Object.keys(f.results).some((k) => k.startsWith(`${editingEPA}.`)));
   }, [formResults, editingEPA]);
 
-  const fetchFormFlagsForEPA = useCallback(async () => {
-    if (!selectedStudent || editingEPA === null) {
-      setFormFlagsByResponse({});
-      return;
-    }
-
+  const fetchFormFlagsForEPA = useCallback(async (student: Student, epaId: number) => {
     const responseIds = formsForEPA.map((f) => f.response_id);
     if (responseIds.length === 0) {
       setFormFlagsByResponse({});
@@ -499,10 +492,10 @@ export default function AdminAllReportsPage() {
 
     for (const row of resultData ?? []) {
       const formResponse = row.form_responses;
-      if (formResponse?.form_requests?.student_id !== selectedStudent.id) continue;
+      if (formResponse?.form_requests?.student_id !== student.id) continue;
 
       if (formResponse.response?.response) {
-        const epaKey = String(editingEPA);
+        const epaKey = String(epaId);
         commentsByResponse[row.response_id].push(...extractCommentTextsForEpa(formResponse, epaKey));
       }
     }
@@ -522,15 +515,15 @@ export default function AdminAllReportsPage() {
     });
 
     setFormFlagsByResponse(next);
-  }, [selectedStudent, editingEPA, formsForEPA]);
+  }, [formsForEPA]);
 
   useEffect(() => {
-    if (editingEPA === null) {
+    if (editingEPA === null || !selectedStudent) {
       setFormFlagsByResponse({});
       return;
     }
-    fetchFormFlagsForEPA();
-  }, [editingEPA, fetchFormFlagsForEPA]);
+    fetchFormFlagsForEPA(selectedStudent, editingEPA);
+  }, [editingEPA, selectedStudent, fetchFormFlagsForEPA]);
 
   const formsForEPASorted = useMemo(() => {
     return [...formsForEPA].sort((a, b) => {
@@ -1241,7 +1234,11 @@ export default function AdminAllReportsPage() {
                               )}
                               <button 
                                 className='btn btn-warning btn-sm'
-                                onClick={() => handleSendResubmissionEmail()}
+                                onClick={() => {
+                                  if (selectedStudent && formRequestData) {
+                                    handleSendResubmissionEmail(selectedStudent, formRequestData);
+                                  }
+                                }}
                                 disabled={sendingEmail || !formRequestData}
                               >
                                 {sendingEmail ? (
