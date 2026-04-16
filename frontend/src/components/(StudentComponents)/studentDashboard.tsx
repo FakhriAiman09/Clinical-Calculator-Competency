@@ -154,14 +154,9 @@ const StudentDashboard: React.FC = () => {
 
 
   const getAverage = (kf: KeyFunction): number | null => {
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - range);
-    const recent = kf.history.filter(
-      (h) => new Date(h.date) >= cutoff && h.level !== 'none'
-    );
-    if (recent.length < 1) return null;
-    const avg =
-      recent.reduce((sum, h) => sum + devLevelMap[h.level], 0) / recent.length;
+    const all = kf.history.filter((h) => h.level !== 'none');
+    if (all.length < 1) return null;
+    const avg = all.reduce((sum, h) => sum + devLevelMap[h.level], 0) / all.length;
     return Math.floor(avg);
   };
 
