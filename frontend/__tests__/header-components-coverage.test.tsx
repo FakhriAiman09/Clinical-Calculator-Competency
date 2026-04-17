@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 jest.mock('next/image', () => ({
   __esModule: true,
@@ -38,8 +38,11 @@ jest.mock('@/utils/supabase/client', () => ({
 
 jest.mock('@/components/DevTicketsModal', () => ({
   __esModule: true,
-  default: ({ show }: { show: boolean }) => (
-    <div data-testid='dev-ticket-modal'>{show ? 'open' : 'closed'}</div>
+  default: ({ show, onClose }: { show: boolean; onClose: () => void }) => (
+    <div data-testid='dev-ticket-modal'>
+      {show ? 'open' : 'closed'}
+      <button onClick={onClose}>CloseModal</button>
+    </div>
   ),
 }));
 
@@ -171,5 +174,52 @@ describe('Header-related coverage', () => {
 
     expect(screen.queryByRole('button', { name: 'Toggle navigation' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Clinical Competency Calculator/i })).toBeInTheDocument();
+  });
+
+  test('Header closes mobile nav when clicking outside', async () => {
+    render(<Header />);
+
+    const toggleButton = screen.getByRole('button', { name: 'Toggle navigation' });
+    fireEvent.click(toggleButton);
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
+
+    // Fire mousedown on document.body — outside the nav container
+    fireEvent.mouseDown(document.body);
+
+    await waitFor(() => {
+      expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
+    });
+  });
+
+  test('Header closes ticket modal via onClose callback', async () => {
+    render(<Header />);
+
+    // Open the ticket modal first
+    fireEvent.click(screen.getAllByRole('button')[1]); // profile dropdown trigger
+    fireEvent.click(screen.getByRole('button', { name: /Report Issue/i }));
+    expect(screen.getByTestId('dev-ticket-modal')).toHaveTextContent('open');
+
+    // Close it via the onClose callback exposed by the mock
+    fireEvent.click(screen.getByRole('button', { name: 'CloseModal' }));
+    expect(screen.getByTestId('dev-ticket-modal')).toHaveTextContent('closed');
+  });
+
+  test('Header mobile nav link click triggers onNavigate and closes nav', async () => {
+    setUserContext({ userRoleStudent: true });
+    render(<Header />);
+
+    const toggleButton = screen.getByRole('button', { name: 'Toggle navigation' });
+    fireEvent.click(toggleButton);
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
+
+    // Find the mobile nav collapse container and click a link inside it
+    const mobileNavCollapse = document.querySelector('.header-nav-collapse') as HTMLElement;
+    expect(mobileNavCollapse).not.toBeNull();
+    const navLink = within(mobileNavCollapse).getAllByRole('link')[0];
+    fireEvent.click(navLink);
+
+    await waitFor(() => {
+      expect(toggleButton).toHaveAttribute('aria-expanded', 'false');
+    });
   });
 });
