@@ -27,7 +27,7 @@ interface StudentReport {
 
 const REPORT_EPAS = Array.from({ length: 13 }, (_, i) => i + 1);
 
-function getDisplayReportTitle(title: string): string {
+export function getDisplayReportTitle(title: string): string {
   const trimmed = title.trim();
   const suffixes = ['(3m)', '(6m)', '(12m)'];
   const matchedSuffix = suffixes.find((suffix) => trimmed.toLowerCase().endsWith(suffix));
@@ -37,6 +37,17 @@ function getDisplayReportTitle(title: string): string {
   }
 
   return trimmed.slice(0, -matchedSuffix.length).trim() || title;
+}
+
+export async function retryAllSummariesForReport(
+  supabaseClient: ReturnType<typeof createClient>,
+  reportId: string | null | undefined
+) {
+  if (!reportId) return;
+  await supabaseClient
+    .from('student_reports')
+    .update({ llm_feedback: 'Generating...' })
+    .eq('id', reportId);
 }
 
 export default function StudentReportPage() {
@@ -83,12 +94,8 @@ export default function StudentReportPage() {
   }, []);
 
   const handleRetryAll = async () => {
-    if (!selectedReport) return;
     setRetryingAll(true);
-    await supabase
-      .from('student_reports')
-      .update({ llm_feedback: 'Generating...' })
-      .eq('id', selectedReport.id);
+    await retryAllSummariesForReport(supabase, selectedReport!.id);
     setRetryingAll(false);
   };
 
