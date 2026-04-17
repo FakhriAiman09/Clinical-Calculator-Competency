@@ -186,6 +186,25 @@ describe('print-report page coverage', () => {
     expect(screen.getByText('Building report…')).toBeInTheDocument();
   });
 
+  it('handles profile present but report missing during auto-load', async () => {
+    getSearchParamMock.mockImplementation((key: string) => {
+      if (key === 'studentId') return 'stu-1';
+      if (key === 'reportId') return 'missing-report';
+      return null;
+    });
+
+    setupSupabase({
+      profiles: [{ id: 'stu-1', display_name: 'Student One' }],
+      reports: [],
+    });
+
+    render(<PrintReportPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Building report…')).toBeInTheDocument();
+    });
+  });
+
   it('uses back and print toolbar actions', async () => {
     const printMock = jest.fn();
     Object.defineProperty(window, 'print', { configurable: true, value: printMock });
@@ -228,5 +247,51 @@ describe('print-report page coverage', () => {
     render(<PrintReportPage />);
     await waitFor(() => expect(screen.getByText('EPA Summary')).toBeInTheDocument());
     expect(screen.queryByText('great comment')).toBeNull();
+  });
+
+  it('handles missing kf averages and out-of-window assessments', async () => {
+    getSearchParamMock.mockImplementation((key: string) => {
+      if (key === 'studentId') return 'stu-1';
+      if (key === 'reportId') return 'rep-1';
+      return null;
+    });
+
+    setupSupabase({
+      reports: [{
+        id: 'rep-1',
+        user_id: 'stu-1',
+        title: 'Sparse Report',
+        time_window: '3m',
+        report_data: {},
+        kf_avg_data: null,
+        llm_feedback: null,
+        created_at: '2026-04-10T00:00:00.000Z',
+      }],
+      formResults: [{
+        created_at: '2026-06-01T00:00:00.000Z',
+        results: { '1.1': 3 },
+        form_responses: {
+          response: { response: { '1': { kf1: {} } } },
+          form_requests: { student_id: 'stu-2', clinical_settings: 'Ward' },
+        },
+      }],
+    });
+
+    const { container } = render(<PrintReportPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('EPA Summary')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Assessment Progress')).toBeNull();
+    expect(screen.getAllByText('No data').length).toBeGreaterThan(0);
+    expect(container.querySelector('.no-data')).not.toBeNull();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  it('sanitizes nullish values and keeps unmatched quotes unchanged', () => {
+    expect(sanitize(undefined)).toBe('');
+    expect(sanitize(null)).toBe('');
+    expect(sanitize('"unmatched')).toBe('"unmatched');
   });
 });
