@@ -37,14 +37,12 @@ jobs:
           python-version: '3.13'
 
       - name: Install Python test dependencies
-        working-directory: python/infer
         run: pip install pytest pytest-cov
 
       - name: Run Python tests with coverage
-        working-directory: python/infer
-        run: python -m pytest test/test_benchmark.py test/test.py --cov=. --cov-report=xml:coverage.xml --ignore=test/tempCodeRunnerFile.py
+        run: python -m pytest python/infer/test/test_benchmark.py python/infer/test/test.py --cov=python/infer --cov-report=xml:python/infer/coverage.xml --ignore=python/infer/test/tempCodeRunnerFile.py
         env:
-          PYTHONPATH: '.'
+          PYTHONPATH: 'python/infer'
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@e44258b109568baa0df60ed515909fc6c72cba92
