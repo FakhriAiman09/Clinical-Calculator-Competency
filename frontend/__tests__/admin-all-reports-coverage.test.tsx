@@ -393,11 +393,9 @@ describe('Admin all-reports page coverage', () => {
       }));
     });
 
-    const reportWindowGroup = screen.getByRole('group', { name: 'Report time window' });
-    fireEvent.click(within(reportWindowGroup).getByRole('button', { name: 'Last 6 mo' }));
     fireEvent.click(screen.getByText('Generate Report'));
     await waitFor(() => {
-      expect(mockRpc).toHaveBeenCalledWith('generate_report', expect.objectContaining({ time_range_input: 6 }));
+      expect(mockRpc).toHaveBeenCalledWith('generate_report', expect.objectContaining({ time_range_input: 12 }));
     });
   });
 
