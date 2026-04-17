@@ -123,4 +123,108 @@ describe('Functional email notification tests', () => {
     expect(mail.html).toContain('<li>No clinical specifics</li>');
     expect(mail.html).toContain('/dashboard/rater/form?id=req-200&responseId=resp-300');
   });
+
+  // --- Error branch coverage for send-email.server (student → rater request email) ---
+
+  test('request email throws Error instance when sendMail rejects with Error', async () => {
+    sendMailMock.mockRejectedValueOnce(new Error('SMTP connection refused'));
+    await expect(
+      sendRequestEmail({ to: 'rater@test.com', studentName: 'John', requestId: 'req-1' })
+    ).rejects.toThrow('SMTP connection refused');
+  });
+
+  test('request email throws generic error when sendMail rejects with non-Error', async () => {
+    sendMailMock.mockRejectedValueOnce('non-error string');
+    await expect(
+      sendRequestEmail({ to: 'rater@test.com', studentName: 'John', requestId: 'req-1' })
+    ).rejects.toThrow('Error sending email');
+  });
+
+  test('request email uses fallback message when Error has empty message', async () => {
+    sendMailMock.mockRejectedValueOnce(new Error(''));
+    await expect(
+      sendRequestEmail({ to: 'rater@test.com', studentName: 'John', requestId: 'req-1' })
+    ).rejects.toThrow('Error sending email');
+  });
+
+  // --- Error branch coverage for send-email-rater.server (rater → student completion email) ---
+
+  test('completion email throws Error instance when sendMail rejects with Error', async () => {
+    sendMailMock.mockRejectedValueOnce(new Error('Auth failed'));
+    await expect(
+      sendStudentCompletionEmail({ to: 'student@test.com', studentName: 'Nur' })
+    ).rejects.toThrow('Auth failed');
+  });
+
+  test('completion email throws generic error when sendMail rejects with non-Error', async () => {
+    sendMailMock.mockRejectedValueOnce(42);
+    await expect(
+      sendStudentCompletionEmail({ to: 'student@test.com', studentName: 'Nur' })
+    ).rejects.toThrow('Error sending rater notification email');
+  });
+
+  test('completion email uses fallback message when Error has empty message', async () => {
+    sendMailMock.mockRejectedValueOnce(new Error(''));
+    await expect(
+      sendStudentCompletionEmail({ to: 'student@test.com', studentName: 'Nur' })
+    ).rejects.toThrow('Error sending rater notification email');
+  });
+
+  // --- Conditional branch coverage for send-reminder-rater.server ---
+
+  test('reminder email uses /dashboard/rater path when requestId is omitted', async () => {
+    const result = await sendReminderEmail({
+      to: 'faculty@test.com',
+      facultyName: 'Dr. Lee',
+    });
+
+    const mail = sendMailMock.mock.calls[0][0];
+    expect(result).toEqual({ message: 'Faculty reminder email sent', id: 'msg-123' });
+    expect(mail.html).toContain('http://localhost:3000/dashboard/rater');
+    expect(mail.html).not.toContain('?id=');
+  });
+
+  test('reminder email uses generic forWhom text when studentName is omitted', async () => {
+    await sendReminderEmail({
+      to: 'faculty@test.com',
+      requestId: 'req-789',
+    });
+
+    const mail = sendMailMock.mock.calls[0][0];
+    expect(mail.html).toContain('for one or more students');
+  });
+
+  test('reminder email uses facultyName in greeting when facultyName is provided', async () => {
+    await sendReminderEmail({
+      to: 'faculty@test.com',
+      facultyName: 'Dr. Smith',
+      requestId: 'req-789',
+    });
+
+    const mail = sendMailMock.mock.calls[0][0];
+    expect(mail.html).toContain('Dear Dr. Smith,');
+  });
+
+  // --- Error branch coverage for send-reminder-rater.server ---
+
+  test('reminder email throws Error instance when sendMail rejects with Error', async () => {
+    sendMailMock.mockRejectedValueOnce(new Error('Timeout'));
+    await expect(
+      sendReminderEmail({ to: 'faculty@test.com', requestId: 'req-1' })
+    ).rejects.toThrow('Timeout');
+  });
+
+  test('reminder email throws generic error when sendMail rejects with non-Error', async () => {
+    sendMailMock.mockRejectedValueOnce(null);
+    await expect(
+      sendReminderEmail({ to: 'faculty@test.com', requestId: 'req-1' })
+    ).rejects.toThrow('Error sending faculty reminder email');
+  });
+
+  test('reminder email uses fallback message when Error has empty message', async () => {
+    sendMailMock.mockRejectedValueOnce(new Error(''));
+    await expect(
+      sendReminderEmail({ to: 'faculty@test.com', requestId: 'req-1' })
+    ).rejects.toThrow('Error sending faculty reminder email');
+  });
 });
