@@ -3,6 +3,7 @@
 '''12 unit tests for inference.py and listener.py'''
 
 import json
+import os
 import sys
 import types
 import unittest
@@ -178,6 +179,25 @@ class TestLoadDebertaModel(unittest.TestCase):
     with self.assertRaises(FileNotFoundError):
       inference.load_deberta_model('nonexistent/path')
 
+  @patch('inference.AutoModelForSequenceClassification.from_pretrained')
+  @patch('inference.AutoTokenizer.from_pretrained')
+  @patch('inference.os.path.exists', return_value=True)
+  def test_returns_tokenizer_and_eval_model_when_path_exists(self, mock_exists,
+                                                             mock_tokenizer_from_pretrained,
+                                                             mock_model_from_pretrained):
+    '''load_deberta_model should load tokenizer plus float().eval() model when the path exists.'''
+    tokenizer = MagicMock()
+    model = MagicMock()
+    model.float.return_value.eval.return_value = 'eval-model'
+    mock_tokenizer_from_pretrained.return_value = tokenizer
+    mock_model_from_pretrained.return_value = model
+
+    result = inference.load_deberta_model('models/deberta')
+
+    self.assertEqual(result, (tokenizer, 'eval-model'))
+    mock_tokenizer_from_pretrained.assert_called_once_with('models/deberta')
+    mock_model_from_pretrained.assert_called_once_with('models/deberta')
+
 
 # ---------------------------------------------------------------------------
 # inference.load_svm_models  (1 test)
@@ -195,6 +215,58 @@ class TestLoadSvmModels(unittest.TestCase):
     self.assertIn('model_a', result)
     self.assertIn('model_b', result)
     self.assertNotIn('README', result)
+
+
+class TestDownloadModelHelpers(unittest.TestCase):
+  '''Unit tests for inference download helper functions.'''
+
+  @patch('inference.shutil.copy2')
+  @patch('inference.os.listdir', return_value=['config.json', 'weights.bin'])
+  @patch('inference.os.makedirs')
+  @patch('inference.subprocess.run')
+  @patch('inference.shutil.which', return_value=None)
+  @patch('inference.tempfile.TemporaryDirectory')
+  def test_download_deberta_model_runs_kaggle_and_copies_files(self, mock_tempdir, mock_which,
+                                                               mock_run, mock_makedirs,
+                                                               mock_listdir, mock_copy2):
+    '''download_deberta_model should invoke Kaggle output download and copy artifacts locally.'''
+    tmp_context = MagicMock()
+    tmp_context.__enter__.return_value = 'tmpdir'
+    tmp_context.__exit__.return_value = False
+    mock_tempdir.return_value = tmp_context
+
+    inference.download_deberta_model('local-model-dir')
+
+    mock_run.assert_called_once()
+    self.assertEqual(mock_run.call_args[0][0][:2], ['kaggle', 'kernels'])
+    mock_makedirs.assert_called_once_with('local-model-dir', exist_ok=True)
+    copied_sources = [call.args[0] for call in mock_copy2.call_args_list]
+    self.assertIn(os.path.join('tmpdir', 'model', 'config.json'), copied_sources)
+    self.assertIn(os.path.join('tmpdir', 'model', 'weights.bin'), copied_sources)
+
+  @patch('builtins.open', new_callable=mock_open)
+  @patch('inference.os.makedirs')
+  @patch('inference.os.path.exists', return_value=False)
+  def test_download_svm_models_creates_dir_and_writes_downloaded_files(self, mock_exists,
+                                                                       mock_makedirs,
+                                                                       mock_file):
+    '''download_svm_models should create the target dir and write each downloaded model blob.'''
+    bucket = MagicMock()
+    bucket.list.return_value = [{'name': 'kf1.pkl'}, {'name': 'kf2.pkl'}]
+    bucket.download.side_effect = [b'model-one', b'model-two']
+
+    supabase = MagicMock()
+    supabase.storage.from_.return_value = bucket
+
+    inference.download_svm_models(supabase, local_dir='local-svm-dir')
+
+    supabase.storage.from_.assert_called_once_with('svm-models')
+    mock_makedirs.assert_called_once_with('local-svm-dir')
+    bucket.download.assert_any_call('kf1.pkl')
+    bucket.download.assert_any_call('kf2.pkl')
+    handle = mock_file()
+    handle.write.assert_any_call(b'model-one')
+    handle.write.assert_any_call(b'model-two')
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +300,71 @@ class TestGenerateReportSummary(unittest.TestCase):
       mock_gemini.models.generate_content.call_count,
       3 * len(inference._GEMINI_MODELS),  # pylint: disable=protected-access
     )
+
+  @patch('inference._try_gemini_model', side_effect=[None, '{"1.1": "fallback ok"}'])
+  def test_falls_back_to_next_model_when_first_model_fails(self, mock_try_model):
+    '''generate_report_summary should try the next Gemini model after a failed model.'''
+    result = inference.generate_report_summary({'1.1': 1.0}, MagicMock())
+    self.assertEqual(json.loads(result), {'1.1': 'fallback ok'})
+    self.assertEqual(mock_try_model.call_count, 2)
+
+
+class TestGeminiHelpers(unittest.TestCase):
+  '''Unit tests for private Gemini helper functions in inference.py.'''
+
+  def test_parse_gemini_text_extracts_outer_json_from_wrapped_text(self):
+    raw = 'intro text\n```json\n{"1.1": "good"}\n```\noutro'
+    self.assertEqual(inference._parse_gemini_text(raw), '{"1.1": "good"}')  # pylint: disable=protected-access
+
+  @patch('inference.time.sleep')
+  def test_handle_gemini_error_sleeps_for_rate_limit(self, mock_sleep):
+    inference._handle_gemini_error(RuntimeError('429 RESOURCE_EXHAUSTED'), 'gemini-2.5-flash', 1)  # pylint: disable=protected-access
+    mock_sleep.assert_called_once_with(30)
+
+  @patch('inference.time.sleep')
+  def test_handle_gemini_error_sleeps_for_unavailable_signal(self, mock_sleep):
+    inference._handle_gemini_error(RuntimeError('503 high demand'), 'gemini-2.5-flash', 1)  # pylint: disable=protected-access
+    mock_sleep.assert_called_once_with(6)
+
+  def test_handle_gemini_error_reraises_unknown_errors(self):
+    with self.assertRaises(RuntimeError):
+      inference._handle_gemini_error(RuntimeError('unexpected boom'), 'gemini-2.5-flash', 0)  # pylint: disable=protected-access
+
+  def test_try_gemini_model_retries_empty_and_invalid_before_success(self):
+    gemini = MagicMock()
+    gemini.models.generate_content.side_effect = [
+      MagicMock(text=''),
+      MagicMock(text='not-json'),
+      MagicMock(text='{"1.1": "ok"}'),
+    ]
+
+    result = inference._try_gemini_model(gemini, 'gemini-2.5-flash', 'query', MagicMock())  # pylint: disable=protected-access
+
+    self.assertEqual(json.loads(result), {'1.1': 'ok'})
+    self.assertEqual(gemini.models.generate_content.call_count, 3)
+
+  def test_try_gemini_model_returns_none_after_three_empty_responses(self):
+    gemini = MagicMock()
+    gemini.models.generate_content.side_effect = [
+      MagicMock(text=''),
+      MagicMock(text=''),
+      MagicMock(text=''),
+    ]
+
+    result = inference._try_gemini_model(gemini, 'gemini-2.5-flash', 'query', MagicMock())  # pylint: disable=protected-access
+
+    self.assertIsNone(result)
+    self.assertEqual(gemini.models.generate_content.call_count, 3)
+
+  @patch('inference._handle_gemini_error')
+  def test_try_gemini_model_routes_exceptions_to_error_handler(self, mock_handle_error):
+    gemini = MagicMock()
+    gemini.models.generate_content.side_effect = RuntimeError('temporary failure')
+
+    result = inference._try_gemini_model(gemini, 'gemini-2.5-flash', 'query', MagicMock())  # pylint: disable=protected-access
+
+    self.assertIsNone(result)
+    self.assertEqual(mock_handle_error.call_count, 3)
 
 
 # ---------------------------------------------------------------------------
