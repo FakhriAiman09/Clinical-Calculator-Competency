@@ -58,28 +58,32 @@ const KF_HINTS: Record<string, string> = {
   '13.4': 'error reflection, individual improvement plan',
   'professionalism': 'professional behavior, ethics, conduct',
 };
-// If the primary model is unavailable, try each fallback in order until one succeeds.
-const MODEL_FALLBACKS: Record<string, string[]> = {
-  'z-ai/glm-4.5-air:free':       ['google/gemini-2.0-flash', 'openai/gpt-4o-mini'],
-  'stepfun/step-3.5-flash:free': ['anthropic/claude-3.5-sonnet', 'openai/gpt-4o-mini'],
+// balanced → fast/short response, powerful → quality response
+const AI_MODEL_MAP: Record<string, { model: string; max_tokens: number; temperature: number }> = {
+  'z-ai/glm-4.5-air:free':       { model: 'gpt-4o-mini', max_tokens: 150, temperature: 0.1 },
+  'stepfun/step-3.5-flash:free': { model: 'gpt-4o',      max_tokens: 350, temperature: 0.2 },
 };
 
-async function callOpenRouter(apiKey: string, model: string, system: string, userContent: string) {
+async function callAI(
+  apiKey: string,
+  modelConfig: { model: string; max_tokens: number; temperature: number },
+  system: string,
+  userContent: string,
+) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30_000);
   try {
-    return await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    return await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       signal: controller.signal,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000',
-        'X-Title':      process.env.OPENROUTER_SITE_NAME || 'CCC-Rater',
       },
       body: JSON.stringify({
-        model,
-        temperature: 0.2,
+        model:       modelConfig.model,
+        max_tokens:  modelConfig.max_tokens,
+        temperature: modelConfig.temperature,
         messages: [
           { role: 'system', content: system },
           { role: 'user',   content: userContent },
@@ -89,40 +93,6 @@ async function callOpenRouter(apiKey: string, model: string, system: string, use
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-async function tryWithFallbacks(
-  apiKey: string,
-  primaryModel: string,
-  system: string,
-  userContent: string,
-  resp: Response,
-  rawText: string,
-): Promise<{ resp: Response; rawText: string }> {
-  if (resp.ok) return { resp, rawText };
-  const fallbacks = MODEL_FALLBACKS[primaryModel] ?? ['openai/gpt-4o-mini'];
-  let currentResp = resp;
-  let currentText = rawText;
-  for (const fallbackModel of fallbacks) {
-    let isUnavailable = false;
-    try {
-      const errBody = JSON.parse(currentText);
-      const errMsg: string = errBody?.error?.message ?? '';
-      const errCode: string = errBody?.error?.code ?? errBody?.error?.type ?? '';
-      isUnavailable = errMsg.toLowerCase().includes('no endpoints') || errCode === 'model_not_found';
-    } catch {}
-    if (!isUnavailable) break;
-    console.warn('[AI Summary] Model unavailable, retrying with:', fallbackModel);
-    try {
-      const fbResp = await callOpenRouter(apiKey, fallbackModel, system, userContent);
-      const fbText = await fbResp.text();
-      console.log('[AI Summary] Fallback', fallbackModel, 'status:', fbResp.status, '|', fbText.slice(0, 300));
-      currentResp = fbResp;
-      currentText = fbText;
-      if (fbResp.ok) break;
-    } catch { break; }
-  }
-  return { resp: currentResp, rawText: currentText };
 }
 
 function buildErrorMessage(rawText: string, status: number): string {
@@ -146,13 +116,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'missing_text', message: 'Missing text' }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      console.error('[AI Summary] OPENROUTER_API_KEY is not set');
+      console.error('[AI Summary] API key is not set');
       return NextResponse.json({ error: 'missing_key', message: 'API key not configured.' }, { status: 500 });
     }
 
     const requestedModel = VALID_MODELS.has(body?.model) ? body.model : DEFAULT_MODEL;
+    const modelConfig = AI_MODEL_MAP[requestedModel] ?? AI_MODEL_MAP[DEFAULT_MODEL];
 
     const kf: string | null = body?.kf ?? null;
     const hint = kf ? KF_HINTS[kf] : null;
@@ -172,12 +143,10 @@ export async function POST(req: Request) {
 
     const userContent = text;
 
-    console.log('[AI Summary] Using model:', requestedModel);
-    let resp = await callOpenRouter(apiKey, requestedModel, system, userContent);
+    console.log('[AI Summary] Using model:', modelConfig.model, '(selected:', requestedModel, ')');
+    let resp = await callAI(apiKey, modelConfig, system, userContent);
     let rawText = await resp.text();
     console.log('[AI Summary] Status:', resp.status, '| Response:', rawText.slice(0, 300));
-
-    ({ resp, rawText } = await tryWithFallbacks(apiKey, requestedModel, system, userContent, resp, rawText));
 
     if (resp.status === 429) {
       return NextResponse.json(
@@ -188,7 +157,7 @@ export async function POST(req: Request) {
 
     if (!resp.ok) {
       return NextResponse.json(
-        { error: 'openrouter_error', message: buildErrorMessage(rawText, resp.status) },
+        { error: 'ai_error', message: buildErrorMessage(rawText, resp.status) },
         { status: resp.status }
       );
     }

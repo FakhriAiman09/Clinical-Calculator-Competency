@@ -92,7 +92,7 @@ def svm_infer(models: dict[str, svm.SVC], data: dict[str, list[bool]]) -> dict[s
 # ==================================================================================================
 
 
-_GEMINI_MODELS = ('gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash')
+_GEMINI_MODELS = ('gemini-2.5-flash', 'gemini-2.0-flash')
 _RATE_LIMIT_SIGNALS = ('429', 'RESOURCE_EXHAUSTED')
 _UNAVAILABLE_SIGNALS = ('503', 'UNAVAILABLE')
 
@@ -189,7 +189,11 @@ def generate_report_summary(data: dict[str, float], gemini: genai.Client) -> str
   _t0 = time.time()
   for model in _GEMINI_MODELS:
     print(f'Trying Gemini model: {model}', flush=True)
-    result = _try_gemini_model(gemini, model, query, config)
+    try:
+      result = _try_gemini_model(gemini, model, query, config)
+    except Exception as e:
+      print(f'Gemini model {model} failed with non-retryable error: {e}', flush=True)
+      continue
     if result is not None:
       print(f'[TIMING] Gemini total ({model} success): {time.time()-_t0:.3f}s', flush=True)
       return result
