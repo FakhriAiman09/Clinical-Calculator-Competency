@@ -282,7 +282,7 @@ export default function AIPreferencesSection() {
           <span className="text-muted">
             Free models are rate-limited by OpenRouter:{' '}
             <strong>50 requests/day</strong> on a free account, or{' '}
-            <strong>1,000/day</strong> after any credit purchase. Resets daily at midnight UTC.
+            <strong>1,000 tokens/day</strong> after any credit purchase. Resets daily at midnight UTC.
           </span>
         </div>
 

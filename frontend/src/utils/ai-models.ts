@@ -31,7 +31,7 @@ export const FREE_AI_MODELS: AIModelOption[] = [
     tokensPerSec: 80,
     description:
       'Lightweight MoE model built for speed. Low latency and high throughput make it ideal for quick summarization tasks.',
-    strengths: ['128K context', 'Very fast', 'Low latency'],
+    strengths: ['131K context', 'Very fast', 'Low latency'],
     bestFor: 'Quick summarization',
     badge: 'Fastest',
   },
