@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useCallback } from 'react';
 import { useUser } from '@/context/UserContext';
 import { useAIPreferences, FREE_LIMIT } from '@/utils/useAIPreferences';
@@ -284,6 +285,25 @@ export default function AIPreferencesSection() {
             <strong>50 requests/day</strong> on a free account, or{' '}
             <strong>1,000 tokens/day</strong> after any credit purchase. Resets daily at midnight UTC.
           </span>
+        </div>
+
+        <div
+          className="rounded-3 px-3 py-3 border mb-4"
+          style={{ background: 'var(--bs-body-bg)', fontSize: '0.82rem' }}
+        >
+          <div className="d-flex align-items-start gap-2">
+            <i className="bi bi-shield-check text-primary mt-1" />
+            <div>
+              <div className="fw-semibold mb-1">AI Terms and Consent</div>
+              <p className="text-muted mb-2">
+                By using AI summarization, you acknowledge that structured assessment data may be processed
+                to generate draft feedback. Please review the terms, privacy notes, and consent guidance.
+              </p>
+              <Link href="/dashboard/settings/ai-consent" className="link-primary text-decoration-none fw-medium">
+                Review AI terms and consent
+              </Link>
+            </div>
+          </div>
         </div>
 
         <div className="d-flex justify-content-end align-items-center gap-3">

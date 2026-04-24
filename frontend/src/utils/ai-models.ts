@@ -15,44 +15,41 @@ export interface AIModelOption {
   badge?: string;
 }
 
-// Confirmed free endpoints on OpenRouter as of Feb 2026.
-// Check https://openrouter.ai/models?q=:free for the current list.
-// IMPORTANT: Your OpenRouter account must have "Enable free endpoints that may train on inputs"
-// turned ON in Privacy Settings or free models will return "No endpoints found" errors.
+// Paid OpenRouter endpoints. Requires a funded OpenRouter account.
 export const FREE_AI_MODELS: AIModelOption[] = [
   {
-    id: 'z-ai/glm-4.5-air:free',
-    name: 'GLM 4.5 Air',
-    provider: 'Z-AI',
-    providerLogo: 'Z',
+    id: 'google/gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    provider: 'Google',
+    providerLogo: 'G',
     tier: 'balanced',
-    contextWindow: 131072,
-    latencyMs: 400,
-    tokensPerSec: 80,
+    contextWindow: 1048576,
+    latencyMs: 300,
+    tokensPerSec: 150,
     description:
-      'Lightweight MoE model built for speed. Low latency and high throughput make it ideal for quick summarization tasks.',
-    strengths: ['131K context', 'Very fast', 'Low latency'],
+      'Google\'s fastest production model. Sub-300ms latency, 1M context window, and high throughput — ideal for instant clinical comment rewriting.',
+    strengths: ['1M context', 'Ultra-fast', 'Low latency'],
     bestFor: 'Quick summarization',
     badge: 'Fastest',
   },
   {
-    id: 'stepfun/step-3.5-flash:free',
-    name: 'Step 3.5 Flash',
-    provider: 'StepFun',
-    providerLogo: 'SF',
+    id: 'anthropic/claude-3.5-sonnet',
+    name: 'Claude 3.5 Sonnet',
+    provider: 'Anthropic',
+    providerLogo: 'A',
     tier: 'powerful',
-    contextWindow: 262144,
-    latencyMs: 1000,
-    tokensPerSec: 45,
+    contextWindow: 200000,
+    latencyMs: 1500,
+    tokensPerSec: 80,
     description:
-      "StepFun's most capable open-source model. 196B sparse MoE with 11B active parameters and 256K context. Strong reasoning without the slowdown of a dedicated reasoning model.",
-    strengths: ['256K context', 'Strong reasoning', 'MoE efficiency'],
+      "Anthropic's flagship model. Exceptional instruction-following and clinical language precision — ideal when comment quality matters most.",
+    strengths: ['200K context', 'Best instruction-following', 'Clinical precision'],
     bestFor: 'High-quality clinical summaries',
     badge: 'Best Quality',
   },
 ];
 
-export const DEFAULT_MODEL_ID = 'z-ai/glm-4.5-air:free';
+export const DEFAULT_MODEL_ID = 'google/gemini-2.0-flash';
 
 export const VALID_MODEL_IDS = new Set(FREE_AI_MODELS.map((m) => m.id));
 

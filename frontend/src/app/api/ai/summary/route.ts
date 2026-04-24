@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 
 // Keep this in sync with FREE_AI_MODELS in src/utils/ai-models.ts
 const VALID_MODELS = new Set([
-  'z-ai/glm-4.5-air:free',
-  'stepfun/step-3.5-flash:free',
+  'google/gemini-2.0-flash',
+  'anthropic/claude-3.5-sonnet',
 ]);
-const DEFAULT_MODEL  = 'z-ai/glm-4.5-air:free';
+const DEFAULT_MODEL  = 'google/gemini-2.0-flash';
 
 const KF_HINTS: Record<string, string> = {
   '1.1': 'history taking, organized',
@@ -58,7 +58,11 @@ const KF_HINTS: Record<string, string> = {
   '13.4': 'error reflection, individual improvement plan',
   'professionalism': 'professional behavior, ethics, conduct',
 };
-const FALLBACK_MODEL = 'openrouter/free';
+// If the primary model is unavailable, try each fallback in order until one succeeds.
+const MODEL_FALLBACKS: Record<string, string[]> = {
+  'google/gemini-2.0-flash':     ['google/gemini-flash-1.5', 'openai/gpt-4o-mini'],
+  'anthropic/claude-3.5-sonnet': ['anthropic/claude-3-haiku', 'openai/gpt-4o-mini'],
+};
 
 async function callOpenRouter(apiKey: string, model: string, system: string, userContent: string) {
   const controller = new AbortController();
@@ -87,27 +91,38 @@ async function callOpenRouter(apiKey: string, model: string, system: string, use
   }
 }
 
-async function tryFallbackOnUnavailable(
+async function tryWithFallbacks(
   apiKey: string,
+  primaryModel: string,
   system: string,
   userContent: string,
   resp: Response,
   rawText: string,
 ): Promise<{ resp: Response; rawText: string }> {
   if (resp.ok) return { resp, rawText };
-  try {
-    const errBody = JSON.parse(rawText);
-    const errMsg: string = errBody?.error?.message ?? '';
-    const errCode: string = errBody?.error?.code ?? errBody?.error?.type ?? '';
-    if (errMsg.toLowerCase().includes('no endpoints') || errCode === 'model_not_found') {
-      console.warn('[AI Summary] Model unavailable, retrying with fallback:', FALLBACK_MODEL);
-      const fallbackResp = await callOpenRouter(apiKey, FALLBACK_MODEL, system, userContent);
-      const fallbackText = await fallbackResp.text();
-      console.log('[AI Summary] Fallback status:', fallbackResp.status, '| Response:', fallbackText.slice(0, 300));
-      return { resp: fallbackResp, rawText: fallbackText };
-    }
-  } catch {}
-  return { resp, rawText };
+  const fallbacks = MODEL_FALLBACKS[primaryModel] ?? ['openai/gpt-4o-mini'];
+  let currentResp = resp;
+  let currentText = rawText;
+  for (const fallbackModel of fallbacks) {
+    let isUnavailable = false;
+    try {
+      const errBody = JSON.parse(currentText);
+      const errMsg: string = errBody?.error?.message ?? '';
+      const errCode: string = errBody?.error?.code ?? errBody?.error?.type ?? '';
+      isUnavailable = errMsg.toLowerCase().includes('no endpoints') || errCode === 'model_not_found';
+    } catch {}
+    if (!isUnavailable) break;
+    console.warn('[AI Summary] Model unavailable, retrying with:', fallbackModel);
+    try {
+      const fbResp = await callOpenRouter(apiKey, fallbackModel, system, userContent);
+      const fbText = await fbResp.text();
+      console.log('[AI Summary] Fallback', fallbackModel, 'status:', fbResp.status, '|', fbText.slice(0, 300));
+      currentResp = fbResp;
+      currentText = fbText;
+      if (fbResp.ok) break;
+    } catch { break; }
+  }
+  return { resp: currentResp, rawText: currentText };
 }
 
 function buildErrorMessage(rawText: string, status: number): string {
@@ -162,7 +177,7 @@ export async function POST(req: Request) {
     let rawText = await resp.text();
     console.log('[AI Summary] Status:', resp.status, '| Response:', rawText.slice(0, 300));
 
-    ({ resp, rawText } = await tryFallbackOnUnavailable(apiKey, system, userContent, resp, rawText));
+    ({ resp, rawText } = await tryWithFallbacks(apiKey, requestedModel, system, userContent, resp, rawText));
 
     if (resp.status === 429) {
       return NextResponse.json(
