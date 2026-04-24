@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 
 // Keep this in sync with FREE_AI_MODELS in src/utils/ai-models.ts
 const VALID_MODELS = new Set([
-  'google/gemini-2.0-flash',
-  'anthropic/claude-3.5-sonnet',
+  'z-ai/glm-4.5-air:free',
+  'stepfun/step-3.5-flash:free',
 ]);
-const DEFAULT_MODEL  = 'google/gemini-2.0-flash';
+const DEFAULT_MODEL  = 'z-ai/glm-4.5-air:free';
 
 const KF_HINTS: Record<string, string> = {
   '1.1': 'history taking, organized',
@@ -60,8 +60,8 @@ const KF_HINTS: Record<string, string> = {
 };
 // If the primary model is unavailable, try each fallback in order until one succeeds.
 const MODEL_FALLBACKS: Record<string, string[]> = {
-  'google/gemini-2.0-flash':     ['google/gemini-flash-1.5', 'openai/gpt-4o-mini'],
-  'anthropic/claude-3.5-sonnet': ['anthropic/claude-3-haiku', 'openai/gpt-4o-mini'],
+  'z-ai/glm-4.5-air:free':       ['google/gemini-2.0-flash', 'openai/gpt-4o-mini'],
+  'stepfun/step-3.5-flash:free': ['anthropic/claude-3.5-sonnet', 'openai/gpt-4o-mini'],
 };
 
 async function callOpenRouter(apiKey: string, model: string, system: string, userContent: string) {
